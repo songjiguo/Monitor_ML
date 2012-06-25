@@ -12,6 +12,8 @@
 #include "shared/consts.h"
 
 struct cos_page {
+	int rt_spdid;             // rooted spd
+	vaddr_t rt_vaddr;         // rooted vpage for addr
 	paddr_t addr;
 };
 
@@ -23,5 +25,12 @@ static inline unsigned int cos_max_mem_caps(void)
 }
 paddr_t cos_access_page(unsigned long cap_no);
 int cos_paddr_to_cap(paddr_t pa);
+
+void cos_add_root_info(int spdid, vaddr_t vaddr, unsigned long frame_id);
+void cos_remove_root_info(unsigned long frame_id);
+vaddr_t cos_lookup_root_page(unsigned long frame_id);
+int cos_lookup_root_spd(unsigned long frame_id);
+
+int cos_is_rootpage(int spdid, vaddr_t vaddr, unsigned long frame_id);
 
 #endif

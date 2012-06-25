@@ -116,6 +116,31 @@ bitmap_unset(u32_t *x, int v)
 	x[idx] = __bitmap_unset(x[idx], off);
 }
 
+#ifdef LINUX_TEST
+static inline void
+print_bitmap(u32_t *x, int max)
+{
+	int i;
+
+	for (i = 0 ; i < max ; i++) {
+		printf("%x\n", x[i]);
+	}
+	printf("\n");
+}
+#else
+static inline void
+print_bitmap(u32_t *x, int max)
+{
+	int i;
+
+	for (i = 0 ; i < max ; i++) {
+		printc("%x", x[i]);
+	}
+	printc("\n");
+}
+#endif
+
+
 /* find the least significant one set.  max is the maximum number of
  * u32_ts in the bitmap. */
 static inline int
@@ -136,15 +161,19 @@ bitmap_one(u32_t *x, int max)
 static inline int 
 bitmap_one_offset(u32_t *x, int off, int max)
 {
-	int subword = off&(WORD_SIZE-1), words = off/WORD_SIZE, ret;
+	/* printc("off %d\n",off); */
+	int subword = off&(WORD_SIZE-1), words = off/WORD_SIZE, ret;  // on bit
 	
 	/* do we have an offset into a word? */
 	if (subword) {
 		u32_t v = x[words] >> subword;
-		if (v) return log32(ls_one(v)) + off;
+		if (v) {
+			/* printc("-%d\n",log32(ls_one(v)) + off); */
+			return log32(ls_one(v)) + off;
+		}
 		words++;
 	}
-	ret = bitmap_one(x+words, max-words);
+	ret = bitmap_one(x+words, max-words);    // ?? words = off/WORD_SIZE up to 128
 	if (ret != -1) ret += (words*WORD_SIZE);
 	return ret;
 }
@@ -166,8 +195,10 @@ bitmap_contiguous_ones(u32_t *x, int off, int extent, int max)
 {
 	int i, prev, start;
 
-	prev = start = 0;
-	for (i = 0 ; i < (int)(max*sizeof(u32_t)) ; i++) {
+	i = off;
+	
+	prev = start = 0; 
+	for (i = 0 ; i < max ; i++) {
 		prev = i;
 		i = bitmap_one_offset(x, i, max);
 		/* end of bitmap? */

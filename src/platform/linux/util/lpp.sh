@@ -5,7 +5,7 @@
 ./cos_loader \
 "c0.o, ;*fprr.o, ;mm.o, ;boot.o, ;print.o, ;\
 \
-!mpool.o,a3;!trans.o,a6;!sm.o,a4;!l.o,a1;!te.o,a3;!e.o,a4;!stat.o,a25;!buf.o,a5;!tp.o,a6;(!po.o=ppong.o), ;(!pi.o=pingp.o),a9;!va.o,a2:\
+!va.o,a2;!mpool.o,a3;!trans.o,a6;!sm.o,a4;!l.o,a1;!te.o,a3;!e.o,a4;!stat.o,a25;!buf.o,a5;!tp.o,a6;(!po.o=ppong.o), ;(!pi.o=pingp.o),a9:\
 \
 c0.o-fprr.o;\
 fprr.o-print.o|[parent_]mm.o;\
@@ -22,7 +22,7 @@ tp.o-sm.o|buf.o|print.o|te.o|fprr.o|mm.o|va.o|mpool.o;\
 va.o-fprr.o|print.o|mm.o|l.o|boot.o;\
 trans.o-sm.o|fprr.o|l.o|buf.o|mm.o|va.o|e.o|print.o;\
 \
-pi.o-sm.o|fprr.o|va.o|po.o|print.o;\
+pi.o-sm.o|fprr.o|va.o|po.o|print.o|mm.o|va.o;\
 po.o-sm.o|va.o|print.o\
 " ./gen_client_stub
 

@@ -24,6 +24,8 @@ void cos_init_memory(void)
 			printk("cos: ERROR -- could not allocate page for cos memory\n");
 		}
 		cos_pages[i].addr = (paddr_t)va_to_pa(r);
+		cos_pages[i].rt_spdid = 0;
+		cos_pages[i].rt_vaddr = (vaddr_t) 0;
 	}
 
 	return;
@@ -68,4 +70,50 @@ paddr_t cos_access_page(unsigned long cap_no)
 	assert(addr);
 
 	return addr;
+}
+
+/* 
+   record the frame id, spd id and its corresponding addr
+   info should be able to be looked up during recovery
+ */
+
+void
+cos_add_root_info(int spdid, vaddr_t vaddr, unsigned long frame_id)
+{	
+	/* printk("cos: root info added spd %d addr %p at frame %lu\n", spdid, vaddr, frame_id); */
+	cos_pages[frame_id].rt_spdid = spdid;
+	cos_pages[frame_id].rt_vaddr = vaddr;
+}
+void 
+cos_remove_root_info(unsigned long frame_id)
+{	
+	/* printk("cos: root info removed at frame %lu\n", frame_id); */
+	cos_pages[frame_id].rt_spdid = 0;
+	cos_pages[frame_id].rt_vaddr = 0;
+}
+
+vaddr_t 
+cos_lookup_root_page(unsigned long frame_id)
+{
+	/* printk("cos: root info lookup fr_id %d addr %p\n", frame_id, cos_pages[frame_id].rt_vaddr); */
+	return cos_pages[frame_id].rt_vaddr;
+}
+
+int 
+cos_lookup_root_spd(unsigned long frame_id)
+{
+	/* printk("cos: root info lookup fr_id %d spdid %d\n", frame_id, cos_pages[frame_id].rt_spdid); */
+	return cos_pages[frame_id].rt_spdid;
+}
+
+int 
+cos_is_rootpage(int spdid, vaddr_t vaddr, unsigned long frame_id)
+{
+	int ret = 0;
+
+	if ((cos_pages[frame_id].rt_spdid == spdid) &&
+	    (cos_pages[frame_id].rt_vaddr == vaddr))
+		ret = 1;
+
+	return ret;
 }

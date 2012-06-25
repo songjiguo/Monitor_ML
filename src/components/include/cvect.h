@@ -145,7 +145,10 @@ cvect_alloc(void)
 	cvect_t *v;
 	
 	v = CVECT_ALLOC();
-	if (NULL == v) return NULL;
+	if (NULL == v) {
+		/* printc("v null\n"); */
+		return NULL;
+	}
 	cvect_init(v);
 
 	return v;

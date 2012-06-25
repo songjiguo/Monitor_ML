@@ -41,6 +41,28 @@ name##_inv:                       \
                                   \
         sysenter;
 
+#define cos_asm_server_fn_stub(name, fn)	\
+.globl name##_inv ;               \
+.type  name##_inv, @function ;	  \
+.align 16 ;			  \
+name##_inv:                       \
+        COS_ASM_GET_STACK         \
+	pushl %ebp;		  \
+	xor %ebp, %ebp;		  \
+        pushl %edi;	          \
+        pushl %esi;	          \
+        pushl %ebx;	          \
+        call fn ; 		  \
+        addl $16, %esp;           \
+                                  \
+        movl %eax, %ecx;          \
+        movl $RET_CAP, %eax;	  \
+        COS_ASM_RET_STACK         \
+                                  \
+        sysenter;                 \
+
+/* #define cos_asm_server_fn_stub(name, fn) cos_asm_server_stub(fn) */
+
 #define cos_asm_server_stub_spdid(name) \
 .globl name##_inv ;                     \
 .type  name##_inv, @function ;	        \
@@ -60,5 +82,28 @@ name##_inv:                             \
         COS_ASM_RET_STACK		\
                                         \
         sysenter;
+
+#define cos_asm_server_fn_stub_spdid(name, fn)	\
+.globl name##_inv ;                     \
+.type  name##_inv, @function ;	        \
+.align 16 ;			        \
+name##_inv:                             \
+        COS_ASM_GET_STACK               \
+	pushl %ebp;		        \
+	xor %ebp, %ebp;			\
+        pushl %edi;	                \
+        pushl %esi;	                \
+        pushl %ecx;	                \
+        call fn ; 		        \
+        addl $16, %esp;                 \
+                                        \
+        movl %eax, %ecx;                \
+        movl $RET_CAP, %eax;	        \
+        COS_ASM_RET_STACK		\
+                                        \
+        sysenter;                       \
+
+
+/* #define cos_asm_server_fn_stub_spdid(name, fn) cos_asm_server_stub_spdid(fn) */
 
 #endif /* COS_ASM_SERVER_STUB_H */

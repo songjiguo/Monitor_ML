@@ -139,12 +139,21 @@ cos_syscall_0(16, int, idle);
 cos_syscall_3(17, int, __spd_cntl, int, op_spdid, long, arg1, long, arg2);
 cos_syscall_3(18, int, __vas_cntl, int, op_spdid, long, arg1, long, arg2);
 cos_syscall_3(19, int, __trans_cntl, unsigned long, op_ch, unsigned long, addr, int, off);
+cos_syscall_3(20, int, __mmap_introspect, long, op_flags_dspd, long, daddr, long, mem_id);
 cos_syscall_0(31,  int, null);
 
 static inline int cos_mmap_cntl(short int op, short int flags, 
 				short int dest_spd, vaddr_t dest_addr, long mem_id) {
 	/* encode into 3 arguments */
 	return cos___mmap_cntl(((op<<24) | (flags << 16) | (dest_spd)), 
+			       dest_addr, mem_id);
+}
+
+/* same as above, only used for recovery now */
+static inline int cos_mmap_introspect(short int op, short int flags, 
+				short int dest_spd, vaddr_t dest_addr, long mem_id) {
+	/* encode into 3 arguments */
+	return cos___mmap_introspect(((op<<24) | (flags << 16) | (dest_spd)), 
 			       dest_addr, mem_id);
 }
 

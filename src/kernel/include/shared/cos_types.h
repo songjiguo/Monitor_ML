@@ -449,10 +449,30 @@ enum {
 				 * for the current thread. */
 };
 
+/* operations for mmap cntl*/
 enum {
 	COS_MMAP_GRANT,
 	COS_MMAP_REVOKE,
 	COS_MMAP_TLBFLUSH
+};
+
+/* operations for mmap introspect */
+enum {
+	COS_MMAP_INTRO_RTADDR,
+	COS_MMAP_INTRO_RTSPD,
+	COS_MMAP_INTRO_FRAME
+};
+
+/* mmap: page set related flags */
+enum {
+	COS_MMAP_SET_ROOT        = 0x1,
+	COS_MMAP_PFN_READ        = 0x2,
+	COS_MMAP_PFN_WRITE       = 0x4,
+	COS_MMAP_PFN_EXE         = 0x8,
+	COS_MMAP_PFN_NONALIAS    = 0x10,
+	COS_MMAP_PFN_RW          = COS_MMAP_PFN_READ | COS_MMAP_PFN_WRITE,
+	COS_MMAP_PFN_READONLY    = COS_MMAP_PFN_READ | ~COS_MMAP_PFN_WRITE,
+	COS_MMAP_PFN_ALL         = COS_MMAP_PFN_RW | COS_MMAP_PFN_EXE
 };
 
 #define IL_INV_UNMAP (0x1) // when invoking, should we be unmapped?

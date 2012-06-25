@@ -118,7 +118,10 @@ void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages)
 	occ = trac->map;
 	assert(occ);
 	off = bitmap_extent_find_set(&occ->pgd_occupied[0], 0, npages, MAP_MAX);
-	if (off < 0) goto done;
+	if (off < 0) {
+		printc("spd %d valloc_alloc failed\n", dest);
+		goto done;
+	}
 	ret = ((char *)trac->extents[0].start) + (off * PAGE_SIZE);
 done:   
 	UNLOCK();

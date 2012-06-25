@@ -66,6 +66,9 @@ struct thread {
 	short int stack_ptr;
 	unsigned short int thread_id, cpu_id, flags;
 
+	/* When prio is added, BUG is triggered in hijack.c L2188 */
+	/* unsigned short int prio; */  
+
 	/* 
 	 * Watch your alignments here!!!
 	 *
