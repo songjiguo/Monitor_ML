@@ -3094,7 +3094,7 @@ COS_SYSCALL int cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t dad
 		page = cos_access_page(mem_id);
 		if (0 == page) {
 			printk("cos: mmap grant init-- could not get a physical page.\n");
-			ret = -1;
+			ret = -2;
 			break;
 		}
 		/*
@@ -3106,7 +3106,7 @@ COS_SYSCALL int cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t dad
 		 */
 		if (pgtbl_add_entry(spd->spd_info.pg_tbl, daddr, page)) {
 			printk("cos: mmap grant root -- could not add entry to page table.\n");
-			ret = -1;
+			ret = -3;
 			break;
 		}
 
@@ -3151,14 +3151,6 @@ COS_SYSCALL long cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vadd
 	/* decode arguments */
 	op = op_flags_dspd>>24;
 	flags = op_flags_dspd>>16 & 0x000000FF;
-	dspd_id = op_flags_dspd & 0x0000FFFF;
-
-	spd = spd_get_by_index(dspd_id);
-	if (NULL == spd || virtual_namespace_query(daddr) != spd) {
-		printk("cos: invalid mmap introspect call for spd %d for spd %d @ vaddr %x\n",
-		       spdid, dspd_id, (unsigned int)daddr);
-		return -1;
-	}
 
 	switch(op) {
 	case COS_MMAP_INTRO_FRAME:
@@ -3168,7 +3160,7 @@ COS_SYSCALL long cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vadd
 
 		if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) {
 			printk("cos: try find frame -- no page table entry found.\n");
-			ret = -1;
+			ret = -4; /* frame id start from 0? */
 			break;
 		}
 
@@ -3184,7 +3176,6 @@ COS_SYSCALL long cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vadd
 		root_page = cos_lookup_root_page(mem_id);
 		if (0 == root_page) {
 			printk("cos: try find root page -- could not get rooted page.\n");
-			ret = 0;  
 			break;
 		}
 		ret = root_page;
@@ -3197,7 +3188,6 @@ COS_SYSCALL long cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vadd
 		root_spd = cos_lookup_root_spd(mem_id);
 		if (0 == root_spd) {
 			printk("cos: try find root spd -- could not get rooted spd.\n");
-			ret = -1;
 			break;
 		}
 

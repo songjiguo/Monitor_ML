@@ -17,3 +17,5 @@ tags
 src/kernel/include/shared/cpu_ghz.h
 src/Makefile.cosconfig
 modules.order
+src/platform/linux/util/Makefile.end
+src/platform/tests/sllist_vect_slab/

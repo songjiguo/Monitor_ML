@@ -43,11 +43,33 @@
 
 #include <mem_mgr.h>
 
+/* mmap_cntl ERROR Code */
+#define EINVALC -1         	/* invalid call */
+#define EGETPHY -2		/* can not get a physical page */
+#define EADDPTE -3		/* can not add entry to page table */
+
+/* mmap_inctrospect ERROR Code */
+#define ENOFRAM -4		/* introspect frame failed */
+
 /***************************************************/
 /*** Data-structure for tracking physical memory ***/
 /***************************************************/
 
-struct mapping;
+/* mappings */
+struct mapping {
+	u16_t   flags;
+	spdid_t spdid;
+	vaddr_t addr;
+
+	struct frame *f;
+	/* child and sibling mappings */
+	struct mapping *p, *c, *_s, *s_;
+} __attribute__((packed));
+
+static struct mapping *mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int root_page);
+static struct mapping *mapping_lookup(spdid_t spdid, vaddr_t addr);
+
+
 /* A tagged union, where the tag holds the number of maps: */
 struct frame {
 	int nmaps;
@@ -63,17 +85,53 @@ static inline int  frame_index(struct frame *f) { return f-frames; }
 static inline int  frame_nrefs(struct frame *f) { return f->nmaps; }
 static inline void frame_ref(struct frame *f)   { f->nmaps++; }
 
+
 static inline struct frame *
 frame_alloc(void)
 {
+	vaddr_t root_addr;
+	spdid_t root_spd;
+
 	struct frame *f = freelist;
+	struct mapping *m = NULL;
 
 	if (!f) return NULL;
+
+again:
 	freelist = f->c.free;
 	f->nmaps = 0;
 	f->c.m   = NULL;
 
+	root_addr = (vaddr_t)cos_mmap_introspect(COS_MMAP_INTRO_RTADDR, 
+						 0, 0, 0, frame_index(f));
+	/* a crash happened before */
+	if (unlikely(root_addr)) {
+		root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTRO_RTSPD, 
+							0, 0, 0, frame_index(f));
+		assert(!root_spd);
+		
+		frame_ref(f);
+
+		m = mapping_crt(NULL, f, root_spd, root_addr, 1);
+		if (!m) {
+			printc("can not create mapping\n");
+			goto err;
+		}
+		f->c.m = m;
+		
+		assert(m->addr == root_addr);
+		assert(m->spdid == root_spd);
+		assert(m == mapping_lookup(root_spd, root_addr));
+		f = freelist;
+
+		goto again;
+	}
+
+done:
 	return f;
+err:
+	f = NULL;
+	goto done;
 }
 
 static inline void 
@@ -202,15 +260,6 @@ cvas_deref(struct comp_vas *cv)
 /*** Mapping operations ***/
 /**************************/
 
-struct mapping {
-	u16_t   flags;
-	spdid_t spdid;
-	vaddr_t addr;
-
-	struct frame *f;
-	/* child and sibling mappings */
-	struct mapping *p, *c, *_s, *s_;
-} __attribute__((packed));
 CSLAB_CREATE(mapping, sizeof(struct mapping));
 
 static void
@@ -239,6 +288,40 @@ mapping_lookup(spdid_t spdid, vaddr_t addr)
 	return cvect_lookup(cv->pages, addr >> PAGE_SHIFT);
 }
 
+
+static struct mapping *
+restore_mapping(spdid_t spd, vaddr_t addr)
+{
+	/* if mmaping does not exist, create with a 'NULL previous' node */
+	/* this could result many independent trees */
+
+	struct mapping *m = NULL;
+	int fr_idx = 0;
+
+	fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTRO_FRAME, 
+					  0, spd, addr, 0);
+
+	if (fr_idx == ENOFRAM) {
+		printc("can not find frame\n");
+		goto done;
+	}
+	
+	m = mapping_crt(NULL, &frames[fr_idx], spd, addr, 0);
+	if (!m) goto err;
+
+	assert(fr_idx == frame_index(m->f));
+	assert(m->p == NULL);
+done:
+	return m;
+err:
+	m = NULL;
+	goto done;
+}
+
+
+/* IMPORTANT: do not make assumption that virtual addresses are all different */
+/*            Across components, vaddr could be same in the future */
+
 /* Make a child mapping */
 static struct mapping *
 mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int root_page)
@@ -246,7 +329,9 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	struct comp_vas *cv = cvas_lookup(dest);
 	struct mapping *m = NULL;
 	long idx = to >> PAGE_SHIFT;
-	int mm_flag = 0;
+	int mm_flag, ret;
+	
+	ret = mm_flag = 0;
 	
 	assert(!p || p->f == f);
 	assert(dest && to);
@@ -258,23 +343,33 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	}
 	assert(cv->pages);
 
-	if (cvect_lookup(cv->pages, idx)) goto collision;
+	/* if (cvect_lookup(cv->pages, idx)) goto collision; */
+	m = cvect_lookup(cv->pages, idx);
+	if (unlikely(m)) goto exist;
+
 	cvas_ref(cv);
 	m = cslab_alloc_mapping();
 	if (!m) goto collision;
 
 	if (root_page) mm_flag = COS_MMAP_SET_ROOT;
-	
-	if (cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f))) {
-		BUG();
+	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
+	if (ret == EGETPHY) {
+		printc("Error: can not find physical page\n");
 		goto no_mapping;
 	}
-	
+	/* no maping, but page in page table already */
+	if (ret == EADDPTE) {
+		printc("Error: can not add page entry into page table\n");
+		printc("A mapping should be created anyway\n");
+	}
+
 	mapping_init(m, dest, to, p, f);
 	assert(!p || frame_nrefs(f) > 0);
 	frame_ref(f);
 	assert(frame_nrefs(f) > 0);
+
 	if (cvect_add(cv->pages, m, idx)) BUG();
+
 done:
 	return m;
 no_mapping:
@@ -282,6 +377,11 @@ no_mapping:
 collision:
 	cvas_deref(cv);
 	m = NULL;
+	goto done;
+exist:
+	assert(m->addr  == to);
+	assert(m->spdid == dest);
+	m->p = p;   		/* connect two tree or root exists */
 	goto done;
 }
 
@@ -369,28 +469,15 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 {
 	struct frame *f;
 	struct mapping *m = NULL;
-	vaddr_t ret = -1;    //should be 0 ??
-	vaddr_t root_addr;
-	spdid_t root_spd;
+	vaddr_t ret = -1;
 
 	LOCK();
 
-again:
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
 
 	assert(frame_nrefs(f) == 0);
 	frame_ref(f);
-	
-	root_addr = (vaddr_t)cos_mmap_introspect(COS_MMAP_INTRO_RTADDR, 
-						 0, spd, addr, frame_index(f));
-	/* a crash happened before */
-	if (unlikely(root_addr)) {
-		root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTRO_RTSPD, 
-							0, spd, addr, frame_index(f));
-		addr = root_addr;
-		spd  = root_spd;
-	}
 
 	m = mapping_crt(NULL, f, spd, addr, 1);
 	if (!m) goto dealloc;
@@ -399,8 +486,6 @@ again:
 	assert(m->addr == addr);
 	assert(m->spdid == spd);
 	assert(m == mapping_lookup(spd, addr));
-
-	if (unlikely(root_addr)) goto again;
 
 	ret = m->addr;
 done:
@@ -411,46 +496,24 @@ dealloc:
 	goto done;		/* -EINVAL */
 }
 
-/* mapping exists means */
-/* 1. normal case */
-/* 2. mapping has been recreated from a fault, through interface on request */
-/*    -- in this process, the root page mapping is ensured to create again */
-
 vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
-	struct mapping *m, *n, *p;
+	struct mapping *m, *n;
 	vaddr_t ret = 0;
-	int fr_idx = 0;
 
 	LOCK();
 	
 	m = mapping_lookup(s_spd, s_addr);
-	/* if (!m) goto done; 	/\* -EINVAL *\/   */
-	/* !m means that a crash happened before */
-	if (unlikely(!m)) {
-		fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTRO_FRAME, 
-						  0, s_spd, s_addr, 0);
-		if (fr_idx == -1) {
-			printc("can not find frame\n");
-			goto done;
-		}
-		/* rebuild the mapping with NULL for previous spd */
-		/* Notice: this mapping has a NULL field */
-		p = mapping_crt(NULL, &frames[fr_idx], s_spd, s_addr, 0);
-		if (!p) goto done;
-		m = p;
-		assert(fr_idx == frame_index(m->f));
-	}
-	
+	/* Now m will be recreated in mapping_crt */
+	if (unlikely(!m)) m = restore_mapping(s_spd, s_addr);
+
+	assert(m == mapping_lookup(s_spd,s_addr));
+
 	n = mapping_crt(m, m->f, d_spd, d_addr, 0);
 	if (!n) goto done;
 	
 	assert(n->addr  == d_addr);
 	assert(n->spdid == d_spd);
-	
-	/* m could be null during rebuilding mapping */ 
-        /* p will be rebuild before revoke? */
-	
 	assert(n->p == m || n->p == NULL); 
 
 	ret = d_addr;
@@ -459,14 +522,6 @@ done:
 	return ret;
 }
 
-/* After a fault happens, when revoking pages, this will be called  */
-/* to rebuild the sub tree from the spd from which the page revoked */
-/* All of its children need to be remapped                          */
-/* Questions:                                           */
-/* 1. From which spd is page revoked?                   */
-/* 2. Should rebuild the entire sub tree from this spd? */
-/* 3. How does this thread know which spds to iterate?  */
-/* 4. How does this thread know which spds to iterate?  */
 
 static struct mapping *
 rebuild_mapping_tree(spdid_t spd, vaddr_t addr, int flags)
@@ -503,12 +558,10 @@ rebuild_mapping_tree(spdid_t spd, vaddr_t addr, int flags)
 	/* Start to replay get/alias from root_addr in root_spd */
 	/* maybe called from super_booter at lower level? */
 	/* like on page fault and have a thread call mm? */
-	/* dealloc rdmm in each spd? */
 
-	/* m = ... */
+	/* THE recovery thread ... ? */
 done:	
 	return m;
-
 }
 
 int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
@@ -517,11 +570,8 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	int ret = 0;
 
 	LOCK();
-
 	m = mapping_lookup(spd, addr);
-
-	/* !m means that a crash happened before */
-	/* need rebuild alias tree here */
+	/* a crash happened before */
 	if (unlikely(!m)) {
 		m = rebuild_mapping_tree(spd, addr, flags);
 		if (!m) {
@@ -529,7 +579,6 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 			BUG();
 		}
 	}
-
 	mapping_del_children(m);
 
 	UNLOCK();
