@@ -241,21 +241,20 @@ rem_record(vaddr_t addr)
 
 	rdmm_list = rdmm_list_lookup(id);
         if (!rdmm_list) {
-		printc("can not record the alias data onto list\n");
+		printc("can not find list\n");
 		BUG();
 	}
 
-	while(1) {
-		rdmm = rdmm_list_rem(rdmm_list);
-		if (!rdmm) break;
+	rdmm = rdmm_list_rem(rdmm_list);
+	while(rdmm->next) {
 		rdmm_dealloc(rdmm);
-		
-		if (!rdmm->next) {
-			rdmm_list_free(rdmm_list);
-			assert(!rdmm_list_lookup(id));
-			break;
-		}
+		rdmm = rdmm_list_rem(rdmm_list);
 	}
+	assert(rdmm && !rdmm->next);
+	rdmm_dealloc(rdmm);
+
+	rdmm_list_free(rdmm_list);
+	assert(!rdmm_list_lookup(id));
 }
 
 static void
@@ -313,10 +312,10 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
 
-        if (!(add_record(s_addr, d_spd, d_addr))) {
-		printc("can not record the alias data onto list\n");
-		BUG();
-	}
+        /* if (!(add_record(s_addr, d_spd, d_addr))) { */
+	/* 	printc("can not record the alias data onto list\n"); */
+	/* 	BUG(); */
+	/* } */
 redo:
 CSTUB_ASM_4(mman_alias_page, s_spd, s_addr, d_spd, d_addr)
 
@@ -346,7 +345,7 @@ CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
        	       goto redo;
        }
 
-       rem_record(addr);
+       /* rem_record(addr); */
 
 CSTUB_POST
 

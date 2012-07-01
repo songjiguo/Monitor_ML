@@ -38,38 +38,16 @@
 
 #include <cos_list.h>
 #include "../../sched/cos_sched_sync.h"
-#define LOCK() if (cos_sched_lock_take()) assert(0);
+#define LOCK()   if (cos_sched_lock_take())    assert(0);
 #define UNLOCK() if (cos_sched_lock_release()) assert(0);
 
 #include <mem_mgr.h>
-
-/* mmap_cntl ERROR Code */
-#define EINVALC -1         	/* invalid call */
-#define EGETPHY -2		/* can not get a physical page */
-#define EADDPTE -3		/* can not add entry to page table */
-
-/* mmap_inctrospect ERROR Code */
-#define ENOFRAM -4		/* introspect frame failed */
 
 /***************************************************/
 /*** Data-structure for tracking physical memory ***/
 /***************************************************/
 
-/* mappings */
-struct mapping {
-	u16_t   flags;
-	spdid_t spdid;
-	vaddr_t addr;
-
-	struct frame *f;
-	/* child and sibling mappings */
-	struct mapping *p, *c, *_s, *s_;
-} __attribute__((packed));
-
-static struct mapping *mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int root_page);
-static struct mapping *mapping_lookup(spdid_t spdid, vaddr_t addr);
-
-
+struct mapping;
 /* A tagged union, where the tag holds the number of maps: */
 struct frame {
 	int nmaps;
@@ -85,53 +63,17 @@ static inline int  frame_index(struct frame *f) { return f-frames; }
 static inline int  frame_nrefs(struct frame *f) { return f->nmaps; }
 static inline void frame_ref(struct frame *f)   { f->nmaps++; }
 
-
 static inline struct frame *
 frame_alloc(void)
 {
-	vaddr_t root_addr;
-	spdid_t root_spd;
-
 	struct frame *f = freelist;
-	struct mapping *m = NULL;
 
 	if (!f) return NULL;
-
-again:
 	freelist = f->c.free;
 	f->nmaps = 0;
 	f->c.m   = NULL;
 
-	root_addr = (vaddr_t)cos_mmap_introspect(COS_MMAP_INTRO_RTADDR, 
-						 0, 0, 0, frame_index(f));
-	/* a crash happened before */
-	if (unlikely(root_addr)) {
-		root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTRO_RTSPD, 
-							0, 0, 0, frame_index(f));
-		assert(!root_spd);
-		
-		frame_ref(f);
-
-		m = mapping_crt(NULL, f, root_spd, root_addr, 1);
-		if (!m) {
-			printc("can not create mapping\n");
-			goto err;
-		}
-		f->c.m = m;
-		
-		assert(m->addr == root_addr);
-		assert(m->spdid == root_spd);
-		assert(m == mapping_lookup(root_spd, root_addr));
-		f = freelist;
-
-		goto again;
-	}
-
-done:
 	return f;
-err:
-	f = NULL;
-	goto done;
 }
 
 static inline void 
@@ -161,11 +103,9 @@ frame_init(void)
 static inline void
 mm_init(void)
 {
-	static int first = 1;
-	if (unlikely(first)) {
-		first = 0;
-		frame_init();
-	}
+	printc("mm init as thread %d\n", cos_get_thd_id());
+
+	frame_init();
 }
 
 /*************************************/
@@ -185,6 +125,7 @@ __page_get(void)
 	f->nmaps  = -1; 	 /* belongs to us... */
 	f->c.addr = (vaddr_t)hp; /* ...at this address */
 	if (cos_mmap_cntl(COS_MMAP_GRANT, 0, cos_spd_id(), (vaddr_t)hp, frame_index(f))) {
+		printc("grant @ %p for frame %d\n", hp, frame_index(f));
 		BUG();
 	}
 	return hp;
@@ -260,6 +201,15 @@ cvas_deref(struct comp_vas *cv)
 /*** Mapping operations ***/
 /**************************/
 
+struct mapping {
+	u16_t   flags;
+	spdid_t spdid;
+	vaddr_t addr;
+
+	struct frame *f;
+	/* child and sibling mappings */
+	struct mapping *p, *c, *_s, *s_;
+} __attribute__((packed));
 CSLAB_CREATE(mapping, sizeof(struct mapping));
 
 static void
@@ -288,51 +238,14 @@ mapping_lookup(spdid_t spdid, vaddr_t addr)
 	return cvect_lookup(cv->pages, addr >> PAGE_SHIFT);
 }
 
-
-static struct mapping *
-restore_mapping(spdid_t spd, vaddr_t addr)
-{
-	/* if mmaping does not exist, create with a 'NULL previous' node */
-	/* this could result many independent trees */
-
-	struct mapping *m = NULL;
-	int fr_idx = 0;
-
-	fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTRO_FRAME, 
-					  0, spd, addr, 0);
-
-	if (fr_idx == ENOFRAM) {
-		printc("can not find frame\n");
-		goto done;
-	}
-	
-	m = mapping_crt(NULL, &frames[fr_idx], spd, addr, 0);
-	if (!m) goto err;
-
-	assert(fr_idx == frame_index(m->f));
-	assert(m->p == NULL);
-done:
-	return m;
-err:
-	m = NULL;
-	goto done;
-}
-
-
-/* IMPORTANT: do not make assumption that virtual addresses are all different */
-/*            Across components, vaddr could be same in the future */
-
 /* Make a child mapping */
 static struct mapping *
-mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int root_page)
+mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to)
 {
 	struct comp_vas *cv = cvas_lookup(dest);
 	struct mapping *m = NULL;
 	long idx = to >> PAGE_SHIFT;
-	int mm_flag, ret;
-	
-	ret = mm_flag = 0;
-	
+
 	assert(!p || p->f == f);
 	assert(dest && to);
 	/* no vas structure for this spd yet... */
@@ -343,33 +256,20 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	}
 	assert(cv->pages);
 
-	/* if (cvect_lookup(cv->pages, idx)) goto collision; */
-	m = cvect_lookup(cv->pages, idx);
-	if (unlikely(m)) goto exist;
-
+	if (cvect_lookup(cv->pages, idx)) goto collision;
 	cvas_ref(cv);
 	m = cslab_alloc_mapping();
 	if (!m) goto collision;
 
-	if (root_page) mm_flag = COS_MMAP_SET_ROOT;
-	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
-	if (ret == EGETPHY) {
-		printc("Error: can not find physical page\n");
+	if (cos_mmap_cntl(COS_MMAP_GRANT, 0, dest, to, frame_index(f))) {
+		printc("mem_man: could not grant at %x:%d\n", dest, (int)to);
 		goto no_mapping;
 	}
-	/* no maping, but page in page table already */
-	if (ret == EADDPTE) {
-		printc("Error: can not add page entry into page table\n");
-		printc("A mapping should be created anyway\n");
-	}
-
 	mapping_init(m, dest, to, p, f);
 	assert(!p || frame_nrefs(f) > 0);
 	frame_ref(f);
 	assert(frame_nrefs(f) > 0);
-
 	if (cvect_add(cv->pages, m, idx)) BUG();
-
 done:
 	return m;
 no_mapping:
@@ -377,11 +277,6 @@ no_mapping:
 collision:
 	cvas_deref(cv);
 	m = NULL;
-	goto done;
-exist:
-	assert(m->addr  == to);
-	assert(m->spdid == dest);
-	m->p = p;   		/* connect two tree or root exists */
 	goto done;
 }
 
@@ -472,21 +367,16 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	vaddr_t ret = -1;
 
 	LOCK();
-
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
-
 	assert(frame_nrefs(f) == 0);
 	frame_ref(f);
-
-	m = mapping_crt(NULL, f, spd, addr, 1);
+	m = mapping_crt(NULL, f, spd, addr);
 	if (!m) goto dealloc;
 	f->c.m = m;
-
 	assert(m->addr == addr);
 	assert(m->spdid == spd);
 	assert(m == mapping_lookup(spd, addr));
-
 	ret = m->addr;
 done:
 	UNLOCK();
@@ -502,66 +392,18 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	vaddr_t ret = 0;
 
 	LOCK();
-	
 	m = mapping_lookup(s_spd, s_addr);
-	/* Now m will be recreated in mapping_crt */
-	if (unlikely(!m)) m = restore_mapping(s_spd, s_addr);
-
-	assert(m == mapping_lookup(s_spd,s_addr));
-
-	n = mapping_crt(m, m->f, d_spd, d_addr, 0);
+	if (!m) goto done; 	/* -EINVAL */
+	n = mapping_crt(m, m->f, d_spd, d_addr);
 	if (!n) goto done;
-	
+
 	assert(n->addr  == d_addr);
 	assert(n->spdid == d_spd);
-	assert(n->p == m || n->p == NULL); 
-
+	assert(n->p     == m);
 	ret = d_addr;
 done:
 	UNLOCK();
 	return ret;
-}
-
-
-static struct mapping *
-rebuild_mapping_tree(spdid_t spd, vaddr_t addr, int flags)
-{
-	int fr_idx;
-	vaddr_t root_addr;
-	spdid_t root_spd;
-
-	struct mapping *m = NULL;
-
-	assert(!mapping_lookup(spd, addr));
-
-	fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTRO_FRAME, 
-					  0, spd, addr, 0);
-	if (fr_idx == -1) {
-		printc("can not find frame\n");
-		goto done;
-	}
-
-	root_addr = (vaddr_t)cos_mmap_introspect(COS_MMAP_INTRO_RTADDR, 
-						 0, spd, addr, fr_idx);
-	if (root_addr == 0) {
-		printc("can not find root page address\n");
-		goto done;
-	}
-	
-	root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTRO_RTSPD, 
-						0, spd, addr, fr_idx);
-	if (root_spd == 0) {
-		printc("can not find root spd\n");
-		goto done;
-	}
-
-	/* Start to replay get/alias from root_addr in root_spd */
-	/* maybe called from super_booter at lower level? */
-	/* like on page fault and have a thread call mm? */
-
-	/* THE recovery thread ... ? */
-done:	
-	return m;
 }
 
 int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
@@ -571,34 +413,22 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 
 	LOCK();
 	m = mapping_lookup(spd, addr);
-	/* a crash happened before */
-	if (unlikely(!m)) {
-		m = rebuild_mapping_tree(spd, addr, flags);
-		if (!m) {
-			printc("rebuild failed\n");
-			BUG();
-		}
+	if (!m) {
+		ret = -1;	/* -EINVAL */
+		goto done;
 	}
 	mapping_del_children(m);
-
+done:
 	UNLOCK();
 	return ret;
 }
 
-
-/* might not be used in the future. A malloc manager should take care */
 int mman_release_page(spdid_t spd, vaddr_t addr, int flags)
 {
 	struct mapping *m;
 	int ret = 0;
 
 	LOCK();
-
-	if (cos_mmap_cntl(COS_MMAP_INTRO_FRAME, 0, spd, addr, 0) == -1) {
-		printc("The page %p does not exist when release\n", (void *)addr);
-		goto done;
-	}
-
 	m = mapping_lookup(spd, addr);
 	if (!m) {
 		ret = -1;	/* -EINVAL */
@@ -643,123 +473,45 @@ void mman_release_all(void)
 /*** The base-case scheduler ***/
 /*******************************/
 
-#include <errno.h>
-#include <sched.h>
+#include <sched_hier.h>
 
-int sched_root_init(void) { mm_init(); return 0; }
-void sched_exit(void)     { mman_release_all(); }
-
-int sched_child_get_evt(spdid_t spdid, struct sched_child_evt *e, int idle, unsigned long wake_diff)
+int  sched_init(void)   { return 0; }
+extern void parent_sched_exit(void);
+void 
+sched_exit(void)   
 {
-	BUG();
-	return 0;
+	mman_release_all(); 
+	parent_sched_exit();
 }
 
-int sched_child_cntl_thd(spdid_t spdid)
-{
-	BUG();
-	return 0;
-}
+int sched_isroot(void) { return 1; }
 
-int sched_child_thd_crt(spdid_t spdid, spdid_t dest_spd)
-{
-	BUG();
-	return 0;
-}
+int 
+sched_child_get_evt(spdid_t spdid, struct sched_child_evt *e, int idle, unsigned long wake_diff) { BUG(); return 0; }
 
-int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
-{
-	BUG();
-	return -ENOTSUP;
-}
+extern int parent_sched_child_cntl_thd(spdid_t spdid);
 
-int sched_block(spdid_t spdid, unsigned short int dependency_thd)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-void sched_timeout(spdid_t spdid, unsigned long amnt) { BUG(); return; }
-
-int sched_priority(unsigned short int tid) { BUG(); return 0; }
-
-int sched_timeout_thd(spdid_t spdid)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-unsigned int sched_tick_freq(void)
-{
-	BUG();
-	return 0;
-}
-
-unsigned long sched_cyc_per_tick(void)
-{
-	BUG();
-	return 0;
-}
-
-unsigned long sched_timestamp(void)
-{
-	BUG();
-	return 0;
-}
-
-unsigned long sched_timer_stopclock(void)
-{
-	BUG();
-	return 0;
-}
-
-int sched_create_thread(spdid_t spdid, struct cos_array *data)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-int sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, u32_t sched_param2)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-int
-sched_create_thread_default(spdid_t spdid, u32_t sched_param_0, 
-			    u32_t sched_param_1, u32_t sched_param_2)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-int sched_thread_params(spdid_t spdid, u16_t thd_id, res_spec_t rs)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-int sched_create_net_brand(spdid_t spdid, unsigned short int port)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short int tid)
-{
-	BUG();
-	return -ENOTSUP;
-}
-
-int sched_component_take(spdid_t spdid) 
+int 
+sched_child_cntl_thd(spdid_t spdid) 
 { 
-	BUG(); 
-	return -ENOTSUP;
+	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
+	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
+	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
+
+	return 0;
 }
 
-int sched_component_release(spdid_t spdid)
+int 
+sched_child_thd_crt(spdid_t spdid, spdid_t dest_spd) { BUG(); return 0; }
+
+void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
-	BUG();
-	return -ENOTSUP;
-}
+	switch (t) {
+	case COS_UPCALL_BOOTSTRAP:
+		mm_init(); break;
+	default:
+		BUG(); return;
+	}
 
+	return;
+}

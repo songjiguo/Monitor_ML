@@ -47,6 +47,15 @@ struct thd_sched_info {
 	int notification_offset;
 };
 
+/* 
+ * User level scheduler record two priority, so later on they can be
+ * introspected 
+*/
+struct sched_introspect {
+	unsigned short int create_priority;
+	unsigned short int switch_priority;
+};
+
 #define THD_STATE_PREEMPTED     0x1   /* Complete register info is saved in regs */
 #define THD_STATE_UPCALL        0x2   /* Thread for upcalls: ->thd_brand points to the thread who we're branded to */
 #define THD_STATE_ACTIVE_UPCALL 0x4   /* Thread is in upcall execution. */
@@ -65,9 +74,6 @@ struct thd_sched_info {
 struct thread {
 	short int stack_ptr;
 	unsigned short int thread_id, cpu_id, flags;
-
-	/* When prio is added, BUG is triggered in hijack.c L2188 */
-	/* unsigned short int prio; */  
 
 	/* 
 	 * Watch your alignments here!!!
@@ -113,6 +119,8 @@ struct thread {
 	//struct thread *upcall_thread_ready, *upcall_thread_active;
 
 	struct thread *freelist_next;
+
+	struct sched_introspect *usr_sched_prio;
 } CACHE_ALIGNED;
 
 struct thread *thd_alloc(struct spd *spd);

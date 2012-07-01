@@ -18,6 +18,7 @@
 #include <cos_list.h>
 
 #include <sched.h>
+#include <sched_hier.h>
 
 /**************** Scheduler Util Fns *******************/
 
@@ -391,7 +392,7 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_sched_lock_release();
 
 	/* kernel will read next thread information from cos_next */
-	return cos___switch_thread(thd_id, flags); /* should we pass priority also here? */
+	return cos___switch_thread(thd_id, flags); 
 }
 
 

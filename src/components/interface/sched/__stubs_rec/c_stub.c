@@ -31,9 +31,6 @@ struct rec_data_sched {
 	unsigned long fcnt;
 };
 
-/**********************************************/
-/* slab allocator and cvect for tracking pages */
-/**********************************************/
 
 CSLAB_CREATE(rdsched, sizeof(struct rec_data_sched));
 CVECT_CREATE_STATIC(rec_sched_vect);

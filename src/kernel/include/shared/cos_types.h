@@ -449,11 +449,15 @@ enum {
 				 * for the current thread. */
 };
 
-/* operations for mmap cntl*/
 enum {
 	COS_MMAP_GRANT,
 	COS_MMAP_REVOKE,
 	COS_MMAP_TLBFLUSH
+};
+
+enum {
+	COS_PFN_GRANT,
+	COS_PFN_MAX_MEM
 };
 
 /* operations for mmap introspect */
