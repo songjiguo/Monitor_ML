@@ -2,7 +2,7 @@ C_OBJS=wakeup.o
 ASM_OBJS=
 COMPONENT=wkup.o
 INTERFACES=
-DEPENDENCIES=sched printc
+DEPENDENCIES=sched printc lock mem_mgr_large valloc
 IF_LIB=
 
 include ../../Makefile.subsubdir

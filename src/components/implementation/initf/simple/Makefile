@@ -2,7 +2,7 @@ C_OBJS=initf.o
 ASM_OBJS=
 COMPONENT=initfs.o
 INTERFACES=initf
-DEPENDENCIES=sched printc
+DEPENDENCIES=sched printc lock mem_mgr_large valloc
 IF_LIB=
 
 include ../../Makefile.subsubdir

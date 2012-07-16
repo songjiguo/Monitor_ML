@@ -23,7 +23,7 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 struct spd_local_md {
 	spdid_t spdid;
 	vaddr_t comp_info;
-	char *page_start, *page_end;
+	char *page_start;
 	struct cobj_header *h;
 } local_md[MAX_NUM_SPDS+1];
 
@@ -147,16 +147,25 @@ static vaddr_t boot_spd_end(struct cobj_header *h)
 
 static int boot_spd_map_memory(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
 {
-	unsigned int i;
+	unsigned int i, tot_sz = 0;
+	char *map_start, *map_iter;
 	vaddr_t dest_daddr;
 
 	local_md[spdid].spdid      = spdid;
 	local_md[spdid].h          = h;
 	local_md[spdid].page_start = cos_get_heap_ptr();
 	local_md[spdid].comp_info  = comp_info;
+
+	/* Here we want to preallocate the contiguous span of virtual address pages... */
+	for (i = 0 ; i < h->nsect ; i++) {
+		tot_sz += round_up_to_page(cobj_sect_size(h, i)); 
+	}
+	map_start = cos_get_vas_pages(tot_sz/PAGE_SIZE);
+	assert(map_start == local_md[spdid].page_start);
+	map_iter = map_start;
+
 	for (i = 0 ; i < h->nsect ; i++) {
 		struct cobj_sect *sect;
-		char *dsrc;
 		int left;
 
 		sect       = cobj_sect_get(h, i);
@@ -164,15 +173,14 @@ static int boot_spd_map_memory(struct cobj_header *h, spdid_t spdid, vaddr_t com
 		left       = cobj_sect_size(h, i);
 
 		while (left > 0) {
-			dsrc = cos_get_vas_page();
-			if ((vaddr_t)dsrc != __mman_get_page(cos_spd_id(), (vaddr_t)dsrc, 0)) BUG();
-			if (dest_daddr != (__mman_alias_page(cos_spd_id(), (vaddr_t)dsrc, spdid, dest_daddr))) BUG();
+			if ((vaddr_t)map_iter != __mman_get_page(cos_spd_id(), (vaddr_t)map_iter, 0)) BUG();
+			if (dest_daddr != (__mman_alias_page(cos_spd_id(), (vaddr_t)map_iter, spdid, dest_daddr))) BUG();
 
+			map_iter   += PAGE_SIZE;
 			dest_daddr += PAGE_SIZE;
 			left       -= PAGE_SIZE;
 		}
 	}
-	local_md[spdid].page_end = (void*)dest_daddr;
 
 	return 0;
 }
@@ -401,7 +409,12 @@ failure_notif_wait(spdid_t caller, spdid_t failed)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed)
 {
+
+	/* unsigned long long start, end; */
+
 	struct spd_local_md *md;
+
+	/* rdtscll(start); */
 
 	LOCK();
 
@@ -415,6 +428,10 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 //	boot_spd_caps_chg_activation(failed, 1);
 
 	UNLOCK();
+
+	/* rdtscll(end); */
+	/* printc("COST (caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start); */
+
 }
 
 struct deps { short int client, server; };

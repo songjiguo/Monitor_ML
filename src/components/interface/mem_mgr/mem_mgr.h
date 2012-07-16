@@ -10,6 +10,11 @@
 #ifndef   	MEM_MGR_H
 #define   	MEM_MGR_H
 
+/* #define MEA_GET */
+/* #define MEA_ALIAS */
+/* #define MEA_REVOKE */
+/* #define MEA_ADD_ROOT */
+
 /* Map a physical frame into a component. */
 vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags);
 /* 
@@ -23,6 +28,7 @@ int mman_release_page(spdid_t spd, vaddr_t addr, int flags);
 int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags); 
 /* The invoking component (s_spd) must own the mapping. */
 vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr);
+vaddr_t mman_alias_page2(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr);
 void mman_print_stats(void);
 
 #endif 	    /* !MEM_MGR_H */

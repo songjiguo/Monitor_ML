@@ -3110,7 +3110,9 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 	switch(op) {
 	case COS_MMAP_GRANT:
 	{
+		paddr_t phy_addr;
 		mem_id += this_spd->pfn_base;
+		/* printk("memid %d pfn_base %d\n", mem_id, this_spd->pfn_base); */
 		if (mem_id < this_spd->pfn_base || /* <- check for overflow? */
 		    mem_id >= (this_spd->pfn_base + this_spd->pfn_extent)) {
 			printk("Accessing physical frame outside of allowed range (%d outside of [%d, %d).\n",
@@ -3131,13 +3133,18 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		 * writing all of the pages itself).
 		 */
 		if (pgtbl_add_entry(spd->spd_info.pg_tbl, daddr, page)) {
-			printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n", 
-			       dspd_id, (unsigned int)daddr);
+			if (spdid!=3) printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n", 
+					     dspd_id, (unsigned int)daddr);
 			ret = -3;
 			break;
 		}
 
 		if (flags == COS_MMAP_SET_ROOT) cos_add_root_info(dspd_id, daddr, mem_id);
+
+		/* /\* test starts*\/ */
+		/* phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr); */
+		/* printk("entry added: daddr %x phyaddr %x phy_id %d\n", daddr, phy_addr, cos_paddr_to_cap(phy_addr)); */
+		/* /\* test ends *\/ */
 
 		cos_meas_event(COS_MAP_GRANT);
 		break;
@@ -3150,8 +3157,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 			ret = 0;
 			break;
 		}
-
-		ret = cos_paddr_to_cap(pa);
+		ret = cos_paddr_to_cap(pa) - this_spd->pfn_base;
 		if (cos_is_rootpage(dspd_id, daddr, ret)) cos_remove_root_info(ret);
 
 		cos_meas_event(COS_MAP_REVOKE);
@@ -3170,17 +3176,19 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 }
 
 COS_SYSCALL long
-cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, long mem_id)
+cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned long mem_id)
 {
-	short int op, flags;
-	long ret = 0;
-	struct spd *spd;
+	short int op, flags, dspd_id;
+	paddr_t page;
+	int ret = 0;
+	struct spd *spd, *this_spd;
 	
-	/* decode arguments */
-	op = op_flags_dspd>>24;
-	flags = op_flags_dspd>>16 & 0x000000FF;
-	spd    = spd_get_by_index(spdid);
-	if (!spd) return -1;
+	/* decode arguments, could be zero */
+	op       = op_flags_dspd>>24;
+	flags    = op_flags_dspd>>16 & 0x000000FF;
+	dspd_id  = op_flags_dspd & 0x0000FFFF;
+	this_spd = spd_get_by_index(spdid);
+	spd      = spd_get_by_index(dspd_id);
 
 	switch(op) {
 	case COS_MMAP_INTRO_FRAME:
@@ -3189,13 +3197,13 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, long m
 		int frame_num;
 
 		if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) {
-			printk("cos: try find frame -- no page table entry found.\n");
+			printk("cos: try find phy frame -- no page table entry found.\n");
 			ret = -4; /* frame id start from 0? */
 			break;
 		}
-
-		frame_num = cos_paddr_to_cap(phy_addr);
-		printk("cos: found a frame %d\n", frame_num);
+		frame_num = cos_paddr_to_cap(phy_addr) - this_spd->pfn_base;
+		/* printk("to intro: frame_num %d daddr %x phyaddr %x\n", frame_num, daddr, phy_addr); */
+		/* printk("cos: found a frame %d\n", frame_num); */
 		ret = frame_num;   // will be used as mem_id in the following recovery invocation
 		break;
 	}
@@ -3203,9 +3211,10 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, long m
 	{
 		vaddr_t root_page;
 
+		mem_id += this_spd->pfn_base;
 		root_page = cos_lookup_root_page(mem_id);
 		if (0 == root_page) {
-			printk("cos: try find root page -- could not get rooted page.\n");
+			//printk("cos: try find root page -- could not get rooted page.\n");
 			break;
 		}
 		ret = root_page;
@@ -3215,6 +3224,7 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, long m
 	{
 		int root_spd;
 
+		mem_id += this_spd->pfn_base;
 		root_spd = cos_lookup_root_spd(mem_id);
 		if (0 == root_spd) {
 			printk("cos: try find root spd -- could not get rooted spd.\n");

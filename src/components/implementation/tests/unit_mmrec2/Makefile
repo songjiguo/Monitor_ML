@@ -1,8 +1,8 @@
-C_OBJS=pgfault.o
+C_OBJS=memory_rec2.o
 ASM_OBJS=
-COMPONENT=pfr.o
-INTERFACES=pgfault
-DEPENDENCIES=sched printc failure_notif lock mem_mgr_large valloc
+COMPONENT=mm_rec2.o
+INTERFACES=
+DEPENDENCIES=sched printc mem_mgr
 IF_LIB=
 
 include ../../Makefile.subsubdir

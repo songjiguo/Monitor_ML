@@ -67,23 +67,32 @@ int main(void)
 
 __attribute__((weak)) vaddr_t ST_user_caps;
 
-__attribute__((weak)) 
-void *cos_get_vas_page(void)
+__attribute__((weak)) void *
+cos_get_vas_pages(int npages)
 {
-	char *h;
+	char *s;
 	long r;
+
 	do {
-		h = cos_get_heap_ptr();
-		r = (long)h+PAGE_SIZE;
-	} while (cos_cmpxchg(&cos_comp_info.cos_heap_ptr, (long)h, r) != r);
-	return h;
+		s = cos_get_heap_ptr();
+		/* assert(h_i = h_{i-1} + PAGE_SIZE */
+		r = (long)s+(PAGE_SIZE * npages);
+	} while (cos_cmpxchg(&cos_comp_info.cos_heap_ptr, (long)s, r) != r);
+
+	return s;
 }
 
-__attribute__((weak)) 
-void cos_release_vas_page(void *p)
+__attribute__((weak)) void *
+cos_get_vas_page(void) { return cos_get_vas_pages(1); }
+
+__attribute__((weak)) void 
+cos_release_vas_pages(void *p, int npages)
 {
-	cos_set_heap_ptr_conditional(p + PAGE_SIZE, p);
+	cos_set_heap_ptr_conditional(p + (npages*PAGE_SIZE), p);
 }
+
+__attribute__((weak)) void
+cos_release_vas_page(void *p) { cos_release_vas_pages(p, 1); }
 
 extern const vaddr_t cos_atomic_cmpxchg, cos_atomic_cmpxchg_end, 
 	cos_atomic_user1, cos_atomic_user1_end, 

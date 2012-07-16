@@ -1226,15 +1226,18 @@ static inline pte_t *pgtbl_lookup_address(paddr_t pgtbl, unsigned long addr)
         return pte_offset_kernel(pmd, addr);
 }
 
-/* returns the page table entry */
+/* returns the paddr for a given vaddr */
 unsigned long
 __pgtbl_lookup_address(paddr_t pgtbl, unsigned long addr)
 {
 	pte_t *pte;
+	unsigned long paddr = 0;
 
 	pte = pgtbl_lookup_address(pgtbl, addr);
 	if (!pte) return 0;
-	return pte->pte_low;
+	
+	paddr = (pte->pte_low >> PAGE_SHIFT) << PAGE_SHIFT; /* zero out all flags */
+	return paddr;
 }
 
 /* returns the page table entry */
@@ -1261,10 +1264,13 @@ int pgtbl_add_entry(paddr_t pgtbl, unsigned long vaddr, unsigned long paddr)
 {
 	pte_t *pte = pgtbl_lookup_address(pgtbl, vaddr);
 
+	/* if (!pte) printk("no pte!\n"); */
+	/* if (pte_val(*pte) & _PAGE_PRESENT) printk("page exists!\n"); */
 	if (!pte || pte_val(*pte) & _PAGE_PRESENT) {
 		return -1;
 	}
 	/*pte_val(*pte)*/pte->pte_low = paddr | (_PAGE_PRESENT | _PAGE_RW | _PAGE_USER | _PAGE_ACCESSED);
+	/* printk("paddr %x pte->pte_low %x\n", paddr, pte->pte_low); */
 
 	return 0;
 }

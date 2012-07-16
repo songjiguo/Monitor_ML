@@ -2,7 +2,7 @@ C_OBJS=periodic.o
 ASM_OBJS=
 COMPONENT=pt.o
 INTERFACES=
-DEPENDENCIES=periodic_wake sched printc synth_hier
+DEPENDENCIES=periodic_wake sched printc synth_hier lock mem_mgr_large valloc
 IF_LIB=
 
 include ../../Makefile.subsubdir

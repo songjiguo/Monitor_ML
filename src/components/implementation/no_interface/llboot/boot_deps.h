@@ -152,16 +152,27 @@ llboot_thd_done(void)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed);
 
+static int first = 0;
+
 int 
 fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
 	unsigned long r_ip; 	/* the ip to return to */
+
 	int tid = cos_get_thd_id();
+
+	if (first >= 10) assert(0);
+
+	if (first<10) first = first + 1;
+
 	printc("<<0>>\n");
 
 	failure_notif_fail(cos_spd_id(), spdid);
 	printc("<<1>>\n");
 	/* no reason to save register contents... */
+	/* unsigned long long start, end; */
+	/* rdtscll(start); */
+
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		/* Manipulate the return address of the component that called
 		 * the faulting component... */
@@ -173,8 +184,11 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* switch to the recovery thread... */
 		recover_spd = spdid;
 		prev_thd = cos_get_thd_id();
+
 		cos_switch_thread(recovery_thd, 0);
 		/* after the recovery thread is done, it should switch back to us. */
+		/* rdtscll(end); */
+		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */
 		return 0;
 	}
 	printc("<<2>>\n");

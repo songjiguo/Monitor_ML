@@ -2,7 +2,7 @@ C_OBJS=t.o
 ASM_OBJS=
 COMPONENT=test.o
 INTERFACES=
-DEPENDENCIES=sched printc
+DEPENDENCIES=sched printc lock mem_mgr_large valloc
 IF_LIB=
 
 include ../../Makefile.subsubdir

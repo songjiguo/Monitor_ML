@@ -2,7 +2,7 @@ C_OBJS=citest.o
 ASM_OBJS=
 COMPONENT=cit.o
 INTERFACES=
-DEPENDENCIES=printc sched cinfo
+DEPENDENCIES=printc sched cinfo lock mem_mgr_large valloc
 IF_LIB=
 ADDITIONAL_LIBS=
 

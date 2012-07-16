@@ -284,7 +284,10 @@ cvect_add(cvect_t *v, void *val, long id)
 	assert(id < CVECT_MAX_ID);
 	assert(!cvect_lookup(v, id));
 	if (__cvect_set(v, id, val)) {
+		/* int i; */
+		/* for(i=4;i<11;i++) printc("before cvect_expand: id %d %x\n", i, (unsigned int)cvect_lookup(v, i)); */
 		if (__cvect_expand(v, id)) return -1;
+		/* for(i=4;i<11;i++) printc("after cvect_expand: id %d %x\n", i, (unsigned int)cvect_lookup(v, i)); */
 		if (__cvect_set(v, id, val)) return -1;
 	}
 	return 0;

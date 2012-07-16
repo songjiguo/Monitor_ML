@@ -364,6 +364,8 @@ static inline void *cos_get_prealloc_page(void)
 /* allocate and release a page in the vas */
 extern void *cos_get_vas_page(void);
 extern void cos_release_vas_page(void *p);
+extern void *cos_get_vas_pages(int npages);
+extern void cos_release_vas_pages(void *p, int npages);
 
 /* only if the heap pointer is pre_addr, set it to post_addr */
 static inline void cos_set_heap_ptr_conditional(void *pre_addr, void *post_addr)

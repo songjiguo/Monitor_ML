@@ -134,7 +134,7 @@ print_bitmap(u32_t *x, int max)
 	int i;
 
 	for (i = 0 ; i < max ; i++) {
-		printc("%x", x[i]);
+		printc("%x\n", x[i]);
 	}
 	printc("\n");
 }
@@ -198,7 +198,8 @@ bitmap_contiguous_ones(u32_t *x, int off, int extent, int max)
 	i = off;
 	
 	prev = start = 0; 
-	for (i = 0 ; i < max ; i++) {
+	for (i = 0 ; i < (int)(max*sizeof(u32_t)) ; i++) {
+	/* for (i = 0 ; i < max ; i++) { */
 		prev = i;
 		i = bitmap_one_offset(x, i, max);
 		/* end of bitmap? */

@@ -1,9 +1,9 @@
-C_OBJS=fake_net.o
+C_OBJS=memory_rec3.o
 ASM_OBJS=
-COMPONENT=fn.o
-INTERFACES=net_transport
+COMPONENT=mm_rec3.o
+INTERFACES=
 DEPENDENCIES=sched printc lock mem_mgr_large valloc
 IF_LIB=
 
 include ../../Makefile.subsubdir
-
+MANDITORY_LIB=simple_stklib.o
