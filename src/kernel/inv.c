@@ -3123,7 +3123,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		page = cos_access_page(mem_id);
 		if (0 == page) {
 			printk("cos: mmap grant -- could not get a physical page.\n");
-			return -2;
+			return -EINVAL;
 		}
 		/*
 		 * Demand paging could mess this up as the entry might
@@ -3133,10 +3133,9 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		 * writing all of the pages itself).
 		 */
 		if (pgtbl_add_entry(spd->spd_info.pg_tbl, daddr, page)) {
-			if (spdid!=3) printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n", 
-					     dspd_id, (unsigned int)daddr);
-			ret = -3;
-			break;
+			printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n", 
+			       dspd_id, (unsigned int)daddr);
+			return -EINVAL;
 		}
 
 		if (flags == COS_MMAP_SET_ROOT) cos_add_root_info(dspd_id, daddr, mem_id);
@@ -3191,46 +3190,40 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 	spd      = spd_get_by_index(dspd_id);
 
 	switch(op) {
-	case COS_MMAP_INTRO_FRAME:
+	case COS_MMAP_INTROSPECT_FRAME:
 	{
 		paddr_t phy_addr;
 		int frame_num;
 
 		if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) {
-			printk("cos: try find phy frame -- no page table entry found.\n");
-			ret = -4; /* frame id start from 0? */
-			break;
+			/* printk("cos: try find phy frame -- no page table entry found.\n"); */
+			return -EINVAL;
 		}
 		frame_num = cos_paddr_to_cap(phy_addr) - this_spd->pfn_base;
 		/* printk("to intro: frame_num %d daddr %x phyaddr %x\n", frame_num, daddr, phy_addr); */
 		/* printk("cos: found a frame %d\n", frame_num); */
-		ret = frame_num;   // will be used as mem_id in the following recovery invocation
+		ret = frame_num;
 		break;
 	}
-	case COS_MMAP_INTRO_RTADDR:
+	case COS_MMAP_INTROSPECT_ADDR:
 	{
 		vaddr_t root_page;
 
 		mem_id += this_spd->pfn_base;
 		root_page = cos_lookup_root_page(mem_id);
-		if (0 == root_page) {
-			//printk("cos: try find root page -- could not get rooted page.\n");
-			break;
-		}
+		if (0 == root_page) return 0;
+			/* printk("cos: try find root page -- could not get rooted page.\n"); */
 		ret = root_page;
 		break;
 	}		
-	case COS_MMAP_INTRO_RTSPD:
+	case COS_MMAP_INTROSPECT_SPD:
 	{
 		int root_spd;
 
 		mem_id += this_spd->pfn_base;
 		root_spd = cos_lookup_root_spd(mem_id);
-		if (0 == root_spd) {
-			printk("cos: try find root spd -- could not get rooted spd.\n");
-			break;
-		}
-
+		if (0 == root_spd) return 0;
+			/* printk("cos: try find root spd -- could not get rooted spd.\n"); */
 		ret = root_spd;
 		break;
 	}		

@@ -42,28 +42,31 @@
 #define CSTUB_ASM_0(name) \
         	CSTUB_ASM_PRE(name)	   \
                 : "a" (uc->cap_no) \
-		: "ebx", "edx", "esi", "edi", "memory", "cc");
+		: "ebx", "edx", "esi", "edi", "memory", "cc"); \
 
 #define CSTUB_ASM_1(name, first)		   \
         	CSTUB_ASM_PRE(name)	   \
 		: "a" (uc->cap_no), "b" (first)		\
-		: "edx", "esi", "edi", "memory", "cc");
+		: "edx", "esi", "edi", "memory", "cc"); \
+		__asm__ __volatile__("" ::: "ebx");
 
 #define CSTUB_ASM_2(name, first, second)   \
         	CSTUB_ASM_PRE(name)	   \
 		: "a" (uc->cap_no), "b" (first), "S" (second)	\
-		: "edx", "edi", "memory", "cc");
+		: "edx", "edi", "memory", "cc"); \
+		__asm__ __volatile__("" ::: "ebx", "esi");
 
 #define CSTUB_ASM_3(name, first, second, third)	\
         	CSTUB_ASM_PRE(name)	   \
 		: "a" (uc->cap_no), "b" (first), "S" (second), "D" (third) \
-		: "edx", "memory", "cc");
+		: "edx", "memory", "cc"); \
+		__asm__ __volatile__("" ::: "ebx", "esi", "edi");
 
 #define CSTUB_ASM_4(name, first, second, third, fourth)	\
         	CSTUB_ASM_PRE(name)	   \
 		: "a" (uc->cap_no), "b" (first), "S" (second), "D" (third), "d" (fourth) \
-		: "memory", "cc");
-
+		: "memory", "cc"); \
+		__asm__ __volatile__("" ::: "ebx", "edx", "esi", "edi");
 
 #define CSTUB_FN_0(type, name)						\
 	__attribute__((regparm(1))) type name##_call(struct usr_inv_cap *uc) \

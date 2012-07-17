@@ -9,7 +9,6 @@ vaddr_t __sg_mman_get_page(spdid_t spdid, vaddr_t addr, int flags)
 
 vaddr_t __sg_mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
-	printc("server stub d_spd %d\n", d_spd);
 	return mman_alias_page(s_spd, s_addr, d_spd, d_addr);
 }
 

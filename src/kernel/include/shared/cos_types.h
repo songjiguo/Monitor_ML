@@ -462,9 +462,9 @@ enum {
 
 /* operations for mmap introspect */
 enum {
-	COS_MMAP_INTRO_RTADDR,
-	COS_MMAP_INTRO_RTSPD,
-	COS_MMAP_INTRO_FRAME
+	COS_MMAP_INTROSPECT_ADDR,
+	COS_MMAP_INTROSPECT_SPD,
+	COS_MMAP_INTROSPECT_FRAME
 };
 
 /* mmap: page set related flags */

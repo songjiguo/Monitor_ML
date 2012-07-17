@@ -338,13 +338,8 @@ CSTUB_POST
 /************************************/
 
 CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
+
         struct rec_data_mm_list *rdmm_list;
-	struct rec_data_mm *rdmm;
-
-	rdmm = rdmm_alloc();
-	rdmm_cons(rdmm, s_addr, d_spd, d_addr);
-
-	rdtscll(start);
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
 
 #ifdef MEA_ALIAS
@@ -372,13 +367,9 @@ redo:
        	       rdtscll(start);
        }
 #endif
-
-printc("rdmm %x s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x\n",
-       (unsigned int)rdmm, cos_spd_id(), (unsigned int)rdmm->s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
-
+/* printc("rdmm %x s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x\n", */
+/*        (unsigned int)rdmm, cos_spd_id(), (unsigned int)rdmm->s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr); */
 CSTUB_ASM_4(mman_alias_page, s_spd, s_addr, d_spd, d_addr)
-
-/* printc("2 d_spd %d\n", d_spd); */
 
        if (unlikely (fault)){
        	       fcounter++;
@@ -393,9 +384,7 @@ CSTUB_ASM_4(mman_alias_page, s_spd, s_addr, d_spd, d_addr)
        	       printc("COST (alias page end): %llu\n", end - start);
        }
 #endif
-
 CSTUB_POST
-
 
 /* test only */
 CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page2, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
