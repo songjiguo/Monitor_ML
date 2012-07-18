@@ -428,7 +428,6 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 //	boot_spd_caps_chg_activation(failed, 1);
 
 	UNLOCK();
-
 	/* rdtscll(end); */
 	/* printc("COST (caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start); */
 

@@ -249,7 +249,7 @@ replay_record(struct rec_data_mm_list *rdmm_list)
 {
 	struct rec_data_mm *rdmm;
 	assert(rdmm_list);
-	/* printc("ready to replay now...\n"); */
+	printc("ready to replay now...\n");
 
 	/* print_rdmm_list(rdmm_list); */
 	rdmm_list->recordable = 0;
@@ -257,12 +257,12 @@ replay_record(struct rec_data_mm_list *rdmm_list)
 	assert(rdmm);
 	while (1) {
 		printc("rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x\n", cos_spd_id(), (unsigned int)rdmm->s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
-		if (rdmm->d_addr != mman_alias_page2(cos_spd_id(), rdmm->s_addr,
+		if (rdmm->d_addr != mman_alias_page(cos_spd_id(), rdmm->s_addr,
 						    rdmm->d_spd, rdmm->d_addr)) BUG();
 		rdmm = rdmm->next;
 		if (!rdmm) break;
 	}
-	/* printc("replay done.\n"); */
+        printc("replay done.\n");
 	rdmm_list->recordable = 1;
 	return;
 }
@@ -272,14 +272,24 @@ void
 update_rdmm(struct rec_data_mm_list *rdmm_list)
 {
 	if (unlikely(rdmm_list->fcnt != fcounter)) {
-		unsigned long long t1, t2;
+		/* unsigned long long t1, t2; */
 
-		rdtscll(t1);		
-		replay_record(rdmm_list);
-		rdtscll(t2);
-		printc("COST (revoke -- replay_records): %llu\n", t2 - t1);		
+		/* rdtscll(t1);		 */
+		/* replay_record(rdmm_list); */
+		/* rdtscll(t2); */
+		/* printc("COST (revoke -- replay_records): %llu\n", t2 - t1);		 */
 		rdmm_list->fcnt = fcounter;
 	}
+	return;
+}
+
+/* replay all alias from root pages for this component */
+void alias_replay(vaddr_t s_addr)
+{
+	printc("in c_stub upcall\n");
+	struct rec_data_mm_list *rdmm_list;
+	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
+	replay_record(rdmm_list);
 	return;
 }
 
@@ -400,9 +410,9 @@ CSTUB_ASM_4(mman_alias_page2, s_spd, s_addr, d_spd, d_addr)
 CSTUB_POST
 
 /************************************//************************************/
-
 CSTUB_FN_ARGS_3(int, mman_revoke_page, spdid_t, spdid, vaddr_t, addr, int, flags)
 
+       printc("revoke start\n");
        struct rec_data_mm_list *rdmm_list;
        measure_first = 0;
        rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT);
@@ -411,7 +421,7 @@ CSTUB_FN_ARGS_3(int, mman_revoke_page, spdid_t, spdid, vaddr_t, addr, int, flags
 redo:
 #ifdef MEA_REVOKE
 
-       update_rdmm(rdmm_list);
+       /* update_rdmm(rdmm_list); */
 
        if (cos_spd_id() == 7 && measure_first == 0) {
        	       measure_first = 1;
@@ -420,7 +430,7 @@ redo:
        }
 
 #else
-       update_rdmm(rdmm_list);
+       /* update_rdmm(rdmm_list); */
 #endif
 
 CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
@@ -457,3 +467,4 @@ CSTUB_POST
 
 /* 	return; */
 /* } */
+

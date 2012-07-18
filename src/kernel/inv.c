@@ -2018,7 +2018,7 @@ static int verify_trust(struct spd *truster, struct spd *trustee)
  */
 extern void cos_syscall_upcall(void);
 COS_SYSCALL int 
-cos_syscall_upcall_cont(int this_spd_id, int spd_id, struct pt_regs **regs)
+cos_syscall_upcall_cont(int this_spd_id, int spd_id, int arg, struct pt_regs **regs)
 {
 	struct spd *dest, *curr_spd;
 	struct thread *thd;
@@ -2053,7 +2053,9 @@ cos_syscall_upcall_cont(int this_spd_id, int spd_id, struct pt_regs **regs)
 	spd_mpd_ipc_release((struct composite_spd *)thd_get_thd_spdpoly(thd));//curr_spd->composite_spd);
 	//spd_mpd_ipc_take((struct composite_spd *)dest->composite_spd);
 
-	upcall_setup(thd, dest, COS_UPCALL_BOOTSTRAP, 0, 0, 0);
+	/* printk("arg1 in kernel %d\n", arg); */
+	if (!arg) upcall_setup(thd, dest, COS_UPCALL_BOOTSTRAP, 0, 0, 0);
+	else      upcall_setup(thd, dest, COS_UPCALL_RECOVERY, arg, 0, 0);
 	*regs = &thd->regs;
 
 	cos_meas_event(COS_MEAS_UPCALLS);

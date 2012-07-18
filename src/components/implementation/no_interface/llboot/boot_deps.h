@@ -48,6 +48,9 @@ printc(char *fmt, ...)
  */
 static int          alpha, init_thd, recovery_thd;	
 static volatile int prev_thd, recover_spd;
+
+static volatile vaddr_t page_addr;
+
 enum { /* hard-coded initialization schedule */
 	LLBOOT_SCHED = 2,
 	LLBOOT_MM    = 3,
@@ -134,12 +137,13 @@ llboot_thd_done(void)
 	while (1) {
 		int     pthd = prev_thd;
 		spdid_t rspd = recover_spd;
+		vaddr_t addr = page_addr;
 				
 		assert(tid == recovery_thd);
 		if (rspd) {             /* need to recover a component */
 			assert(pthd);
 			recover_spd = 0;
-			cos_upcall(rspd); /* This will escape from the loop */
+			cos_upcall_args(rspd, addr); /* This will escape from the loop */
 			assert(0);
 		} else {		/* ...done reinitializing...resume */
 			assert(pthd && pthd != tid);
@@ -149,8 +153,23 @@ llboot_thd_done(void)
 	}
 }
 
+int
+recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
+{
+	/* switch to the recovery thread... */
+	printc("in llbooter rec_upcall\n");
+	recover_spd = dest;
+	prev_thd    = cos_get_thd_id();
+	page_addr = addr;
+	
+	while (prev_thd == cos_get_thd_id()) cos_switch_thread(recovery_thd, 0);
+
+	return 0;
+}
+
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed);
+
 
 static int first = 0;
 
@@ -161,13 +180,12 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	int tid = cos_get_thd_id();
 
-	if (first >= 10) assert(0);
-
-	if (first<10) first = first + 1;
-
+	first = first + 1;
+	if(first == 10) BUG();
 	printc("<<0>>\n");
 
 	failure_notif_fail(cos_spd_id(), spdid);
+
 	printc("<<1>>\n");
 	/* no reason to save register contents... */
 	/* unsigned long long start, end; */
@@ -180,17 +198,13 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* ...and set it to its value -8, which is the fault handler
 		 * of the stub. */
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
-
-		/* switch to the recovery thread... */
-		recover_spd = spdid;
-		prev_thd = cos_get_thd_id();
-
-		cos_switch_thread(recovery_thd, 0);
+		recovery_upcall(cos_spd_id(), spdid, 0);
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */
 		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */
 		return 0;
 	}
+	
 	printc("<<2>>\n");
 	/* 
 	 * The thread was created in the failed component...just use

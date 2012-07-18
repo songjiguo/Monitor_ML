@@ -44,7 +44,7 @@ alias_test()
 			printc("Cannot valloc for comp %d!\n", spd2);
 			BUG();
 		}
-		if ((vaddr_t)d_addr[i]!= mman_alias_page(spd_root, (vaddr_t)s_addr[0], 
+		if ((vaddr_t)d_addr[i]!= mman_alias_page(spd_root, (vaddr_t)s_addr[i], 
 							 spd2, (vaddr_t)d_addr[i])) BUG();
 		/* printc("after alias page\n\n"); */
 	}
@@ -86,6 +86,12 @@ get_test()
 }
 
 
+static void
+recovery(void)
+{
+	return;
+}
+
 void 
 cos_init(void)
 {
@@ -116,5 +122,18 @@ cos_init(void)
 		printc("<<< PAGE ALIAS TEST DONE!! >>>\n");
 	}
 	
+	return;
+}
+
+
+void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
+{
+	switch (t) {
+	case COS_UPCALL_RECOVERY:
+		alias_replay((vaddr_t)arg3); break;
+	default:
+		cos_init();
+	}
+
 	return;
 }

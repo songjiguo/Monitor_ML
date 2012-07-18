@@ -127,7 +127,7 @@ cos_syscall_2(4,  int, __switch_thread, int, thd_id, int, flags);
 cos_syscall_1(5,  int, brand_wait, int, thdid);
 cos_syscall_3(6,  int, __brand_upcall, int, thd_id_flags, long, arg1, long, arg2);
 cos_syscall_3(7,  int, __brand_cntl, int, ops, u32_t, bid_tid, spdid_t, spdid);
-cos_syscall_1(8,  int, upcall, int, spd_id);
+cos_syscall_2(8,  int, upcall_args, int, spd_id, int, arg);
 cos_syscall_3(9,  int, sched_cntl, int, operation, int, thd_id, long, option);
 cos_syscall_3(10, int, mpd_cntl, int, operation, spdid_t, composite_spd, spdid_t, composite_dest);
 cos_syscall_3(11, int, __mmap_cntl, long, op_flags_dspd, vaddr_t, daddr, unsigned long, mem_id);
@@ -171,6 +171,11 @@ static inline int cos_mmap_introspect(short int op, short int flags,
 static inline int cos_brand_upcall(short int thd_id, short int flags, long arg1, long arg2)
 {
 	return cos___brand_upcall(((thd_id << 16) | (flags & 0xFFFF)), arg1, arg2);
+}
+
+static inline int cos_upcall(spdid_t spdid)
+{
+	return cos_upcall_args(spdid, 0);
 }
 
 static inline int cos_buff_mgmt(unsigned short int op, void *addr, unsigned short int len, short int thd_id)
