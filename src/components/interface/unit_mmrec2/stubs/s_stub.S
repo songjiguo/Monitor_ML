@@ -5,9 +5,9 @@
  * Public License v2.
  */
 
-#include <cos_asm_server_stub.h>
-//#include <cos_asm_server_stub_simple_stack.h>
+//#include <cos_asm_server_stub.h>
+#include <cos_asm_server_stub_simple_stack.h>
 
 .text
 
-cos_asm_server_stub(mm_rec2)
+cos_asm_server_stub(mm_test2)

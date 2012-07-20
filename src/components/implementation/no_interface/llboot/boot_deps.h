@@ -157,10 +157,11 @@ int
 recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
 {
 	/* switch to the recovery thread... */
-	printc("in llbooter rec_upcall\n");
+	printc("LL: llbooter rec_upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)addr, cos_get_thd_id());
+
 	recover_spd = dest;
 	prev_thd    = cos_get_thd_id();
-	page_addr = addr;
+	page_addr   = addr;
 	
 	while (prev_thd == cos_get_thd_id()) cos_switch_thread(recovery_thd, 0);
 
@@ -182,11 +183,13 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	first = first + 1;
 	if(first == 10) BUG();
-	printc("<<0>>\n");
+	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
+	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %d)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
+	printc("LL: <<0>>\n");
 	failure_notif_fail(cos_spd_id(), spdid);
 
-	printc("<<1>>\n");
+	printc("LL: <<1>>\n");
 	/* no reason to save register contents... */
 	/* unsigned long long start, end; */
 	/* rdtscll(start); */
@@ -205,7 +208,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		return 0;
 	}
 	
-	printc("<<2>>\n");
+	printc("LL: <<2>>\n");
 	/* 
 	 * The thread was created in the failed component...just use
 	 * it to restart the component!  This might even be the

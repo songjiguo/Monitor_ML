@@ -10,4 +10,4 @@
 
 .text
 
-cos_asm_server_stub(mm_rec3)
+cos_asm_server_stub(mm_test3)
