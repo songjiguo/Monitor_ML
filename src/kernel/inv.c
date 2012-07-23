@@ -3135,8 +3135,8 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		 * writing all of the pages itself).
 		 */
 		if (pgtbl_add_entry(spd->spd_info.pg_tbl, daddr, page)) {
-			printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n", 
-			       dspd_id, (unsigned int)daddr);
+			/* printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n",  */
+			/*        dspd_id, (unsigned int)daddr); */
 			return -EINVAL;
 		}
 

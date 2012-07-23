@@ -26,7 +26,7 @@
  * usage.
  */
 
-/* 
+/*
  * FIXME: locking!
  */
 
@@ -55,7 +55,7 @@ struct mapping {
 	struct frame *f;
 	/* child and sibling mappings */
 	struct mapping *p, *c, *_s, *s_;
-	struct mapping *head, *next;
+	struct mapping *next, *prev;
 } __attribute__((packed));
 
 /* A tagged union, where the tag holds the number of maps: */
@@ -97,15 +97,15 @@ again:
 		if (!f) return NULL;
 		goto again;
 	}
-	
+
 	return f;       	/* return an unused frame or NULL or reused */
 }
 
-static inline void 
+static inline void
 frame_deref(struct frame *f)
-{ 
+{
 	assert(f->nmaps > 0);
-	f->nmaps--; 
+	f->nmaps--;
 	if (f->nmaps == 0) {
 		f->c.free = freelist;
 		freelist  = f;
@@ -166,7 +166,7 @@ again:
 			goto again;
 		}
 	}
-	
+
 	int ret;
 	ret =  cos_mmap_cntl(COS_MMAP_GRANT, COS_MMAP_SET_ROOT, cos_spd_id(), (vaddr_t)hp, frame_index(f));
 	if (unlikely(ret)) memset(hp, 0, PAGE_SIZE);
@@ -230,7 +230,7 @@ cvas_ref(struct comp_vas *cv)
 	cv->nmaps++;
 }
 
-static void 
+static void
 cvas_deref(struct comp_vas *cv)
 {
 	assert(cv && cv->nmaps > 0);
@@ -257,13 +257,14 @@ mapping_init(struct mapping *m, spdid_t spdid, vaddr_t a, struct mapping *p, str
 	m->spdid = spdid;
 	m->addr  = a;
 	m->p     = p;
-	m->head  = m;
-	m->next = NULL;
 	if (p) {
 		m->flags = p->flags;
 		if (!p->c) p->c = m;
 		else       ADD_LIST(p->c, m, _s, s_);
 	}
+
+	/* for upcall list */
+	INIT_LIST(m, next, prev);
 }
 
 static struct mapping *
@@ -308,8 +309,8 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	/* 	printc("exist m : m->spd %d m->addr %x idx %ld\n", mm->spdid, (unsigned int)mm->addr, idx+i); */
 	/* } */
 	/* 	goto exist; */
-	
-	
+
+
 	cvas_ref(cv);
 	m = cslab_alloc_mapping();
 	if (!m) goto collision;
@@ -318,9 +319,9 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	unsigned long long start = 0;
 	unsigned long long end = 0;
 
-	if (root_page) { 
+	if (root_page) {
 		mm_flag = COS_MMAP_SET_ROOT;
-		if (dest == 7) rdtscll(start);		
+		if (dest == 7) rdtscll(start);
 	}
 	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
 	if (root_page && dest == 7) {
@@ -337,13 +338,14 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 			goto no_mapping;
 		}
 	}
-	
+
 	mapping_init(m, dest, to, p, f);
 	assert(!p || frame_nrefs(f) > 0);
 	frame_ref(f);
 	assert(frame_nrefs(f) > 0);
-	
+
 	if (cvect_add(cv->pages, m, idx)) BUG();
+
 done:
 	return m;
 no_mapping:
@@ -364,7 +366,7 @@ static struct mapping *
 __mapping_linearize_decendents(struct mapping *m)
 {
 	struct mapping *first, *last, *c, *gc;
-	
+
 	first = c = m->c;
 	m->c = NULL;
 	if (!c) return NULL;
@@ -377,7 +379,7 @@ __mapping_linearize_decendents(struct mapping *m)
 		if (gc) ADD_LIST(last, gc, _s, s_);
 		c = FIRST_LIST(c, _s, s_);
 	} while (first != c);
-	
+
 	return first;
 }
 
@@ -481,7 +483,7 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	if (!m) goto dealloc;
 	f->c.m = m;
 
-	assert(!m->next);
+	assert(EMPTY_LIST(m, next, prev));
 	assert(m->addr == addr);
 	assert(m->spdid == spd);
 	assert(m == mapping_lookup(spd, addr));
@@ -525,7 +527,7 @@ dealloc:
 
 vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
-	struct mapping *m, *n, *p;
+	struct mapping *m, *n;
 	vaddr_t ret = 0;
 
 	LOCK();
@@ -534,37 +536,35 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 		printc("crashed --> rebuild s_addr mapping (thd %d)\n", cos_get_thd_id());
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
-		assert(m->head == m);
-		assert(!m->next);
+		assert(EMPTY_LIST(m, next, prev));
 	}
 	assert(m == mapping_lookup(s_spd,s_addr));
 	n = mapping_crt(m, m->f, d_spd, d_addr, 0);
 	if (!n) goto done;
 
-	assert(!n->next);
+	assert(EMPTY_LIST(n, next, prev));
 	assert(n->addr  == d_addr);
 	assert(n->spdid == d_spd);
-	assert(n->p == m || n->p == NULL); 
+	assert(n->p == m || n->p == NULL);
 
 	ret = d_addr;
 
         /* recovery thread only */
 	/* assume recovery thread won't fail */
 	static int max_upcalls = 0;
-	if (unlikely(2 == cos_get_thd_id())) { 
+	if (unlikely(2 == cos_get_thd_id())) {
 		/* create the sub upcall_list from n, first head node is m */
-		assert(m->head == m);
-		if (!m->next) m->next = n;
-		else {
-			p = m->next;
-			m->next = n;
-			n->next = p;
-		}
+		ADD_LIST(m, n, next, prev); /* should insert between 2 nodes here, not the head */
 		max_upcalls++;
-		printc("upcall spd %d record is added to m->spd %d\n", n->spdid, m->spdid);
-		struct mapping *a,*b;
-		a = m->head;
-		do {printc("on list %x\n", a); b = a->next;a=b;} while (a);
+
+		/* printc("upcall spd %d record is added to m->spd %d\n", n->spdid, m->spdid); */
+		/* struct mapping *a; */
+		/* for(a = FIRST_LIST(m, next, prev); */
+		/*     a != m; */
+		/*     a = FIRST_LIST(a, next, prev)) { */
+		/* 	printc("on list @addr %x\n", (unsigned int)a->addr); */
+		/* } */
+
 		/* assert(max_upcalls < MAX_UPCALL_LIST_DEPTH); */
 	}
 
@@ -582,7 +582,7 @@ vaddr_t mman_alias_page2(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d
 	get_test = 100;
 	alias_test = 100;
 	revoke_test = 100;
-	return mman_alias_page(s_spd, s_addr, d_spd, d_addr);	
+	return mman_alias_page(s_spd, s_addr, d_spd, d_addr);
 }
 
 /////////////////////////////////////////////////
@@ -672,7 +672,7 @@ void mman_release_all(void)
 }
 
 
-////////////////////////////////////////////////////////////////                                                       
+////////////////////////////////////////////////////////////////
 /* ,--.--. ,---.  ,---. ,---.,--.  ,--.,---. ,--.--.,--. ,--. */
 /* |  .--'| .-. :| .--'| .-. |\  `'  /| .-. :|  .--' \  '  /  */
 /* |  |   \   --.\ `--.' '-' ' \    / \   --.|  |     \   '   */
@@ -687,14 +687,14 @@ recovery_rebuild_mapping(spdid_t s_spd, vaddr_t s_addr)
 	/* this could result many independent trees */
 	struct mapping *m = NULL;
 	int fr_idx = 0;
-	fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 
+	fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME,
 					  0, s_spd, s_addr, 0);
 
 	assert(fr_idx);
 	m = mapping_crt(NULL, &frames[fr_idx], s_spd, s_addr, 0);
 	if (!m) goto err;
-	
-	assert(!m->next);
+
+	assert(EMPTY_LIST(m, next, prev));
 	assert(fr_idx == frame_index(m->f));
 	assert(m->p == NULL);
 done:
@@ -720,13 +720,12 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
 	m = mapping_lookup(spd, addr); /* m should exist now  */
 	assert(m);
 
-	n = m->head->next;
-	while (n) {
+	n = FIRST_LIST(m, next, prev);
+	while (n != m) {
 		printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id());
-		printc("before:list is %x, thd %d\n", n, cos_get_thd_id());
 		recovery_upcall(cos_spd_id(), n->spdid, n->addr);
-		printc("after:list is %x, thd %d\n", n, cos_get_thd_id());
-		p = n->next;
+		p = FIRST_LIST(n, next, prev);
+		REM_LIST(n, next, prev);
 		n = p;
 	}
 	printc("leaving upcall helper......... thd %d\n", cos_get_thd_id());
@@ -740,23 +739,23 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
 
 int  sched_init(void)   { return 0; }
 extern void parent_sched_exit(void);
-void 
-sched_exit(void)   
+void
+sched_exit(void)
 {
-	mman_release_all(); 
+	mman_release_all();
 	parent_sched_exit();
 }
 
 int sched_isroot(void) { return 1; }
 
-int 
+int
 sched_child_get_evt(spdid_t spdid, struct sched_child_evt *e, int idle, unsigned long wake_diff) { BUG(); return 0; }
 
 extern int parent_sched_child_cntl_thd(spdid_t spdid);
 
-int 
-sched_child_cntl_thd(spdid_t spdid) 
-{ 
+int
+sched_child_cntl_thd(spdid_t spdid)
+{
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
@@ -764,7 +763,7 @@ sched_child_cntl_thd(spdid_t spdid)
 	return 0;
 }
 
-int 
+int
 sched_child_thd_crt(spdid_t spdid, spdid_t dest_spd) { BUG(); return 0; }
 
 

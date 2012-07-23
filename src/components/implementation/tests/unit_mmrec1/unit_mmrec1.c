@@ -15,7 +15,7 @@ vaddr_t d_addr[PAGE_NUM];
 
 #define THREAD1 10
 
-/* #define ONE2ONE */
+//#define TEN2TEN
 #define ONE2TEN
 
 static void
@@ -24,10 +24,15 @@ revoke_test()
 	int i;
 	vaddr_t addr;
 	printc("<<< REVOKE TEST BEGIN! >>>\n");
+
+#ifdef ONE2TEN
 	for (i = 0; i<1; i++) {
+#else
+	for (i = 0; i<PAGE_NUM; i++) {
+#endif
 		printc("\nrevoke... # %d\n", i);
 
-		#ifdef ONE2ONE
+		#ifdef TEN2TEN
 		addr = s_addr[i];
 		#endif
 		#ifdef ONE2TEN
@@ -49,7 +54,7 @@ alias_test()
 	for (i = 0; i<PAGE_NUM; i++) {
 		d_addr[i] = mm_test2();
 
-		#ifdef ONE2ONE
+		#ifdef TEN2TEN
 		addr = s_addr[i];
 		#endif
 		#ifdef ONE2TEN
@@ -117,7 +122,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_RECOVERY:
-		printc("UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id());
+		/* printc("UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id()); */
 		alias_replay((vaddr_t)arg3); break;
 	default:
 		cos_init();

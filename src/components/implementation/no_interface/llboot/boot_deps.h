@@ -153,11 +153,11 @@ llboot_thd_done(void)
 	}
 }
 
+/* can only be called from mmgr/scheduler */
 int
 recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
 {
-	/* switch to the recovery thread... */
-	printc("LL: llbooter rec_upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)addr, cos_get_thd_id());
+	/* printc("LL: llbooter upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)addr, cos_get_thd_id()); */
 
 	recover_spd = dest;
 	prev_thd    = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread in sys */

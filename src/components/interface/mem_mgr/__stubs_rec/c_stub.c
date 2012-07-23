@@ -227,8 +227,8 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 	assert(rdmm);
 	while (1) {
 		rdmm_list->recordable = 0; /* no more same records added during the replay alias */
-		printc("replay::<rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x>\n", 
-		       cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
+		/* printc("replay::<rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x>\n", */
+		/*        cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr); */
 		if (rdmm->d_addr != mman_alias_page(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr)) BUG();
 		if (!(rdmm = rdmm->next)) break;
 	}
@@ -249,7 +249,7 @@ update_info(struct rec_data_mm_list *rdmm_list)
 {
 	/* printc("((Cstub:update crash status thd %d) spd %d)\n", cos_get_thd_id(), cos_spd_id()); */
 	if (unlikely(rdmm_list->fcnt != fcounter)) {
-		printc(" -- mm crashed before when this spd called it -- \n");
+		printc(" -- mm crashed before when this spd called it -- thd %d\n", cos_get_thd_id());
 		record_replay(rdmm_list);
 	}
 	return;
@@ -350,10 +350,12 @@ CSTUB_FN_ARGS_3(int, mman_revoke_page, spdid_t, spdid, vaddr_t, addr, int, flags
        struct rec_data_mm_list *rdmm_list;
        measure_first = 0;
        rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT);
-       assert(rdmm_list);
-flags = 0;
+       /* assert(rdmm_list); */
+       if (!rdmm_list) goto done;
 
-       update_info(rdmm_list);
+       flags = 0; 		/* test */
+
+       /* update_info(rdmm_list); */   //can not deal with the further levels
 redo:
 
 CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
@@ -363,8 +365,10 @@ CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
 	       flags = 1;  	/* test */
        	       goto redo;
        }
- 
+
        record_rem(rdmm_list);
+
+done:
 
 CSTUB_POST
 
