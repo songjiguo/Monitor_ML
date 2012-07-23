@@ -160,7 +160,7 @@ recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
 	printc("LL: llbooter rec_upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)addr, cos_get_thd_id());
 
 	recover_spd = dest;
-	prev_thd    = cos_get_thd_id();
+	prev_thd    = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread in sys */
 	page_addr   = addr;
 	
 	while (prev_thd == cos_get_thd_id()) cos_switch_thread(recovery_thd, 0);

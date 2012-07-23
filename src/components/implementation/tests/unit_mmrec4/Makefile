@@ -1,8 +1,8 @@
-C_OBJS=memory_rec1.o
+C_OBJS=memory_rec4.o
 ASM_OBJS=
-COMPONENT=mm_rec1.o
-INTERFACES=
-DEPENDENCIES=sched printc lock mem_mgr unit_mmrec2
+COMPONENT=mm_rec4.o
+INTERFACES= unit_mmrec4
+DEPENDENCIES= sched printc lock mem_mgr
 IF_LIB=
 
 include ../../Makefile.subsubdir

@@ -58,7 +58,6 @@ static unsigned long fcounter;
 struct rec_data_mm_list;
 /* recovery data structure for each alias */
 struct rec_data_mm {
-	vaddr_t s_addr;
 	spdid_t d_spd;
 	vaddr_t d_addr;
 	
@@ -67,6 +66,7 @@ struct rec_data_mm {
 
 struct rec_data_mm_list {
 	int id;
+	vaddr_t s_addr;
 	int recordable;
 	unsigned long fcnt;
 	struct rec_data_mm first;
@@ -83,9 +83,6 @@ CSLAB_CREATE(rdmm_ls, sizeof(struct rec_data_mm_list));
 
 void print_rdmm_info(struct rec_data_mm *rdmm);
 void print_rdmm_list(struct rec_data_mm_list *rdmm_list);
-/*------------------------------------------*/
-/* item functions: each alias page mapping  */
-/*------------------------------------------*/
 
 static struct rec_data_mm *
 rdmm_alloc(void)
@@ -163,7 +160,45 @@ rdmm_list_rem(struct rec_data_mm_list *rdmm_list)
 	return rdmm;
 }
 
-/* only called by revoke */
+static void
+rdmm_list_add(struct rec_data_mm *rdmm, struct rec_data_mm_list *rdmm_list)
+{
+	assert(rdmm && rdmm_list->head);
+	if (rdmm == rdmm_list->head) return;
+	rdmm_list->tail->next = rdmm;
+	rdmm_list->tail = rdmm;
+}
+
+/*--------------------------------------*/
+/*        record operation functions    */
+/*--------------------------------------*/
+
+/* only called by alias */
+static struct rec_data_mm_list *
+record_add(struct rec_data_mm_list *rdmm_list, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
+{
+	/* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("recording....\n"); */
+	struct rec_data_mm *rdmm;
+	if (!rdmm_list) {
+		rdmm_list = rdmm_list_init(s_addr >> PAGE_SHIFT);
+		assert(rdmm_list && rdmm_list->head);
+		rdmm_list->s_addr = s_addr;
+		rdmm = &rdmm_list->first;
+		/* printc("list init\n"); */
+	} else {
+		rdmm = rdmm_alloc();
+		assert(rdmm);
+	}
+	/* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("record added here rdmm_list %x s_addr %x d_addr %x\n", rdmm_list, s_addr, d_addr); */
+	rdmm->d_spd = d_spd;
+	rdmm->d_addr = d_addr;
+	rdmm_list_add(rdmm, rdmm_list);
+	rdmm->next = NULL;
+	/* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("recording....done!\n"); */
+
+	return rdmm_list;
+}
+
 static void
 record_rem(struct rec_data_mm_list *rdmm_list)
 {
@@ -179,92 +214,55 @@ record_rem(struct rec_data_mm_list *rdmm_list)
 }
 
 static void
-rdmm_cons(struct rec_data_mm *rdmm, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
-{
-	assert(rdmm);
-
-	rdmm->s_addr = s_addr;
-	rdmm->d_spd = d_spd;
-	rdmm->d_addr = d_addr;
-
-	return;
-}
-
-static void
-rdmm_list_add(struct rec_data_mm *rdmm, struct rec_data_mm_list *rdmm_list)
-{
-	assert(rdmm && rdmm_list->head);
-	if (rdmm == rdmm_list->head) return;
-	rdmm_list->tail->next = rdmm;
-	rdmm_list->tail = rdmm;
-}
-
-/* only called by alias */
-static struct rec_data_mm_list *
-record_add(struct rec_data_mm_list *rdmm_list, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
-{
-	/* if (cos_spd_id() == 7) printc("recording....\n"); */
-	struct rec_data_mm *rdmm;
-	if (!rdmm_list) {
-		rdmm_list = rdmm_list_init(s_addr >> PAGE_SHIFT);
-		assert(rdmm_list && rdmm_list->head);
-		rdmm = &rdmm_list->first;
-	} else {
-		rdmm = rdmm_alloc();
-		assert(rdmm);
-	}
-	rdmm_cons(rdmm, s_addr, d_spd, d_addr);
-	/* printc("record added here rdmm_list %x s_addr %x d_addr %x\n", rdmm_list, s_addr, d_addr); */
-	rdmm_list_add(rdmm, rdmm_list);
-	rdmm->next = NULL;
-	/* if (cos_spd_id() == 7) printc("recording....done!\n"); */
-
-	return rdmm_list;
-}
-
-/* static int rec_num; */
-static void
-replay_record(struct rec_data_mm_list *rdmm_list)
+record_replay(struct rec_data_mm_list *rdmm_list)
 {
 	struct rec_data_mm *rdmm;
+	vaddr_t s_addr;
 	assert(rdmm_list);
-	printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id());
+	/* printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
 
 	/* print_rdmm_list(rdmm_list); */
-	rdmm_list->recordable = 0;
 	rdmm = rdmm_list->head;
+	s_addr = rdmm_list->s_addr;
 	assert(rdmm);
 	while (1) {
-		printc("rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x\n", cos_spd_id(), (unsigned int)rdmm->s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
-		if (rdmm->d_addr != mman_alias_page2(cos_spd_id(), rdmm->s_addr,
-						    rdmm->d_spd, rdmm->d_addr)) BUG();
-		rdmm = rdmm->next;
-		if (!rdmm) break;
+		rdmm_list->recordable = 0; /* no more same records added during the replay alias */
+		printc("replay::<rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x>\n", 
+		       cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
+		if (rdmm->d_addr != mman_alias_page(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr)) BUG();
+		if (!(rdmm = rdmm->next)) break;
 	}
 	rdmm_list->recordable = 1;
 	rdmm_list->fcnt = fcounter;
-	printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id());
+	/* printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
 	return;
 }
 
+/*--------------------------------------*/
+/*        other operation functions     */
+/*--------------------------------------*/
+
+/* Do we need a client lock here in case that: when the record is
+   replayed by one thread nad preempted by another thread? */
 void
-update_rdmm(struct rec_data_mm_list *rdmm_list)
+update_info(struct rec_data_mm_list *rdmm_list)
 {
-	printc("((Cstub:update crash status thd %d))\n", cos_get_thd_id());
+	/* printc("((Cstub:update crash status thd %d) spd %d)\n", cos_get_thd_id(), cos_spd_id()); */
 	if (unlikely(rdmm_list->fcnt != fcounter)) {
 		printc(" -- mm crashed before when this spd called it -- \n");
-		replay_record(rdmm_list);
+		record_replay(rdmm_list);
 	}
 	return;
 }
 
 /* replay all alias from root pages for this component */
-void alias_replay(vaddr_t s_addr)
+void 
+alias_replay(vaddr_t s_addr)
 {
-	printc("In Cli %ld: from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id());
+	/* printc("In Cli %ld: from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id()); */
 	struct rec_data_mm_list *rdmm_list;
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
-	if (rdmm_list) replay_record(rdmm_list);
+	if (rdmm_list) record_replay(rdmm_list);
 	return;
 }
 
@@ -275,6 +273,14 @@ void alias_replay(vaddr_t s_addr)
 static int measure_first = 0;
 unsigned long long start = 0;
 unsigned long long end = 0;
+
+/////////////////////////////////////////
+/*  ,---. ,--------.,--. ,--.,-----.   */
+/* '   .-''--.  .--'|  | |  ||  |) /_  */
+/* `.  `-.   |  |   |  | |  ||  .-.  \ */
+/* .-'    |  |  |   '  '-'  '|  '--' / */
+/* `-----'   `--'    `-----' `------'  */
+/////////////////////////////////////////
 
 CSTUB_FN_ARGS_3(vaddr_t, mman_get_page, spdid_t, spdid, vaddr_t, addr, int, flags)
 
@@ -289,15 +295,15 @@ CSTUB_ASM_3(mman_get_page, spdid, addr, flags)
 
 CSTUB_POST
 
-/************************************/
 
 CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
 
         struct rec_data_mm_list *rdmm_list;
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
-	/* if (cos_spd_id() == 7 || cos_spd_id() == 8) { */
-	/* 	printc("Cli: alias cstub spd %ld\n", cos_spd_id()); */
-	/* } */
+	if (cos_spd_id() == 7 || cos_spd_id() == 8) {
+		printc("Cli(spd %d): alias cstub from s_spd %d (s_addr %x) to d_spsd %d (d_addr %x)\n",
+		       cos_spd_id(), s_spd, (unsigned int)s_addr, d_spd, (unsigned int)d_addr);
+	}
 
         if (!rdmm_list || rdmm_list->recordable == 1) {
 		rdmm_list = record_add(rdmm_list, s_addr, d_spd, d_addr);
@@ -313,39 +319,48 @@ CSTUB_ASM_4(mman_alias_page, s_spd, s_addr, d_spd, d_addr)
 	       rdmm_list->recordable = 0;
        	       goto redo;
        }
-       rdmm_list->recordable = 1;
 
 CSTUB_POST
 
 
-/* test only */
-CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page2, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
+/* /\* test use only *\/ */
+/* CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page2, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr) */
 
-redo:
-CSTUB_ASM_4(mman_alias_page2, s_spd, s_addr, d_spd, d_addr)
+/*         struct rec_data_mm_list *rdmm_list; */
+/* 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT); */
+/*         if (!rdmm_list || rdmm_list->recordable == 1) { */
+/* 		rdmm_list = record_add(rdmm_list, s_addr, d_spd, d_addr); */
+/* 	} */
+/* 	assert(rdmm_list); */
+/* redo: */
 
-       if (unlikely (fault)){
-       	       fcounter++;
-       	       goto redo;
-       }
+/* CSTUB_ASM_4(mman_alias_page2, s_spd, s_addr, d_spd, d_addr) */
 
-CSTUB_POST
+/*        if (unlikely (fault)){ */
+/*        	       fcounter++; */
+/* 	       rdmm_list->recordable = 0; */
+/*        	       goto redo; */
+/*        } */
 
-/************************************//************************************/
+/* CSTUB_POST */
+
+
 CSTUB_FN_ARGS_3(int, mman_revoke_page, spdid_t, spdid, vaddr_t, addr, int, flags)
 
        struct rec_data_mm_list *rdmm_list;
        measure_first = 0;
        rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT);
-       assert(rdmm_list);   	/* this depends on the test case now... Fix this later */
+       assert(rdmm_list);
+flags = 0;
 
-       update_rdmm(rdmm_list);
+       update_info(rdmm_list);
 redo:
 
 CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
 
        if (unlikely (fault)){
        	       fcounter++;
+	       flags = 1;  	/* test */
        	       goto redo;
        }
  
@@ -353,16 +368,15 @@ CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
 
 CSTUB_POST
 
-/************************************//************************************/
-
-/* Debug helper */
+/*****************/
+/* Debug helper  */
+/*****************/
 void
 print_rdmm_info(struct rec_data_mm *rdmm)
 {
 	assert(rdmm);
 
 	print_mm("rdmm->idx %d  ",rdmm->idx);
-	print_mm("rdmm->s_addr %d  ",rdmm->s_addr);
 	print_mm("rdmm->d_spd %d  ",rdmm->d_spd);
 	print_mm("rdmm->d_addr %d  ",rdmm->d_addr);
 	print_mm("rdmm->fcnt %ld  ",rdmm->fcnt);
@@ -377,11 +391,12 @@ void print_rdmm_list(struct rec_data_mm_list *rdmm_list)
 	printc("list cnt %lu fcounter %lu\n", rdmm_list->fcnt, fcounter);
 	struct rec_data_mm *rdmm;
 	rdmm = rdmm_list->head;
+	vaddr_t s_addr = rdmm_list->s_addr;
 	int test = 0;
 	while (1) {
 		test++;
-		printc("rdmm %x s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x\n",
-		       (unsigned int)rdmm, cos_spd_id(), (unsigned int)rdmm->s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
+		printc("rdmm %x s_spd %ld s_addr %x rdmm->d_spd %d rdmm->d_addr %x\n",
+		       (unsigned int)rdmm, cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
 		rdmm = rdmm->next;
 		if (!rdmm) break;
 	}
