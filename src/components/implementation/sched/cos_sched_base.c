@@ -554,7 +554,9 @@ static void sched_timer_tick(void)
 		
 		/* are we done running? */
 		if (unlikely(ticks >= RUNTIME_SEC*TIMER_FREQ+1)) {
+			printc("B: thread is %d\n", cos_get_thd_id());
 			sched_exit();
+			printc("A: thread is %d\n", cos_get_thd_id());
 			while (COS_SCHED_RET_SUCCESS !=
 			       cos_switch_thread_release(init->id, COS_SCHED_BRAND_WAIT)) {
 				cos_sched_lock_take();

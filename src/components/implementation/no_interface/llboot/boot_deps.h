@@ -153,11 +153,12 @@ llboot_thd_done(void)
 	}
 }
 
+
 /* can only be called from mmgr/scheduler */
 int
 recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
 {
-	/* printc("LL: llbooter upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)addr, cos_get_thd_id()); */
+	printc("LL: llbooter upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)addr, cos_get_thd_id());
 
 	recover_spd = dest;
 	prev_thd    = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread in sys */
@@ -186,7 +187,13 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
 	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %d)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
-	printc("LL: <<0>>\n");
+	printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
+
+	/* when system exits, mman_release_all is called to kill all mappings in other components */
+	/* Q: Do we really need kill all of these mappings when the system exits? */
+	/* for now, I just use assert(0) here to avoid the endless print info caused by pgfault */
+	if (cos_get_thd_id() == 3) assert(0); 
+
 	failure_notif_fail(cos_spd_id(), spdid);
 
 	printc("LL: <<1>>\n");
@@ -201,6 +208,9 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* ...and set it to its value -8, which is the fault handler
 		 * of the stub. */
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
+
+		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
+
 		recovery_upcall(cos_spd_id(), spdid, 0);
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */

@@ -219,7 +219,7 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 	struct rec_data_mm *rdmm;
 	vaddr_t s_addr;
 	assert(rdmm_list);
-	/* printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id());
 
 	/* print_rdmm_list(rdmm_list); */
 	rdmm = rdmm_list->head;
@@ -233,8 +233,7 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 		if (!(rdmm = rdmm->next)) break;
 	}
 	rdmm_list->recordable = 1;
-	rdmm_list->fcnt = fcounter;
-	/* printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id());
 	return;
 }
 
@@ -245,12 +244,15 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 /* Do we need a client lock here in case that: when the record is
    replayed by one thread nad preempted by another thread? */
 void
-update_info(struct rec_data_mm_list *rdmm_list)
+update_cap_fault_cnt(struct rec_data_mm_list *rdmm_list, int cap_no)
 {
 	/* printc("((Cstub:update crash status thd %d) spd %d)\n", cos_get_thd_id(), cos_spd_id()); */
 	if (unlikely(rdmm_list->fcnt != fcounter)) {
-		printc(" -- mm crashed before when this spd called it -- thd %d\n", cos_get_thd_id());
-		record_replay(rdmm_list);
+		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), cap_no)) {
+			printc("set cap_fault_cnt failed\n");
+			BUG();
+		}
+		rdmm_list->fcnt = fcounter;
 	}
 	return;
 }
@@ -259,10 +261,13 @@ update_info(struct rec_data_mm_list *rdmm_list)
 void 
 alias_replay(vaddr_t s_addr)
 {
-	/* printc("In Cli %ld: from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	printc("In Cli %ld: from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id());
 	struct rec_data_mm_list *rdmm_list;
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
-	if (rdmm_list) record_replay(rdmm_list);
+	if (rdmm_list) {
+		rdmm_list->fcnt = fcounter;
+		record_replay(rdmm_list);
+	}
 	return;
 }
 
@@ -274,99 +279,71 @@ static int measure_first = 0;
 unsigned long long start = 0;
 unsigned long long end = 0;
 
-/////////////////////////////////////////
-/*  ,---. ,--------.,--. ,--.,-----.   */
-/* '   .-''--.  .--'|  | |  ||  |) /_  */
-/* `.  `-.   |  |   |  | |  ||  .-.  \ */
-/* .-'    |  |  |   '  '-'  '|  '--' / */
-/* `-----'   `--'    `-----' `------'  */
-/////////////////////////////////////////
-
 CSTUB_FN_ARGS_3(vaddr_t, mman_get_page, spdid_t, spdid, vaddr_t, addr, int, flags)
 
 redo:
 
 CSTUB_ASM_3(mman_get_page, spdid, addr, flags)
 
-       if (unlikely (fault)){
-       	       fcounter++;
-       	       goto redo;
-       }
+        if (unlikely (fault)){
+		fcounter++;
+		goto redo;
+	}
 
 CSTUB_POST
 
 
 CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
 
-        struct rec_data_mm_list *rdmm_list;
-	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
-	if (cos_spd_id() == 7 || cos_spd_id() == 8) {
-		printc("Cli(spd %d): alias cstub from s_spd %d (s_addr %x) to d_spsd %d (d_addr %x)\n",
-		       cos_spd_id(), s_spd, (unsigned int)s_addr, d_spd, (unsigned int)d_addr);
-	}
+         struct rec_data_mm_list *rdmm_list;
+	 rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
+	 if (cos_spd_id() == 7 || cos_spd_id() == 8) {
+		 printc("Cli(spd %ld): alias cstub from s_spd %d (s_addr %x) to d_spsd %d (d_addr %x)\n",
+			cos_spd_id(), s_spd, (unsigned int)s_addr, d_spd, (unsigned int)d_addr);
+	 }
+	 
+         if (!rdmm_list || rdmm_list->recordable == 1) {
+		 rdmm_list = record_add(rdmm_list, s_addr, d_spd, d_addr);
+	 }
 
-        if (!rdmm_list || rdmm_list->recordable == 1) {
-		rdmm_list = record_add(rdmm_list, s_addr, d_spd, d_addr);
-	}
-
-	assert(rdmm_list);
+         assert(rdmm_list);
 redo:
+         update_cap_fault_cnt(rdmm_list, uc->cap_no);
 
 CSTUB_ASM_4(mman_alias_page, s_spd, s_addr, d_spd, d_addr)
 
-       if (unlikely (fault)){
-       	       fcounter++;
-	       rdmm_list->recordable = 0;
-       	       goto redo;
-       }
+         if (unlikely (fault)){
+		 fcounter++;
+		 rdmm_list->recordable = 0;
+		 goto redo;
+	 }
 
 CSTUB_POST
 
 
-/* /\* test use only *\/ */
-/* CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page2, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr) */
-
-/*         struct rec_data_mm_list *rdmm_list; */
-/* 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT); */
-/*         if (!rdmm_list || rdmm_list->recordable == 1) { */
-/* 		rdmm_list = record_add(rdmm_list, s_addr, d_spd, d_addr); */
-/* 	} */
-/* 	assert(rdmm_list); */
-/* redo: */
-
-/* CSTUB_ASM_4(mman_alias_page2, s_spd, s_addr, d_spd, d_addr) */
-
-/*        if (unlikely (fault)){ */
-/*        	       fcounter++; */
-/* 	       rdmm_list->recordable = 0; */
-/*        	       goto redo; */
-/*        } */
-
-/* CSTUB_POST */
-
-
 CSTUB_FN_ARGS_3(int, mman_revoke_page, spdid_t, spdid, vaddr_t, addr, int, flags)
 
-       struct rec_data_mm_list *rdmm_list;
-       measure_first = 0;
-       rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT);
-       /* assert(rdmm_list); */
-       if (!rdmm_list) goto done;
+        struct rec_data_mm_list *rdmm_list;
+        measure_first = 0;
+        rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT);
+        /* assert(rdmm_list); */
+        if (!rdmm_list) goto done;
 
-       flags = 0; 		/* test */
-
-       /* update_info(rdmm_list); */   //can not deal with the further levels
+        flags = 0; 		/* test */
 redo:
+        update_cap_fault_cnt(rdmm_list, uc->cap_no);
+        printc("Cli(spd %ld): revoke cstub from spd %d (addr %x) ... thd %d\n",
+	      cos_spd_id(), spdid, (unsigned int)addr, cos_get_thd_id());
 
 CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
 
-       if (unlikely (fault)){
-       	       fcounter++;
-	       flags = 1;  	/* test */
-       	       goto redo;
-       }
+        if (unlikely (fault)){
+		fcounter++;
+		flags = 1;  	/* test */
+		goto redo;
+        }
 
-       record_rem(rdmm_list);
+        record_rem(rdmm_list);
 
 done:
 

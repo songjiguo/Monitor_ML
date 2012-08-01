@@ -35,6 +35,8 @@ struct thd_invocation_frame {
 	 */
 	struct spd *spd;
 	vaddr_t sp, ip;
+
+	unsigned long fault_cnt;
 }; //HALF_CACHE_ALIGNED;
 
 /* 
@@ -63,7 +65,7 @@ struct sched_introspect {
 #define THD_STATE_BRAND         0x10  /* This thread is used as a brand */
 #define THD_STATE_SCHED_RETURN  0x20  /* When the sched switches to this thread, ret from ipc */
 #define THD_STATE_FAULT         0x40  /* Thread has had a (e.g. page) fault which is being serviced */
-#define THD_STATE_HW_BRAND      0x80 /* Actual hardware should be making this brand */
+#define THD_STATE_HW_BRAND      0x80  /* Actual hardware should be making this brand */
 #define THD_STATE_CYC_CNT       0x100 /* This thread is being cycle tracked */
 
 /**
@@ -150,6 +152,10 @@ static inline void thd_invocation_push(struct thread *curr_thd, struct spd *curr
 	inv_frame->ip = ip;
 	inv_frame->spd = curr_spd;
 
+	/* if (spd_get_index(curr_spd) == 11 || spd_get_index(curr_spd) == 6) */
+	/* 	printk("cos: invok:push --> set frame fault cnt to %d in spd %d\n", curr_spd->fault_cnt, spd_get_index(curr_spd)); */
+	inv_frame->fault_cnt = curr_spd->fault_cnt;
+
 	return;
 }
 
@@ -169,10 +175,10 @@ static inline struct thd_invocation_frame *thd_invocation_pop(struct thread *cur
 	}
 
 	prev_frame = &curr_thd->stack_base[curr_thd->stack_ptr--];
-/*
-	printd("Popping off of %x, cspd %x (sp %x, ip %x, usr %x).\n", (unsigned int)curr_thd,
-	       (unsigned int)prev_frame->current_composite_spd, (unsigned int)prev_frame->sp, (unsigned int)prev_frame->ip, (unsigned int)prev_frame->usr_def);
-*/
+
+	/* printd("Popping off of %x, cspd %x (sp %x, ip %x, usr %x).\n", (unsigned int)curr_thd, */
+	/*        (unsigned int)prev_frame->current_composite_spd, (unsigned int)prev_frame->sp, (unsigned int)prev_frame->ip, (unsigned int)prev_frame->usr_def); */
+
 	return prev_frame;
 }
 

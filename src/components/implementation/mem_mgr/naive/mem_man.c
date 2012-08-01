@@ -598,7 +598,7 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m;
 	int ret = 0;
 
-	/* if (spd == 7) printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id()); */
+	if (spd == 7) printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id());
 	if (spd == 7 && revoke_test < 99) revoke_test++;
 
 #ifdef MEA_REVOKE
@@ -612,6 +612,7 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	m = mapping_lookup(spd, addr);
 	/* a crash happened before */
 	if (unlikely(!m)) {
+		printc("find a crash happened before\n");
 	again:
 		UNLOCK();  /* race condition */
 		recovery_upcalls_helper(spd, addr);
@@ -722,7 +723,7 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
 
 	n = FIRST_LIST(m, next, prev);
 	while (n != m) {
-		printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id());
+		/* printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id()); */
 		recovery_upcall(cos_spd_id(), n->spdid, n->addr);
 		p = FIRST_LIST(n, next, prev);
 		REM_LIST(n, next, prev);
@@ -771,7 +772,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_BOOTSTRAP:
-		/* printc("MM: thread %d\n", cos_get_thd_id()); */
+		printc("MM: thread %d\n", cos_get_thd_id());
 		mm_init(); break;
 	default:
 		BUG(); return;

@@ -155,7 +155,7 @@ static inline void cap_set_usr_cap(struct usr_inv_cap *uptr, vaddr_t inv_fn,
 	uptr->service_entry_inst = inv_fn;
 	uptr->invocation_count = inv_cnt;
 	uptr->cap_no = cap_no;
-	//printk("cos: writing to user-level capno %x, %x (%x)\n", cap_no, cap_no>>16, inv_fn);
+	/* printk("cos: writing to user-level capno %x, %x (%x)\n", cap_no, cap_no>>16, inv_fn); */
 
 	return;
 }
@@ -578,9 +578,11 @@ struct spd *spd_get_by_index(int idx)
 	return &spds[idx];
 }
 
+
 /* 
  * Static Capability Manipulation Functions
  */
+
 unsigned int spd_add_static_cap(struct spd *owner_spd, vaddr_t ST_serv_entry, 
 				struct spd *trusted_spd, isolation_level_t isolation_level)
 {
@@ -613,9 +615,11 @@ static struct invocation_cap *spd_get_cap(struct spd *spd, int cap)
 int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd)
 {
 	struct invocation_cap *c = spd_get_cap(spd, cap);
-	
+
 	if (!c) return -1;
 	c->destination = dspd;
+
+	c->fault_cnt   = dspd->fault_cnt;
 	return 0;
 }
 int spd_cap_set_fault_handler(struct spd *spd, int cap, int handler_num)
@@ -665,6 +669,9 @@ int spd_cap_activate(struct spd *spd, int cap)
 
 	/* +1 for return cap */
 	if (cap_change_isolation(spd->cap_base + cap + 1, IL_SDT, 0) == IL_INV) assert(0);
+
+	/* printk("ker: cap id %d\n", spd->cap_base + cap + 1); */
+	/* printk("ker: owner %d dest is %d\n", spd_get_index(c->owner),spd_get_index(c->destination)); */
 
 	return 0;
 }

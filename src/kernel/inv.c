@@ -119,6 +119,7 @@ struct inv_ret_struct {
  * isolation level isolation access from caller, 2) all return 0
  * should kill thread.
  */
+
 COS_SYSCALL vaddr_t 
 ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp, 
 		    vaddr_t ip, struct inv_ret_struct *ret)
@@ -180,6 +181,25 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 		return 0;
 	}
 
+	if (unlikely(cap_entry->fault_cnt != dest_spd->fault_cnt)) {
+		printk("cos: Fault has happened to the dest_spd %d\n", spd_get_index(dest_spd));
+		printk("cos: from the curr_spd %d\n", spd_get_index(curr_spd));
+		printk("cos: capability is %d\n", capability);
+		printk("cos: thdid %d spdid %d\n", thd->thread_id, spd_get_index(curr_spd));
+		/*
+		 * What to do???
+		 * throw a fault to be handled by a user-level handler? NO, need another handler
+		 *
+		 * for now
+		 * ret->spd_id = sp;   ---> a hack for now
+		 * return ip-8;
+		 */
+		/* return 0; */
+		printk("\n Fault is detected on ipc_walk ^^^ \n\n");
+		ret->spd_id = sp;
+		return ip-8;
+	}
+
 	/* now we are committing to the invocation */
 	cos_meas_event(COS_MEAS_INVOCATIONS);
 
@@ -191,6 +211,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 	spd_mpd_ipc_take((struct composite_spd *)dest_spd->composite_spd);
 
 	/* add a new stack frame for the spd we are invoking (we're committed) */
+	/* be sure that the fault state of destination has been checked above, not fault if we get here */
 	thd_invocation_push(thd, cap_entry->destination, sp, ip);
 	cap_entry->invocation_cnt++;
 
@@ -214,6 +235,7 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 	struct thd_invocation_frame *inv_frame;
 	struct thd_invocation_frame *curr_frame;
 
+again:
 	inv_frame = thd_invocation_pop(curr);
 
 	/* At the top of the invocation stack? */
@@ -225,8 +247,30 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 
 		return NULL;
 	}
-	
+
 	curr_frame = thd_invstk_top(curr);
+
+	/* if (curr->thread_id == 10 || curr->thread_id == 11) { */
+	/* 		printk("cos: check fault when %d return\n", curr->thread_id); */
+	/* 		printk("fault_cnt on curr_frame is %d\n", curr_frame->fault_cnt); */
+	/* 		printk("fault_cnt in curr_frame->spd %d is %d\n", spd_get_index(curr_frame->spd), curr_frame->spd->fault_cnt); */
+	/* 		printk("fault_cnt on inv_frame is %d\n", inv_frame->fault_cnt); */
+	/* 		printk("fault_cnt in inv_frame->spd %d is %d\n", spd_get_index(inv_frame->spd), inv_frame->spd->fault_cnt); */
+	/* 		printk("************\n"); */
+	/* 	} */
+	if (unlikely(curr_frame->fault_cnt != curr_frame->spd->fault_cnt)) {
+		printk("cos: Fault was in %d before return back\n", spd_get_index(curr_frame->spd));
+		printk("fault_cnt on curr_frame is %d\n", curr_frame->fault_cnt);
+		printk("fault_cnt in curr_frame->spd %d is %d\n", spd_get_index(curr_frame->spd), curr_frame->spd->fault_cnt);
+		printk("fault_cnt on inv_frame is %d\n", inv_frame->fault_cnt);
+		printk("fault_cnt in inv_frame->spd %d is %d\n", spd_get_index(inv_frame->spd), inv_frame->spd->fault_cnt);
+		
+		struct thd_invocation_frame *tmp;
+		tmp = thd_invstk_top(curr);
+		if (tmp) tmp->ip -= 8; /* in order to replay the returning one invoking repaired spd again  */
+		goto again;
+	}
+
 	/* for now just assume we always close the server spd */
 	open_close_spd_ret(curr_frame->current_composite_spd);
 
@@ -306,6 +350,82 @@ int fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct p
 	return 1;
 }
 
+COS_SYSCALL unsigned long
+cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_no)
+{
+	unsigned long ret = 0;
+	struct spd *d_spd, *this_spd;
+	struct invocation_cap *cap_entry;
+	
+	this_spd = spd_get_by_index(spdid);
+	d_spd      = spd_get_by_index(d_spdid);
+
+	if (!this_spd || !d_spd) {
+		printk("cos: invalid fault cnt  call for spd %d or spd %d\n",
+		       spdid, d_spdid);
+		return -1;
+	}
+
+	cap_no >>= 20;
+	/* printk("cos: cap_no is %d base is %d\n", cap_no, d_spd->cap_base); */
+
+	if (unlikely(cap_no >= MAX_STATIC_CAP)) {
+		printk("cos: capability %d greater than max\n",
+		       cap_no);
+		return -1;
+	}
+
+	cap_entry = &invocation_capabilities[cap_no];
+
+	if (unlikely(!cap_entry->owner)) {
+		printk("cos: No owner for cap %d.\n", cap_no);
+		return -1;
+	}
+
+	struct spd *dest_spd;
+	unsigned int cap_no_origin = cap_no;
+		
+	switch(option) {
+	case COS_SPD_FAULT_TRIGGER:
+		d_spd->fault_cnt++;
+		printk("cos: SPD %d Fault_Cnt is incremented by 1\n", spd_get_index(d_spd));
+		break;
+	case COS_CAP_FAULT_UPDATE: /* does not need destination spd, got by cap_no on interface */
+		assert(cap_entry->owner == d_spd);
+		dest_spd = cap_entry->destination;
+		cap_entry->fault_cnt = dest_spd->fault_cnt;
+		/* printk("cap_entry->fault_cnt %d\n",cap_entry->fault_cnt); */
+		/* assume capabilities are continuse in invocation_capabilities[] */
+		/* + direction */
+		while(1) {
+			cap_no_origin++;
+			cap_entry = &invocation_capabilities[cap_no_origin];
+			if (cap_entry->destination != dest_spd) break;
+			cap_entry->fault_cnt = dest_spd->fault_cnt;
+			/* printk("ker set cnt+(cap_no_origin %d): owner %d dest is %d\n", cap_no_origin, */
+			/*        spd_get_index(cap_entry->owner),spd_get_index(cap_entry->destination)); */
+			/* printk("cap_entry->fault_cnt %d\n",cap_entry->fault_cnt); */
+		}
+		cap_no_origin = cap_no;
+		/* - direction */
+		while(1) {
+			cap_no_origin--;
+			cap_entry = &invocation_capabilities[cap_no_origin];
+			if (cap_entry->destination != dest_spd) break;
+			cap_entry->fault_cnt = dest_spd->fault_cnt;			
+		}
+
+		printk("cos: CAP (owner %d dest %d) Fault is updated\n", spd_get_index(d_spd), spd_get_index(dest_spd));
+		break;
+	default:
+		ret = -1;
+		break;
+	}
+	
+	return ret;
+}
+
+
 /********** Composite system calls **********/
 
 COS_SYSCALL int 
@@ -365,8 +485,29 @@ static inline void __switch_thread_context(struct thread *curr, struct thread *n
 static inline void switch_thread_context(struct thread *curr, struct thread *next)
 {
 	struct spd_poly *nspd, *cspd;
+	struct spd *n;
+	struct thd_invocation_frame *tif;
 
 	cspd = thd_get_thd_spdpoly(curr);
+	tif  = thd_invstk_top(next);
+	n    = tif->spd;
+	/* 
+	/*  * Has the component we're returning to faulted since we were */
+	/*  * last executing in it?  If so, return to the calling */
+	/*  * component at eip-8 (at the fault handler). */
+	/*  *\/ */
+	if (tif->fault_cnt != n->fault_cnt) {
+		printk("Fault is detected when context switch\n");
+		printk("curr thd %d, next thd %d\n", thd_get_id(curr), thd_get_id(next));
+		next->flags  |= THD_STATE_PREEMPTED;
+		next->regs.ip = tif->ip-8;
+		next->regs.sp = tif->sp;
+		tif = thd_invocation_pop(next);
+		if (unlikely(!tif)) {
+			next->regs.ip = 0;
+			next->regs.sp = 0;
+		}
+	}
 	__switch_thread_context(curr, next, cspd);
 	nspd = thd_get_thd_spdpoly(next);
 	open_close_spd(nspd, cspd);
@@ -527,7 +668,6 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 		return -1;
 	}
 */
-	
 	switch (op) {
 	case COS_THD_INV_FRAME:
 	{
@@ -3180,7 +3320,6 @@ COS_SYSCALL long
 cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned long mem_id)
 {
 	short int op, flags, dspd_id;
-	paddr_t page;
 	int ret = 0;
 	struct spd *spd, *this_spd;
 	
@@ -3378,6 +3517,7 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 			ret = -1;
 			break;
 		}
+
 		if (spd_cap_activate(cspd, capid)) ret = -1;
 		break;
 	default:
@@ -3547,6 +3687,9 @@ cos_syscall_spd_cntl(int id, int op_spdid, long arg1, long arg2)
 			ret = -1;
 			break;
 		}
+
+		spd->fault_cnt = 0; /* initialize the fault_cnt to 0. How about mm/fprr/print/boot?? */
+		
 		spd_make_active(spd);
 
 		assert(spd->composite_spd);
@@ -3620,7 +3763,7 @@ void *cos_syscall_tbl[32] = {
 	(void*)cos_syscall_trans_cntl,
 	(void*)cos_syscall_pfn_cntl,
 	(void*)cos_syscall_mmap_introspect,
-	(void*)cos_syscall_void,
+	(void*)cos_syscall_fault_cntl,
 	(void*)cos_syscall_void,
 	(void*)cos_syscall_void,
 	(void*)cos_syscall_void,

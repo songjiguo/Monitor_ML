@@ -450,6 +450,12 @@ enum {
 				 * for the current thread. */
 };
 
+/* operations for general fault notification */
+enum {
+	COS_SPD_FAULT_TRIGGER,
+	COS_CAP_FAULT_UPDATE
+};
+
 enum {
 	COS_MMAP_GRANT,
 	COS_MMAP_REVOKE,

@@ -141,7 +141,9 @@ cos_syscall_3(18, int, __vas_cntl, int, op_spdid, long, arg1, long, arg2);
 cos_syscall_3(19, int, __trans_cntl, unsigned long, op_ch, unsigned long, addr, int, off);
 cos_syscall_3(20, int, __pfn_cntl, unsigned long, op_spd, unsigned long, mem_id, int, extent);
 cos_syscall_3(21, int, __mmap_introspect, long, op_flags_dspd, long, daddr, long, mem_id);
+cos_syscall_3(22, int, fault_cntl, int, option, spdid_t, spd, unsigned int, cap_no);
 cos_syscall_0(31,  int, null);
+
 
 static inline int cos_mmap_cntl(short int op, short int flags, short int dest_spd, 
 				vaddr_t dest_addr, unsigned long mem_id) {

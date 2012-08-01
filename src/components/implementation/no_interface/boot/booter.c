@@ -189,19 +189,18 @@ static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t c
 {
 	unsigned int i;
 	char *start_page;
-	
+
 	start_page = local_md[spdid].page_start;
+
 	for (i = 0 ; i < h->nsect ; i++) {
 		struct cobj_sect *sect;
 		vaddr_t dest_daddr;
 		char *lsrc, *dsrc;
 		int left, page_left;
-
 		sect       = cobj_sect_get(h, i);
 		dest_daddr = sect->vaddr;
 		lsrc       = cobj_sect_contents(h, i);
 		left       = cobj_sect_size(h, i);
-
 		while (left) {
 			/* data left on a page to copy over */
 			page_left   = (left > PAGE_SIZE) ? PAGE_SIZE : left;
@@ -218,12 +217,13 @@ static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t c
 			/* Check if special symbols that need
 			 * modification are in this page */
 			boot_symb_process(h, spdid, boot_spd_end(h), dsrc, dest_daddr, comp_info);
-			
+
 			lsrc       += PAGE_SIZE;
 			dest_daddr += PAGE_SIZE;
 			left       -= page_left;
 		}
 	}
+
 	return 0;
 }
 
@@ -301,6 +301,8 @@ static int boot_spd_caps(struct cobj_header *h, spdid_t spdid)
 		    cos_cap_cntl(COS_CAP_SET_CSTUB, spdid, cap->cap_off, cap->cstub) ||
 		    cos_cap_cntl(COS_CAP_SET_SSTUB, spdid, cap->cap_off, cap->sstub) ||
 		    cos_cap_cntl(COS_CAP_ACTIVATE, spdid, cap->cap_off, cap->dest_id)) BUG();
+		
+		/* printc("cli (spd %d): cap id %d\n", spdid, cap->cap_off); */
 		
 		boot_edge_create(spdid, cap->dest_id);
 	}
@@ -417,14 +419,14 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 	/* rdtscll(start); */
 
 	LOCK();
-
 //	boot_spd_caps_chg_activation(failed, 0);
 	md = &local_md[failed];
 	assert(md);
+	/* printc("caller %d failed spd %d md->h %x\n", caller, failed, md->h); */
 	if (boot_spd_map_populate(md->h, failed, md->comp_info)) BUG();
 	/* can fail if component had no boot threads: */
-	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed); 	
-	if (boot_spd_caps(md->h, failed)) BUG();
+	if (boot_spd_caps(md->h, failed)) BUG();  /* do this first ??? */
+	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed); /* do this second ??? */	
 //	boot_spd_caps_chg_activation(failed, 1);
 
 	UNLOCK();

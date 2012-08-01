@@ -73,6 +73,8 @@ struct invocation_cap {
 	unsigned int invocation_cnt:30;
 	isolation_level_t il:2;
 	vaddr_t dest_entry_instruction;
+	unsigned long fault_cnt;
+
 	/* 
 	 * For now, this can be part of the structure as the structure
 	 * should still remain <= 32 bytes, however if this changes,
@@ -157,6 +159,9 @@ typedef int mmaps_t;
 struct spd {
 	/* data touched on the ipc hotpath (32 bytes)*/
 	struct spd_poly spd_info;
+	/* fault counter associated with this spd */
+	unsigned long fault_cnt;
+	
 	struct spd_location location[MAX_SPD_VAS_LOCATIONS];
 	/* The "current" protection state of the spd, which might
 	 * point directly to spd->spd_info, or

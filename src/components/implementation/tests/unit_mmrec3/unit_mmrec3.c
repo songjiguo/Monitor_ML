@@ -11,13 +11,19 @@ vaddr_t mm_test3()
 	return addr;
 }
 
+#ifdef CLI_UPCALL_ENABLE
 void alias_replay(vaddr_t s_addr);
+#endif
+
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_RECOVERY:
+#ifdef CLI_UPCALL_ENABLE
 		/* printc("UNIT_MMREC 3 upcall: thread %d arg3 %x\n", cos_get_thd_id(), (unsigned int)arg3); */
-		alias_replay((vaddr_t)arg3); break;
+		alias_replay((vaddr_t)arg3);
+#endif
+		break;
 	default:
 		break;
 	}
