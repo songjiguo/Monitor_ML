@@ -27,4 +27,6 @@ int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short
 int sched_component_take(spdid_t spdid);
 int sched_component_release(spdid_t spdid);
 
+int sched_create_thd_again(unsigned int tid);
+
 #endif 	    /* !SCHED_H */

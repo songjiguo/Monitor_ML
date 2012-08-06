@@ -35,8 +35,8 @@ struct thd_invocation_frame {
 	 */
 	struct spd *spd;
 	vaddr_t sp, ip;
-
-	unsigned long fault_cnt;
+	/* unsigned long fault_cnt; */
+	struct fault_counter fault;
 }; //HALF_CACHE_ALIGNED;
 
 /* 
@@ -151,10 +151,7 @@ static inline void thd_invocation_push(struct thread *curr_thd, struct spd *curr
 	inv_frame->sp = sp;
 	inv_frame->ip = ip;
 	inv_frame->spd = curr_spd;
-
-	/* if (spd_get_index(curr_spd) == 11 || spd_get_index(curr_spd) == 6) */
-	/* 	printk("cos: invok:push --> set frame fault cnt to %d in spd %d\n", curr_spd->fault_cnt, spd_get_index(curr_spd)); */
-	inv_frame->fault_cnt = curr_spd->fault_cnt;
+	/* inv_frame->fault.cnt = curr_spd->fault.cnt; */
 
 	return;
 }

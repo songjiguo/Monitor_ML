@@ -14,6 +14,10 @@ rec_stubs = '__stubs_rec'
 normal_stubs = '__stubs'
 using_stubs = 'stubs'
 
+mm_rec_h = '__mem_mgr_rec.h'
+mm_nor_h = '__mem_mgr.h'
+mm_header = 'mem_mgr.h'
+
 def query(name, default = "n"):
 
     valid = {"n":"normal","r":"recovery"}
@@ -49,18 +53,26 @@ def main():
 		if os.path.exists(p_dst):
 		   os.unlink(p_dst)
 
+		if os.path.exists(mm_header):
+		   os.unlink(mm_header)
+
 		ret = query(names[i], 'normal')
 
 		if (ret == 'normal') or (ret == 'n'):
 		   print "set to " + ret + '\n'
 		   os.system("ln -s " + p_nor + " " + p_dst)
+                   if (names[i] == 'mem_mgr'):
+                       os.system("ln -s " + mm_nor_h + " " + mm_header)
 		elif (ret == 'recovery') or (ret == 'r'):
 		   print "set to " + ret + '\n'
 		   os.system("ln -s " + p_rec + " " + p_dst)
+                   if (names[i] == 'mem_mgr'):
+                       os.system("ln -s " + mm_rec_h + " " + mm_header)
 		else:
 		   print "set to normal" + '\n'
 		   os.system("ln -s " + p_nor + " " + p_dst)
-
+                   if (names[i] == 'mem_mgr'):
+                       os.system("ln -s " + mm_nor_h + " " + mm_header)
 
 main()
 

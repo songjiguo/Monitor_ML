@@ -124,13 +124,6 @@ __cslab_mem_free(void *buf, struct cslab_freelist *fl, int obj_sz, int max_objs)
 	 */
 	idx = off/obj_sz;
 	assert(idx < max_objs);
-	/* if (cos_spd_id() == 7) */
-	/* { */
-	/* 	printc("in free: s %x spd %d off %d obj_sz %d max_objs %d idx %d\n",  */
-	/* 	       s, cos_spd_id(), off, obj_sz, max_objs, idx); */
-	/* 	printc("before bit set\n"); */
-	/* 	print_bitmap(s->bitmap, 10); */
-	/* } */
 	assert(!bitmap_check(s->bitmap, idx));
 	bitmap_set(s->bitmap, idx);
 	s->nfree++;
@@ -142,12 +135,6 @@ __cslab_mem_free(void *buf, struct cslab_freelist *fl, int obj_sz, int max_objs)
 		__slab_freelist_add(fl, s);
 	}
 
-	/* if (cos_spd_id() == 7) */
-	/* { */
-	/* 	printc("after bit set\n"); */
-	/* 	print_bitmap(s->bitmap, 10); */
-	/* } */
-
 	return;
 }
 
@@ -156,7 +143,6 @@ __cslab_init(struct cslab *s, struct cslab_freelist *fl, int size, int max_objs)
 {
 	s->obj_sz = size;
 	s->nfree  = max_objs;
-
 	memset(s->bitmap, ~0, sizeof(u32_t) * CSLAB_BITMAP_SIZE);
 	INIT_LIST(s, next, prev);
 	__slab_freelist_add(fl, s);
@@ -169,12 +155,10 @@ __cslab_mem_alloc(struct cslab_freelist *fl, int obj_sz, int max_objs)
 	int idx;
 	u32_t *bm;
 	void *mem;
-	
+
 	s = fl->list;
 	if (unlikely(!s)) {
-		/* printc("no free slab list\n"); */
 		s = CSLAB_ALLOC(CSLAB_MEM_ALLOC_SZ);
-		/* printc("spd %ld called CSLAB_ALLOC\n", cos_spd_id()); */
 		if (unlikely(!s)) return NULL;
 		__cslab_init(s, fl, obj_sz, max_objs);
 	}
@@ -182,47 +166,15 @@ __cslab_mem_alloc(struct cslab_freelist *fl, int obj_sz, int max_objs)
 	/* find an empty slot */
 	bm  = s->bitmap;
 	idx = bitmap_one(bm, CSLAB_BITMAP_SIZE);
-	if (idx <= -1 || idx >= max_objs) {
-		printc("spd %ld idx %d, max objs %d\n", cos_spd_id(), idx, max_objs);
-	}
-	/* printc("spd %ld idx %d, max objs %d\n", cos_spd_id(), idx, max_objs); */
-	/* if (cos_spd_id() == 15) { */
-	/* 	printc("spd %ld idx %d\n", cos_spd_id(),idx); */
-	/* 	/\* printc("ba %p\n", bm); *\/ */
-	/* 	/\* print_bitmap(bm, CSLAB_BITMAP_SIZE); *\/ */
-	/* } */
 	assert(idx > -1 && idx < max_objs);
 	bitmap_unset(bm, idx);
 	assert(!bitmap_check(bm, idx));
-
-	/* if (cos_spd_id() == 15) { */
-	/* 	printc("after: ba %p\n", bm); */
-	/* 	print_bitmap(bm, CSLAB_BITMAP_SIZE); */
-	/* } */
-
 	mem = __cslab_mem_first(s) + (idx * obj_sz);
 
 	assert(s->nfree);
 	s->nfree--;
 	/* remove from the freelist */
 	if (!s->nfree) __slab_freelist_rem(fl, s);
-
-	
-	/* /\* test *\/ */
-	/* if (cos_spd_id() == 7){ */
-	/* 	s = __cslab_lookup(mem); */
-	/* 	int off; */
-	/* 	assert(s && mem); */
-		
-	/* 	off = (int)((u32_t)mem - (u32_t)__cslab_mem_first(s)); */
-	/* 	assert(off >= 0); */
-	/* 	idx = off/obj_sz; */
-	/* 	assert(idx < max_objs); */
-	/* 	printc("in alloc: spd %d off %d obj_sz %d max_objs %d idx %d\n",  */
-	/* 	       cos_spd_id(), off, obj_sz, max_objs, idx); */
-	/* 	assert(!bitmap_check(s->bitmap, idx)); */
-	/* 	print_bitmap(s->bitmap, 10); */
-	/* } */
 
 	return mem;
 }

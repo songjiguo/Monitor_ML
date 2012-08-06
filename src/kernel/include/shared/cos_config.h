@@ -48,4 +48,7 @@
 /* print out to dmesg? */
 #define COS_PRINT_DMESG 1
 
+/* enable the fault tolerance in Composite? */
+#define RECOVERY_ENABLE 1
+
 #endif /* COS_CONFIG_H */

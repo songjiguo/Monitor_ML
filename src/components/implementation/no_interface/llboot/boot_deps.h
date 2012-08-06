@@ -153,7 +153,6 @@ llboot_thd_done(void)
 	}
 }
 
-
 /* can only be called from mmgr/scheduler */
 int
 recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
@@ -172,9 +171,7 @@ recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed);
 
-
 static int first = 0;
-
 int 
 fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {

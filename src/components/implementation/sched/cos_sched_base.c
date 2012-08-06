@@ -28,6 +28,8 @@
 #include <sched.h>
 #include <sched_hier.h>
 
+#include <recovery_upcall.h>
+
 //#define TIMER_ACTIVATE
 #include <timer.h>
 #include <errno.h>
@@ -554,9 +556,7 @@ static void sched_timer_tick(void)
 		
 		/* are we done running? */
 		if (unlikely(ticks >= RUNTIME_SEC*TIMER_FREQ+1)) {
-			printc("B: thread is %d\n", cos_get_thd_id());
 			sched_exit();
-			printc("A: thread is %d\n", cos_get_thd_id());
 			while (COS_SCHED_RET_SUCCESS !=
 			       cos_switch_thread_release(init->id, COS_SCHED_BRAND_WAIT)) {
 				cos_sched_lock_take();
@@ -857,6 +857,8 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 
 	// Added by Gabe 08/19
 	if (unlikely(dependency_thd == cos_get_thd_id())) return -EINVAL;
+
+	/* printc("curr thd id is %d\n", cos_get_thd_id()); */
 
 	cos_sched_lock_take();
 	thd = sched_get_current();
@@ -1166,6 +1168,26 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, u32_t sc
 
 	cos_sched_lock_take();
 	curr = sched_get_current();
+	assert(curr);
+
+	/* ****** default thread has been recreated, maybe with different id ******** */
+	/* printc("curr thd id is %d\n", cos_get_thd_id()); */
+	/* curr could be null if a crash happened to scheduler, and
+	 * sched_thd_map[thd_id] is lost */
+	/* recreate default thread */
+	/* if (unlikely(!curr)) { */
+	/* 	printc("scheduler might have crashed before...\n"); */
+	/* 	/\* we need introspect the kernel to get the default thread prio *\/ */
+	/* 	union sched_param sp_def = {.c = {.type = SCHEDP_RPRIO, .value = 1}}; */
+	/* 	if ((sched_create_thread_default(spdid, sp_def.v, 0, 0)) < 0) return -1; */
+	/* 	/\* However, this will use RLPRIO and */
+	/* 	 * sched_get_current() which does not have the correct */
+	/* 	 * prio anymore*\/ */
+
+	/* } */
+	/* *********************** */
+	/* recovery_upcall(spdid, spdid, 0); */
+	
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, d, 1);
 	cos_sched_lock_release();
 	printc("sched %d: created thread %d in spdid %d (requested by %d)\n",
@@ -1213,6 +1235,17 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n",
 	       (unsigned int)cos_spd_id(), new->id, spdid, sched_get_current()->id, spdid);
 
+	return 0;
+}
+
+/* In case that the scheduler fails and is being rebuilt, we do not
+ * want to recreate all threads which have been created and now maybe
+ * in other components. Not through booter and build everything */
+int 
+sched_create_thd_again(unsigned int tid)
+{
+	/* introspect by thread id first */
+	/* then recreate such thread */
 	return 0;
 }
 

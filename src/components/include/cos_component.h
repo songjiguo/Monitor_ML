@@ -144,7 +144,6 @@ cos_syscall_3(21, int, __mmap_introspect, long, op_flags_dspd, long, daddr, long
 cos_syscall_3(22, int, fault_cntl, int, option, spdid_t, spd, unsigned int, cap_no);
 cos_syscall_0(31,  int, null);
 
-
 static inline int cos_mmap_cntl(short int op, short int flags, short int dest_spd, 
 				vaddr_t dest_addr, unsigned long mem_id) {
 	/* encode into 3 arguments */

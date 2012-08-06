@@ -10,6 +10,7 @@
 #include "include/thread.h"
 #include "include/spd.h"
 #include "include/page_pool.h"
+#include "include/recovery.h"
 
 struct thread threads[MAX_NUM_THREADS];
 static struct thread *thread_freelist_head = NULL;
@@ -88,6 +89,7 @@ struct thread *thd_alloc(struct spd *spd)
 	thd->stack_ptr = -1;
 	/* establish this thread's base spd */
 	thd_invocation_push(thd, spd, 0, 0);
+	inv_frame_fault_cnt_update(thd, spd);
 
 	thd->flags = 0;
 

@@ -17,6 +17,16 @@
 #include "shared/cos_types.h"
 #include "shared/consts.h"
 
+#ifdef RECOVERY_ENABLE
+struct fault_counter {
+	unsigned long cnt;
+};
+#else
+struct fault_counter {
+	int : 0;
+};
+#endif
+
 /**
  * Service Protection Domains
  *
@@ -73,8 +83,8 @@ struct invocation_cap {
 	unsigned int invocation_cnt:30;
 	isolation_level_t il:2;
 	vaddr_t dest_entry_instruction;
-	unsigned long fault_cnt;
 
+	struct fault_counter fault;
 	/* 
 	 * For now, this can be part of the structure as the structure
 	 * should still remain <= 32 bytes, however if this changes,
@@ -159,9 +169,10 @@ typedef int mmaps_t;
 struct spd {
 	/* data touched on the ipc hotpath (32 bytes)*/
 	struct spd_poly spd_info;
+
 	/* fault counter associated with this spd */
-	unsigned long fault_cnt;
-	
+	struct fault_counter fault;
+
 	struct spd_location location[MAX_SPD_VAS_LOCATIONS];
 	/* The "current" protection state of the spd, which might
 	 * point directly to spd->spd_info, or
@@ -170,7 +181,8 @@ struct spd {
 	struct spd_poly /*composite_spd*/ *composite_spd; 
 	
 	unsigned short int cap_base, cap_range;
-	unsigned short int fault_handler[COS_NUM_FAULTS];
+	/* numbered faults correspond to which capability? */
+	unsigned short int fault_handler[COS_FLT_MAX];
 	/*
 	 * user_cap_tbl is a pointer to the virtual address within the
 	 * kernel address space of the user level capability table,

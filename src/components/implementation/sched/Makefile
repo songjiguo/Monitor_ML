@@ -1,5 +1,5 @@
 INTERFACES=sched sched_hier
-DEPENDENCIES=printc sched_hier
+DEPENDENCIES=printc sched_hier recovery_upcall
 
 include ../Makefile.subdir
 ifeq (${ENABLE_STACK_MANAGER},1)

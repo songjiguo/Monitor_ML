@@ -191,16 +191,17 @@ static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t c
 	char *start_page;
 
 	start_page = local_md[spdid].page_start;
-
 	for (i = 0 ; i < h->nsect ; i++) {
 		struct cobj_sect *sect;
 		vaddr_t dest_daddr;
 		char *lsrc, *dsrc;
 		int left, page_left;
+
 		sect       = cobj_sect_get(h, i);
 		dest_daddr = sect->vaddr;
 		lsrc       = cobj_sect_contents(h, i);
 		left       = cobj_sect_size(h, i);
+
 		while (left) {
 			/* data left on a page to copy over */
 			page_left   = (left > PAGE_SIZE) ? PAGE_SIZE : left;
@@ -223,7 +224,6 @@ static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t c
 			left       -= page_left;
 		}
 	}
-
 	return 0;
 }
 
@@ -293,7 +293,7 @@ static int boot_spd_caps(struct cobj_header *h, spdid_t spdid)
 		if (cobj_cap_undef(cap)) break;
 
 		/* we have a fault handler... */
-		if (cap->fault_num < COS_NUM_FAULTS) {
+		if (cap->fault_num < COS_FLT_MAX) {
 			if (cos_cap_cntl(COS_CAP_SET_FAULT, spdid, cap->cap_off, cap->fault_num)) BUG();
 		}
 		

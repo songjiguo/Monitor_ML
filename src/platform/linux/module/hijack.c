@@ -52,12 +52,7 @@ MODULE_LICENSE("GPL");
 extern void sysenter_interposition_entry(void);
 extern void page_fault_interposition(void);
 extern void div_fault_interposition(void);
-extern void state_inv_interposition(void);
-
-/* extern unsigned long cos_default_page_fault_handler; */
-/* extern unsigned long cos_default_div_fault_handler; */
-/* extern unsigned long cos_default_state_inv_handler; */
-//extern void *cos_sysenter_addr;
+extern void reg_save_interposition(void);
 
 /* 
  * This variable exists for the assembly code for temporary
@@ -960,7 +955,7 @@ cos_handle_page_fault(struct thread *thd, vaddr_t fault_addr,
 		      int ecode, struct pt_regs *regs)
 {
 	cos_record_fault_regs(thd, fault_addr, ecode, regs);
-	fault_ipc_invoke(thd, fault_addr, 0, regs, 0);
+	fault_ipc_invoke(thd, fault_addr, 0, regs, COS_FLT_PGFLT);
 		
 	return 0;
 }
@@ -1131,8 +1126,8 @@ int main_div_fault_interposition(struct pt_regs *rs, unsigned int error_code)
 	return 1;
 }
 
-__attribute__((regparm(3))) 
-int main_state_inv_interposition(struct pt_regs *rs, unsigned int error_code)
+__attribute__((regparm(3))) int
+main_reg_save_interposition(struct pt_regs *rs, unsigned int error_code)
 {
 	struct thread *t;
 	struct spd *s;
@@ -1144,7 +1139,6 @@ int main_state_inv_interposition(struct pt_regs *rs, unsigned int error_code)
 	/* The spd that was invoked should be the one faulting here
 	 * (must get stack) */
 	s = thd_curr_spd_noprint();
-	
 
 	return 0;
 }
@@ -1226,18 +1220,15 @@ static inline pte_t *pgtbl_lookup_address(paddr_t pgtbl, unsigned long addr)
         return pte_offset_kernel(pmd, addr);
 }
 
-/* returns the paddr for a given vaddr */
+/* returns the page table entry */
 unsigned long
 __pgtbl_lookup_address(paddr_t pgtbl, unsigned long addr)
 {
 	pte_t *pte;
-	unsigned long paddr = 0;
 
 	pte = pgtbl_lookup_address(pgtbl, addr);
 	if (!pte) return 0;
-	
-	paddr = (pte->pte_low >> PAGE_SHIFT) << PAGE_SHIFT; /* zero out all flags */
-	return paddr;
+	return pte->pte_low;
 }
 
 /* returns the page table entry */
@@ -1264,13 +1255,10 @@ int pgtbl_add_entry(paddr_t pgtbl, unsigned long vaddr, unsigned long paddr)
 {
 	pte_t *pte = pgtbl_lookup_address(pgtbl, vaddr);
 
-	/* if (!pte) printk("no pte!\n"); */
-	/* if (pte_val(*pte) & _PAGE_PRESENT) printk("page exists!\n"); */
 	if (!pte || pte_val(*pte) & _PAGE_PRESENT) {
 		return -1;
 	}
 	/*pte_val(*pte)*/pte->pte_low = paddr | (_PAGE_PRESENT | _PAGE_RW | _PAGE_USER | _PAGE_ACCESSED);
-	/* printk("paddr %x pte->pte_low %x\n", paddr, pte->pte_low); */
 
 	return 0;
 }
@@ -2180,7 +2168,7 @@ static int asym_exec_dom_init(void)
 	hw_int_override_sysenter(sysenter_interposition_entry);
 	hw_int_override_pagefault(page_fault_interposition);
 	hw_int_override_idt(0, div_fault_interposition, 0, 0);
-	hw_int_override_idt(0xe9, state_inv_interposition, 0, 3);
+	hw_int_override_idt(0xe9, reg_save_interposition, 0, 3);
 
 	BUG_ON(offsetof(struct thread, regs) != 8);
 

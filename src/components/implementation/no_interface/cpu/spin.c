@@ -6,18 +6,55 @@
  * Public License v2.
  */
 
+/* Old code of cpu is just spin, now it is changed to test: */
+
+/*
+ * sched_create_default_thread, sched_create_thd, sched_block,
+ * sched_wake, sched_component_take, sched_component_release
+ * also use mem_mgr w/o valloc to simplify the test (simple stack)
+*/
+
 #include <cos_component.h>
 #include <print.h>
-
 #include <sched.h>
+#include <res_spec.h>
 
-int spin_var = 0, other;
+int high, low;
+static int num = 0;
 
 void cos_init(void *arg)
 {
-//	BUG();
-//	spin_var = *(int*)NULL;
-	printc("<<**Running!**>>\n");
-//	while (1) if (spin_var) other = 1;
+	printc("thd %d running \n", cos_get_thd_id());
+
+	static int first = 0;
+	union sched_param sp;
+
+	if(first == 0){
+		first = 1;
+		num = 1;
+
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 10;
+		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 11;
+		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+
+	} else {
+		while (num < 10) {
+			if (cos_get_thd_id() == high){
+				num++;
+				printc("high %d running and to block\n", cos_get_thd_id());
+				sched_block(cos_spd_id(), 0);
+			}
+			if (cos_get_thd_id() == low){
+				printc("low %d running and to wake up high %d\n", cos_get_thd_id(), high);
+				sched_wakeup(cos_spd_id(), high);
+			}
+		}
+	}
+	
 	return;
+
 }

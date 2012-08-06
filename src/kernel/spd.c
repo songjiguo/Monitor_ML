@@ -15,7 +15,7 @@
 #include "include/spd.h"
 #include "include/debug.h"
 #include "include/page_pool.h"
-
+#include "include/recovery.h"
 /* 
  * This is the layout in virtual memory of the spds.  Spd's virtual
  * ranges are allocated (currently) on the granularity of a pgd, thus
@@ -425,6 +425,8 @@ struct spd *spd_alloc(unsigned short int num_caps, struct usr_inv_cap *user_cap_
 
 	for (i = 0 ; i < MAX_SPD_VAS_LOCATIONS ; i++) spd->location[i].size = 0;
 
+	init_spd_fault_cnt(spd);
+
 	return spd;
 
  free_spd:
@@ -578,11 +580,9 @@ struct spd *spd_get_by_index(int idx)
 	return &spds[idx];
 }
 
-
 /* 
  * Static Capability Manipulation Functions
  */
-
 unsigned int spd_add_static_cap(struct spd *owner_spd, vaddr_t ST_serv_entry, 
 				struct spd *trusted_spd, isolation_level_t isolation_level)
 {
@@ -618,15 +618,16 @@ int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd)
 
 	if (!c) return -1;
 	c->destination = dspd;
+	/* c->fault.cnt   = dspd->fault.cnt; */
+	cap_fault_cnt_update(c, dspd);
 
-	c->fault_cnt   = dspd->fault_cnt;
 	return 0;
 }
 int spd_cap_set_fault_handler(struct spd *spd, int cap, int handler_num)
 {
 	int abs;
 	
-	if (handler_num >= COS_NUM_FAULTS) return -1;
+	if (handler_num >= COS_FLT_MAX || handler_num < 0) return -1;
 	abs = spd_get_cap_off(spd, cap);
 	if (abs == -1) return -1;
 	spd->fault_handler[handler_num] = abs;
@@ -726,6 +727,8 @@ unsigned int spd_add_static_cap_extended(struct spd *owner_spd, struct spd *trus
 	new_cap->destination = trusted_spd;
 	new_cap->invocation_cnt = 0;
 	new_cap->il = isolation_level;
+
+	init_cap_fault_cnt(new_cap);
 
 	new_cap->dest_entry_instruction = stubs->ST_serv_entry = ST_serv_entry;
 	stubs->AT_cli_stub = AT_cli_stub;

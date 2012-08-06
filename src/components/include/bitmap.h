@@ -195,9 +195,7 @@ bitmap_contiguous_ones(u32_t *x, int off, int extent, int max)
 {
 	int i, prev, start;
 
-	i = off;
-	
-	prev = start = 0; 
+	prev = start = 0;
 	for (i = 0 ; i < (int)(max*sizeof(u32_t)) ; i++) {
 	/* for (i = 0 ; i < max ; i++) { */
 		prev = i;

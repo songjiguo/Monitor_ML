@@ -467,6 +467,24 @@ enum {
 	COS_PFN_MAX_MEM
 };
 
+/* 
+ * Fault and fault handler information.  Fault indices/identifiers and
+ * the function names to handle them.
+ */
+typedef enum {
+	COS_FLT_PGFLT,
+	COS_FLT_DIVZERO,
+	COS_FLT_BRKPT,
+	COS_FLT_OVERFLOW,
+	COS_FLT_RANGE,
+	COS_FLT_GEN_PROT,
+	/* software defined: */
+	COS_FLT_LINUX,
+	COS_FLT_SAVE_REGS,
+	COS_FLT_FLT_NOTIF,
+	COS_FLT_MAX
+} cos_flt_off; /* <- this indexes into cos_flt_handlers in the loader */
+
 /* operations for mmap introspect */
 enum {
 	COS_MMAP_INTROSPECT_ADDR,

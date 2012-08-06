@@ -2,7 +2,7 @@ C_OBJS=spin.o
 ASM_OBJS=
 COMPONENT=cpu.o
 INTERFACES=
-DEPENDENCIES=sched printc lock mem_mgr_large valloc
+DEPENDENCIES=sched printc mem_mgr
 IF_LIB=
 
 include ../../Makefile.subsubdir

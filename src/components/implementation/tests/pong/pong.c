@@ -53,6 +53,7 @@ int pong(void)
 void pong(void)
 {
 	return;
+	number = 0;
 }
 #endif
 
