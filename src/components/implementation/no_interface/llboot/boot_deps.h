@@ -83,7 +83,11 @@ typedef void (*crt_thd_fn_t)(void);
 
 /* We'll do all of our own initialization... */
 static int
-sched_create_thread_default(spdid_t spdid, u32_t v1, u32_t v2, u32_t v3)
+sched_create_thread_default(spdid_t spdid, unsigned int desired_thd_id)
+{ return 0; }
+
+static int
+sched_thd_parameter_set(unsigned int thd_id, u32_t sched_param0, u32_t sched_param1, u32_t sched_param2)
 { return 0; }
 
 static void
@@ -155,13 +159,13 @@ llboot_thd_done(void)
 
 /* can only be called from mmgr/scheduler */
 int
-recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
+recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t arg)
 {
-	printc("LL: llbooter upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)addr, cos_get_thd_id());
+	printc("LL: llbooter upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)arg, cos_get_thd_id());
 
 	recover_spd = dest;
 	prev_thd    = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread in sys */
-	page_addr   = addr;
+	page_addr   = arg;
 	
 	while (prev_thd == cos_get_thd_id()) cos_switch_thread(recovery_thd, 0);
 
@@ -171,6 +175,9 @@ recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t addr)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed);
 
+
+void sched_exit(void);
+
 static int first = 0;
 int 
 fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
@@ -179,20 +186,17 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	int tid = cos_get_thd_id();
 
-	first = first + 1;
-	if(first == 10) BUG();
+	first++;
+	if(first == 5) {
+		printc("has failed %d times\n",first);
+		sched_exit();
+	}
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
 	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %d)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
 	printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
 
-	/* when system exits, mman_release_all is called to kill all mappings in other components */
-	/* Q: Do we really need kill all of these mappings when the system exits? */
-	/* for now, I just use assert(0) here to avoid the endless print info caused by pgfault */
-	if (cos_get_thd_id() == 3) assert(0); 
-
 	failure_notif_fail(cos_spd_id(), spdid);
-
 	printc("LL: <<1>>\n");
 	/* no reason to save register contents... */
 	/* unsigned long long start, end; */
@@ -220,12 +224,44 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	 * The thread was created in the failed component...just use
 	 * it to restart the component!  This might even be the
 	 * initial thread.
-	 */
+	 */	
 	cos_upcall(spdid); 	/* FIXME: give back stack... */
 	BUG();
 
 	return 0;
 }
+
+#ifdef NOTIF_TEST
+static int second = 0;
+int
+fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
+{
+	unsigned long r_ip;
+
+	int tid = cos_get_thd_id();
+
+	second = second + 1;
+	if(second == 10) BUG();
+	printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
+
+	if (cos_get_thd_id() == 3) assert(0);
+
+	failure_notif_fail(cos_spd_id(), spdid);
+
+	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
+		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
+		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
+		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
+		recovery_upcall(cos_spd_id(), spdid, 0);
+		return 0;
+	}
+	cos_upcall(spdid); 	/* FIXME: give back stack... */
+	BUG();
+
+	return 0;
+}
+
+#endif
 
 /* memory operations... */
 
@@ -278,12 +314,11 @@ comp_info_record(struct cobj_header *h, spdid_t spdid, struct cos_component_info
 	}
 }
 
-
 static void
 boot_deps_init(void)
 {
 	int i;
-
+	
 	alpha        = cos_get_thd_id();
 	recovery_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(recovery_thd >= 0);
@@ -344,7 +379,8 @@ sched_child_get_evt(spdid_t spdid, struct sched_child_evt *e, int idle, unsigned
 
 int 
 sched_child_cntl_thd(spdid_t spdid) 
-{ 
+{
+	if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0;
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 	return 0;

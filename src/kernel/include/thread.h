@@ -122,6 +122,9 @@ struct thread {
 
 	struct thread *freelist_next;
 
+	/* Linked list of the threads created in scheduler */
+	struct thread *sched_prev, *sched_next;
+
 	struct sched_introspect *usr_sched_prio;
 } CACHE_ALIGNED;
 
@@ -139,11 +142,11 @@ static inline void thd_invocation_push(struct thread *curr_thd, struct spd *curr
 				       vaddr_t sp, vaddr_t ip)
 {
 	struct thd_invocation_frame *inv_frame;
-/*
-	printk("cos: Pushing onto %p, spd %p, cspd %p (sp %x, ip %x).\n", 
-	       curr_thd, curr_spd, curr_spd->composite_spd, 
-	       (unsigned int)sp, (unsigned int)ip);
-*/
+
+	/* printk("cos: Pushing onto %p, spd %p, cspd %p (sp %x, ip %x).\n",  */
+	/*        curr_thd, curr_spd, curr_spd->composite_spd,  */
+	/*        (unsigned int)sp, (unsigned int)ip); */
+
 	curr_thd->stack_ptr++;
 	inv_frame = &curr_thd->stack_base[curr_thd->stack_ptr];
 
@@ -151,7 +154,6 @@ static inline void thd_invocation_push(struct thread *curr_thd, struct spd *curr
 	inv_frame->sp = sp;
 	inv_frame->ip = ip;
 	inv_frame->spd = curr_spd;
-	/* inv_frame->fault.cnt = curr_spd->fault.cnt; */
 
 	return;
 }

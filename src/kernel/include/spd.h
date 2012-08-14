@@ -17,15 +17,6 @@
 #include "shared/cos_types.h"
 #include "shared/consts.h"
 
-#ifdef RECOVERY_ENABLE
-struct fault_counter {
-	unsigned long cnt;
-};
-#else
-struct fault_counter {
-	int : 0;
-};
-#endif
 
 /**
  * Service Protection Domains
@@ -59,6 +50,22 @@ struct fault_counter {
  * synchronized with asm_ipc_defs.h.
  */
 /* user half found in cos_types.h */
+
+
+/* Comment: by defining 0 bit, it takes no memory allocation at
+ * all. By doing this, we can eliminate the fault_counter from all
+ * thread and spd data structure */
+
+#if RECOVERY_ENABLE == 1
+struct fault_counter {
+	unsigned long cnt;
+};
+#else
+struct fault_counter {
+	unsigned long : 0;		
+};
+#endif
+
 
 /* ST stubs are linked automatically */
 struct usr_cap_stubs {
@@ -212,6 +219,9 @@ struct spd {
 	struct spd *freelist_next;
 	/* Linked list of the members of a non-depricated, current composite spd */
 	struct spd *composite_member_next, *composite_member_prev;
+
+	struct thread *scheduler_all_threads;
+	
 } CACHE_ALIGNED; //cache line size
 
 paddr_t spd_alloc_pgtbl(void);

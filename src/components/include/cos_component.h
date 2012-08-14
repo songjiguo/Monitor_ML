@@ -142,6 +142,7 @@ cos_syscall_3(19, int, __trans_cntl, unsigned long, op_ch, unsigned long, addr, 
 cos_syscall_3(20, int, __pfn_cntl, unsigned long, op_spd, unsigned long, mem_id, int, extent);
 cos_syscall_3(21, int, __mmap_introspect, long, op_flags_dspd, long, daddr, long, mem_id);
 cos_syscall_3(22, int, fault_cntl, int, option, spdid_t, spd, unsigned int, cap_no);
+cos_syscall_3(23, int, sched_introspect, int, operation, unsigned int, arg, int, thd_id);
 cos_syscall_0(31,  int, null);
 
 static inline int cos_mmap_cntl(short int op, short int flags, short int dest_spd, 
@@ -161,10 +162,8 @@ cos_pfn_cntl(short int op, int dest_spd, unsigned int mem_id, int extent) {
 	return cos___pfn_cntl(((op<<16) | (dest_spd)), mem_id, extent);
 }
 
-/* same as above, only used for recovery now */
 static inline int cos_mmap_introspect(short int op, short int flags, 
 				short int dest_spd, vaddr_t dest_addr, long mem_id) {
-	/* encode into 3 arguments */
 	return cos___mmap_introspect(((op<<24) | (flags << 16) | (dest_spd)), 
 			       dest_addr, mem_id);
 }

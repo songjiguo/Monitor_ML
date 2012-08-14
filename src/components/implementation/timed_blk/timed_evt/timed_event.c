@@ -676,6 +676,7 @@ static void start_timer_thread(void)
 void cos_init()
 {
 	union sched_param sp;
+	int thdid;
 	static int first = 1;
 
 	if (first) {
@@ -688,10 +689,17 @@ void cos_init()
 		cos_vect_init_static(&thd_evts);
 		cos_vect_init_static(&thd_periodic);
 
+#ifdef SCHEDULER_TEST
+		if ((thdid = sched_create_thd(cos_spd_id(), 0)) == 0) BUG();
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 3;
+		sched_thd_parameter_set(thdid, sp.v, 0, 0);
+#else
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 3;
 
 		if (sched_create_thd(cos_spd_id(), sp.v, 0, 0) == 0) BUG();
+#endif
 	} else {
 		start_timer_thread();
 	}

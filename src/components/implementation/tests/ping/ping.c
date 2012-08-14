@@ -5,6 +5,7 @@
 #include <sched.h>
 #include <timed_blk.h>
 #include <pong.h>
+#include <pgfault.h>
 
 #include <pingpong_test.h>
 
@@ -21,6 +22,7 @@ ping_pong_test()
 	printc("<<< thd %d TEST_INVOCATION_RECOVERY BEGIN! >>>\n", cos_get_thd_id());
 	int i = 0;
 	while(i++ <= NUM) pong();
+	
 	return;
 }
 #endif
@@ -96,6 +98,18 @@ cos_init(void)
 	if(first == 0){
 		first = 1;
 
+#ifdef SCHEDULER_TEST
+		high = sched_create_thd(cos_spd_id(), 0);
+		sp.c.type  = SCHEDP_PRIO;
+		sp.c.value = THREAD1;
+		sched_thd_parameter_set(high, sp.v, 0, 0);
+
+		low = sched_create_thd(cos_spd_id(), 0);
+		sp.c.type  = SCHEDP_PRIO;
+		sp.c.value = THREAD2;
+		sched_thd_parameter_set(low, sp.v, 0, 0);
+
+#else
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = THREAD1;
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
@@ -103,6 +117,7 @@ cos_init(void)
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = THREAD2;
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+#endif
 
 	} else {
 		ping_pong_test();

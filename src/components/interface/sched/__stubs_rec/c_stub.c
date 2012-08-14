@@ -38,11 +38,24 @@ struct rec_data_sched {
 /******  client stub functions ******/
 /************************************/
 
-CSTUB_FN_ARGS_4(int, sched_create_thd, spdid_t, spdid, u32_t, sched_param0, u32_t, sched_param1, u32_t, sched_param2)
+CSTUB_FN_ARGS_2(int, sched_create_thd, spdid_t, spdid, unsigned int, desired_thd)
 printc("<< sched_create_thd >>\n");
 redo:
 
-CSTUB_ASM_4(sched_create_thd, spdid, sched_param0, sched_param1, sched_param2)
+CSTUB_ASM_2(sched_create_thd, spdid, desired_thd)
+
+       if (unlikely (fault)){
+       	       fcounter++;
+       	       goto redo;
+       }
+
+CSTUB_POST
+
+CSTUB_FN_ARGS_4(int, sched_thd_parameter_set, unsigned int, thdid, u32_t, sched_param0, u32_t, sched_param1, u32_t, sched_param2)
+printc("<< sched_thd_parameter_set >>\n");
+redo:
+
+CSTUB_ASM_4(sched_create_thd, thdid, sched_param0, sched_param1, sched_param2)
 
        if (unlikely (fault)){
        	       fcounter++;
@@ -81,7 +94,7 @@ CSTUB_POST
 
 
 CSTUB_FN_ARGS_1(int, sched_component_take, spdid_t, spdid)
-printc("<< sched_component_take >>\n");
+	printc("<< sched_component_take >>\n");
 redo:
 
 CSTUB_ASM_1(sched_component_take, spdid)
@@ -95,7 +108,7 @@ CSTUB_POST
 
 
 CSTUB_FN_ARGS_1(int, sched_component_release, spdid_t, spdid)
-printc("<< sched_component_release >>\n");
+	printc("<< sched_component_release >>\n");
 redo:
 
 CSTUB_ASM_1(sched_component_release, spdid)

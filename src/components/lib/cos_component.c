@@ -16,6 +16,10 @@ struct cos_sched_data_area cos_sched_notifications = {
 	.cos_events = {}
 };
 
+/* will be initialized to a list */
+struct user_thread_id uthd_ids[MAX_NUM_THREADS];
+struct user_thread_id *global_user_thread_id_list;
+
 __attribute__ ((weak))
 void cos_init(void *arg)
 {

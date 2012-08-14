@@ -92,17 +92,24 @@ cos_init(void)
 {
 	static int first = 0;
 	union sched_param sp;
-	int i;
+	int i, thd_id;
 
 	if(first == 0){
 		first = 1;
 
 		for (i=0; i<PAGE_NUM; i++) s_addr[i] = 0;
 		for (i=0; i<PAGE_NUM; i++) d_addr[i] = 0;
-		
+
+#ifdef SCHEDULER_TEST		
+		thd_id = sched_create_thd(cos_spd_id(), 0);
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = THREAD1;
+		sched_thd_parameter_set(thd_id, sp.v, 0, 0);
+#else
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = THREAD1;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+#endif
 	} else {
 		printc("<<< MM RECOVERY TEST START >>>\n");
 

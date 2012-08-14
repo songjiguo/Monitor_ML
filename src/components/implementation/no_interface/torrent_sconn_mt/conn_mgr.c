@@ -284,12 +284,22 @@ static void init(char *init_str)
 	assert(create_str);
 
 	for (; nthds > 0 ; nthds--) {
+#ifdef SCHEDULER_TEST
+		int thdid;
+		thdid = sched_create_thd(cos_spd_id(), 0);
+
+		union sched_param sp;
+		sp.c.type  = SCHEDP_PRIO;
+		sp.c.value = __prio++;
+		sched_thd_parameter_set(thdid, sp.v, 0, 0);
+#else
 		union sched_param sp;
 		int thdid;
 		
 		sp.c.type  = SCHEDP_PRIO;
 		sp.c.value = __prio++;
 		thdid = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+#endif
 		if (!hpthd) hpthd = thdid;
 	}
 }

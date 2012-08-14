@@ -6,6 +6,12 @@
  */
 
 #include <cos_asm_server_stub_simple_stack.h>
+//#include "/home/songjiguo/research/composite/src/kernel/include/shared/cos_config.h"
+#include "../../../../kernel/include/shared/cos_config.h"
 	
 .text
 cos_asm_server_stub_spdid(fault_page_fault_handler)
+
+#ifdef NOTIF_TEST
+cos_asm_server_stub_spdid(fault_flt_notif_handler)
+#endif

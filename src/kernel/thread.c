@@ -14,6 +14,9 @@
 
 struct thread threads[MAX_NUM_THREADS];
 static struct thread *thread_freelist_head = NULL;
+
+struct thread scheduler_thread_head;
+
 /* like "current" in linux */
 struct thread *current_thread = NULL;
 
@@ -46,10 +49,12 @@ void thd_init_all(struct thread *thds)
 	for (i = 0 ; i < MAX_NUM_THREADS ; i++) {
 		/* adjust the thread id to avoid using thread 0 clear */
 		thds[i].thread_id = i+1;
-		thds[i].freelist_next = (i == (MAX_NUM_THREADS-1)) ? NULL : &thds[i+1];
+		thds[i].freelist_next  = (i == (MAX_NUM_THREADS-1)) ? NULL : &thds[i+1];
+		thds[i].sched_next = thds[i].sched_prev = NULL;
 	}
 
 	thread_freelist_head = thds;
+	scheduler_thread_head.thread_id = 0;
 
 	return;
 }
@@ -75,7 +80,7 @@ struct thread *thd_alloc(struct spd *spd)
 		
 	}
 	thread_freelist_head = thread_freelist_head->freelist_next;
-
+	
 	id = thd->thread_id;
 	memset(thd, 0, sizeof(struct thread));
 	thd->thread_id = id;
@@ -96,6 +101,33 @@ struct thread *thd_alloc(struct spd *spd)
 	thd->thread_brand = NULL;
 	thd->pending_upcall_requests = 0;
 	thd->freelist_next = NULL;
+
+	/* It will be better if the threads created by scheduler
+	 * internally are only saved in kernel, then all client's
+	 * requests to create threads will be saved somewhere, i.e. a
+	 * separate spd so that they can be replay later*/
+	
+	/* for now, just save all threads for simplcity */
+	if (spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
+		/* printk("cos: add thread %d onto spd %d list\n", thd_get_id(thd), spd_get_index(spd));		 */
+		if (!spd->scheduler_all_threads) {
+			/* initialize the list head */
+			scheduler_thread_head.sched_next = scheduler_thread_head.sched_prev = &scheduler_thread_head;
+
+			thd->sched_next = scheduler_thread_head.sched_next;
+			thd->sched_prev = &scheduler_thread_head;
+			scheduler_thread_head.sched_next = thd;
+			thd->sched_next->sched_prev = thd;
+			
+			/* initialize the list entry in scheduler spd */
+			spd->scheduler_all_threads = &scheduler_thread_head;
+		} else {
+			thd->sched_next = scheduler_thread_head.sched_next;
+			thd->sched_prev = &scheduler_thread_head;
+			scheduler_thread_head.sched_next = thd;
+			thd->sched_next->sched_prev = thd;
+		}
+	}
 
 	return thd;
 }

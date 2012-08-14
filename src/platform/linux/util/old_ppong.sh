@@ -14,7 +14,7 @@ mpool.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o;\
 pfr.o-sm.o|mm.o|va.o|print.o|boot.o;\
 te.o-sm.o|mm.o|va.o|print.o|fprr.o;\
 \
-pi.o-sm.o|print.o|fprr.o|l.o|mm.o|po.o|te.o;\
+pi.o-sm.o|print.o|fprr.o|l.o|mm.o|po.o|te.o|pfr.o;\
 po.o-sm.o|print.o|fprr.o|l.o|mm.o|b_po.o|pfr.o;\
 b_po.o-sm.o|print.o|fprr.o|l.o|mm.o\
 " ./gen_client_stub

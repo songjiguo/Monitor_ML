@@ -125,3 +125,11 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *o
 
 	return 0;
 }
+
+#ifdef NOTIF_TEST
+
+int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
+{
+	return 0;
+}
+#endif

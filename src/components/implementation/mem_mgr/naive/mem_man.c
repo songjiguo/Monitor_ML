@@ -758,6 +758,7 @@ int
 sched_child_cntl_thd(spdid_t spdid)
 {
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
+	if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0;
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 

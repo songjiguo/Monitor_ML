@@ -48,7 +48,13 @@
 /* print out to dmesg? */
 #define COS_PRINT_DMESG 1
 
-/* enable the fault tolerance in Composite? */
-#define RECOVERY_ENABLE 1
+/**** Fault Tolerance Option ****/
+/* Note: A separate python script needs run to switch different
+ * versions of interfaces, such as mmgr, schduler, cbuf, torrent. To
+ * use it, run python set_symbolic_link.py under composite/tools */
+
+#define RECOVERY_ENABLE 0               // 1 will enable the fault notification in Composite kernel
+//#define NOTIF_TEST  		        /* test purpose only */
+#define SCHEDULER_TEST  		/* test purpose only */
 
 #endif /* COS_CONFIG_H */

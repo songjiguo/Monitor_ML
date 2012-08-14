@@ -10,11 +10,44 @@
 #include "spd.h"
 #include "thread.h"
 
+/*---------Threads that created by scheduler--------*/
+static struct thread*
+sched_thread_lookup(struct spd *spd, int thd_id)
+{
+	struct thread *thd, *n_thd;
+
+	if (!(thd = spd->scheduler_all_threads)) return NULL;
+
+	for (thd = thd->sched_prev; thd->thread_id != 0;) {
+		n_thd = thd->sched_prev;
+		/* printk("<<< thd %d  and look up id %d>>>\n", thd->thread_id, thd_id); */
+		if (thd->thread_id == thd_id) {
+			/* printk("found thd %d\n", thd->thread_id); */
+			
+			/* optimization for look up desired thread id */
+			/* /\* "remove" the found thd from original location *\/ */
+			thd->sched_next->sched_prev = thd->sched_prev;
+			thd->sched_prev->sched_next = thd->sched_next;
+			/* /\* put the found thd to the front of list *\/ */
+			thd->sched_next = spd->scheduler_all_threads->sched_next;
+			thd->sched_prev = spd->scheduler_all_threads;
+			spd->scheduler_all_threads->sched_next = thd;
+			thd->sched_next->sched_prev = thd;
+
+			return thd;
+		}
+		thd = n_thd;
+	}
+	/* printk("Can not find an existing thread id %d!!\n", thd_id); */
+	return NULL;
+}
+
+#if RECOVERY_ENABLE == 1
 //*************************************************
            /* enable recovery */
 //*************************************************
-#ifdef RECOVERY_ENABLE
 
+/*---------Fault Notification Operations--------*/
 static inline int
 init_spd_fault_cnt(struct spd *spd)
 {
@@ -48,20 +81,14 @@ inv_frame_fault_cnt_update(struct thread *thd, struct spd *spd)
 static inline int
 ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
-	if (cap_entry->fault.cnt != dest_spd->fault.cnt) {
-		printk("cos: Fault has happened to the dest_spd %d\n", spd_get_index(dest_spd));
-		return 1;
-	}
+	if (cap_entry->fault.cnt != dest_spd->fault.cnt) return 1;
 	else return 0;
 }
 
 static inline int
 pop_fault_detect(struct thd_invocation_frame *curr_frame)
 {
-	if (curr_frame->fault.cnt != curr_frame->spd->fault.cnt) {
-		printk("cos: Fault was in %d before return back\n", spd_get_index(curr_frame->spd));
-		return 1;
-	}
+	if (curr_frame->fault.cnt != curr_frame->spd->fault.cnt) return 1;
 	else return 0;
 }
 
@@ -110,6 +137,8 @@ interrupt_fault_detect(struct thread *next)
 }
 
 extern struct invocation_cap invocation_capabilities[MAX_STATIC_CAP];
+
+/* cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_no) */
 
 static inline unsigned long
 fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int cap_no)
@@ -193,11 +222,10 @@ cap_fault_cnt_update(struct invocation_cap *c, struct spd* dspd)
 	return 0;
 }
 
+#else
 //*************************************************
            /* disable recovery */
 //*************************************************
-#else
-
 static inline int
 init_spd_fault_cnt(struct spd *spd)
 {

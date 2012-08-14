@@ -858,8 +858,6 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	// Added by Gabe 08/19
 	if (unlikely(dependency_thd == cos_get_thd_id())) return -EINVAL;
 
-	/* printc("curr thd id is %d\n", cos_get_thd_id()); */
-
 	cos_sched_lock_take();
 	thd = sched_get_current();
 	assert(thd);
@@ -992,7 +990,7 @@ int sched_component_take(spdid_t spdid)
 	struct sched_thd *holder, *curr;
 	int first = 1;
 
-	//printc("sched take %d\n", spdid);
+	/* printc("sched take %d\n", spdid); */
 
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
@@ -1098,9 +1096,28 @@ static struct sched_thd *__sched_setup_thread_no_policy(int tid)
 	return new;
 }
 
+static int 
+create_thread_fn(int fn, int d, unsigned short int desired_thd)
+{
+	int ret_id = 0;
+
+	if (likely(!desired_thd)) {
+		ret_id = cos_create_thread(fn, d, 0);
+		assert(0 != ret_id);
+	} else {
+		ret_id = cos_sched_introspect(COS_SCHED_THD_EXIST, d, desired_thd);
+		if (unlikely(!ret_id)) {
+			ret_id = cos_create_thread(fn, d, 0);
+			assert(0 != ret_id);
+		}
+	}
+
+	return ret_id;
+}
+
 extern int parent_sched_child_thd_crt(spdid_t spdid, spdid_t dest_spd);
 
-static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t fn, void *d, int parm)
+static struct sched_thd *sched_setup_thread_arg(crt_thd_fn_t fn, void *d, unsigned short int desired_thd)
 {
 	int tid;
 	struct sched_thd *new;
@@ -1115,16 +1132,14 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 		sched_init_thd(new, new->id, THD_READY);
 		new->spdid = (spdid_t)(unsigned int)d;
 	} else {
-		tid = (sched_is_root())                       ?
-			cos_create_thread((int)fn, (int)d, 0) :
+		tid = (sched_is_root())                                    ?
+			create_thread_fn((int)fn, (int)d, desired_thd) :
 			parent_sched_child_thd_crt(cos_spd_id(), (spdid_t)(int)d);
 		assert(0 != tid);
 
 		new = __sched_setup_thread_no_policy(tid);
 	}
 	thread_new(new);
-	if (parm) thread_param_set(new,  (struct sched_param_s *)metric_str);
-	else      thread_params_set(new, (char *)metric_str);
 	
 	return new;
 }
@@ -1146,7 +1161,7 @@ sched_create_thread(spdid_t spdid, struct cos_array *data)
 	cos_sched_lock_take();
 	curr = sched_get_current();
 	metric_str = (char *)data->mem;
-	new = sched_setup_thread_arg((char *)metric_str, fp_create_spd_thd, d, 0);
+	new = sched_setup_thread_arg(fp_create_spd_thd, d, 0);
 	cos_sched_lock_release();
 	printc("sched %d: created thread %d in spdid %d (requested by %d)\n",
 	       (unsigned int)cos_spd_id(), new->id, spdid, curr->id);
@@ -1155,40 +1170,16 @@ sched_create_thread(spdid_t spdid, struct cos_array *data)
 }
 
 int
-sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, u32_t sched_param2)
+sched_create_thd(spdid_t spdid, unsigned int desired_thd)
 {
-	struct sched_param_s sp[4];
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
-
-	sp[0] = ((union sched_param)sched_param0).c;
-	sp[1] = ((union sched_param)sched_param1).c;
-	sp[2] = ((union sched_param)sched_param2).c;
-	sp[3] = (union sched_param){.c = {.type = SCHEDP_NOOP}}.c;
 
 	cos_sched_lock_take();
 	curr = sched_get_current();
 	assert(curr);
 
-	/* ****** default thread has been recreated, maybe with different id ******** */
-	/* printc("curr thd id is %d\n", cos_get_thd_id()); */
-	/* curr could be null if a crash happened to scheduler, and
-	 * sched_thd_map[thd_id] is lost */
-	/* recreate default thread */
-	/* if (unlikely(!curr)) { */
-	/* 	printc("scheduler might have crashed before...\n"); */
-	/* 	/\* we need introspect the kernel to get the default thread prio *\/ */
-	/* 	union sched_param sp_def = {.c = {.type = SCHEDP_RPRIO, .value = 1}}; */
-	/* 	if ((sched_create_thread_default(spdid, sp_def.v, 0, 0)) < 0) return -1; */
-	/* 	/\* However, this will use RLPRIO and */
-	/* 	 * sched_get_current() which does not have the correct */
-	/* 	 * prio anymore*\/ */
-
-	/* } */
-	/* *********************** */
-	/* recovery_upcall(spdid, spdid, 0); */
-	
-	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, d, 1);
+	new = sched_setup_thread_arg(fp_create_spd_thd, d, desired_thd);
 	cos_sched_lock_release();
 	printc("sched %d: created thread %d in spdid %d (requested by %d)\n",
 	       (unsigned int)cos_spd_id(), new->id, spdid, curr->id);
@@ -1197,6 +1188,29 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, u32_t sc
 }
 
 #define SCHED_STR_SZ 64
+
+int
+sched_thd_parameter_set(unsigned int thd_id, u32_t sched_param0, u32_t sched_param1, u32_t sched_param2)
+{
+	struct sched_param_s sp[4];
+	struct sched_thd *new;
+	
+	cos_sched_lock_take();
+
+	sp[0] = ((union sched_param)sched_param0).c;
+	sp[1] = ((union sched_param)sched_param1).c;
+	sp[2] = ((union sched_param)sched_param2).c;
+
+	sp[3] = (union sched_param){.c = {.type = SCHEDP_NOOP}}.c; /* always??? */
+
+	new = sched_get_mapping(thd_id);
+	assert(new);
+	thread_param_set(new, sp);
+
+	cos_sched_lock_release();
+
+	return 0;
+}
 
 int 
 sched_thread_params(spdid_t spdid, u16_t thd_id, res_spec_t rs)
@@ -1214,28 +1228,21 @@ done:
 	return ret;
 }
 
-/* Create a thread in target with the default parameters */
+/* Create a thread in target. The default parameters will be set later */
 int
-sched_create_thread_default(spdid_t spdid, u32_t sched_param_0, 
-			    u32_t sched_param_1, u32_t sched_param_2)
+sched_create_thread_default(spdid_t spdid, unsigned int desired_thd)
 {
-	struct sched_param_s sp[4];
 	struct sched_thd *new;
 	vaddr_t t = spdid;
 
-	sp[0] = ((union sched_param)sched_param_0).c;
-	sp[1] = ((union sched_param)sched_param_1).c;
-	sp[2] = ((union sched_param)sched_param_2).c;
-	sp[3] = (union sched_param){.c = {.type = SCHEDP_NOOP}}.c;
-	
 	cos_sched_lock_take();
-	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, 1);
+	new = sched_setup_thread_arg(fp_create_spd_thd, (void*)t, desired_thd);
 	sched_switch_thread(0, NULL_EVT);
 	if (!new) return -1;
 	printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n",
 	       (unsigned int)cos_spd_id(), new->id, spdid, sched_get_current()->id, spdid);
-
-	return 0;
+	/* why not release clock here? */
+	return new->id;
 }
 
 /* In case that the scheduler fails and is being rebuilt, we do not
@@ -1296,6 +1303,7 @@ int sched_child_cntl_thd(spdid_t spdid)
 
 	c = sched_get_current();
 	sched_grp_make(c, spdid);
+	printc("scheduler: promote child\n");
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, c->id, spdid)) BUG();
 
@@ -1604,45 +1612,80 @@ void sched_exit(void)
 
 static struct sched_thd *fp_create_timer(void)
 {
-	int bid;
-	union sched_param sp[2] = {{.c = {.type = SCHEDP_TIMER}},
+	int bid, ret_id;
+
+	union sched_param sp[3] = {{.c = {.type = SCHEDP_TIMER}},
+				   {.c = {.type = SCHEDP_NOOP}},
 				   {.c = {.type = SCHEDP_NOOP}}};
 
-	bid = sched_setup_brand(cos_spd_id());
+
+	ret_id = cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), 6);
+
+	if (likely(!ret_id)) bid = sched_setup_brand(cos_spd_id());
+	else bid = ret_id;
+
+	assert(bid == 6);
 	assert(sched_is_root());
-	timer = sched_setup_thread_arg(&sp, fp_timer, (void*)bid, 1);
+	timer = sched_setup_thread_arg(fp_timer, (void*)bid, 7);
 	if (NULL == timer) BUG();
+	/* race condition?? */
+	sched_thd_parameter_set(timer->id, sp[0].v, sp[1].v, sp[2].v);
+
+	cos_brand_cntl(COS_BRAND_REMOVE_THD, bid, timer->id, 0);
 	if (0 > sched_add_thd_to_brand(cos_spd_id(), bid, timer->id)) BUG();
+
 	printc("Timer thread has id %d with priority %s.\n", timer->id, "t");
-	cos_brand_wire(bid, COS_HW_TIMER, 0);
+	cos_brand_wire(bid, COS_HW_TIMER, 0); /* syscall, but initialize in hijack?? need deregister?? */
 
 	return timer;
 }
 
+//#define INIT_THREAD_TEST
 /* Iterate through the configuration and create threads for
  * components as appropriate */
 static void 
 sched_init_create_threads(int boot_threads)
 {
 	struct sched_thd *t;
-	union sched_param sp[4] = {{.c = {.type = SCHEDP_IDLE}}, 
-				   {.c = {.type = SCHEDP_NOOP}}, 
+	union sched_param sp[3] = {{.c = {.type = SCHEDP_IDLE}},
 				   {.c = {.type = SCHEDP_NOOP}}, 
 				   {.c = {.type = SCHEDP_NOOP}}};
 
+#ifdef INIT_THREAD_TEST
+	int i;
+	for (i = 0; i < 7 ; i++) {
+		/* create the idle thread */
+		printc("create idle thread\n");
+		idle = sched_setup_thread_arg(fp_idle_loop, NULL, 4+i);
+		assert(idle);
+		/* race condition?? */
+		sched_thd_parameter_set(idle->id, sp[0].v, sp[1].v, sp[2].v);
+		printc("Idle thread has id %d with priority %s.\n", idle->id, "i");
+	}
+	if (!boot_threads) return;
+
+	sp[0].c.type = SCHEDP_INIT;
+	t = sched_setup_thread_arg(fp_create_spd_thd, (void*)(int)BOOT_SPD, 11);
+	assert(t);
+	sched_thd_parameter_set(t->id, sp[0].v, sp[1].v, sp[2].v);
+	printc("Initialization thread has id %d.\n", t->id);
+#else
 	/* create the idle thread */
-	idle = sched_setup_thread_arg(&sp, fp_idle_loop, NULL, 1);
+	printc("create idle thread\n");
+	idle = sched_setup_thread_arg(fp_idle_loop, NULL, 4);
+	assert(idle);
+	/* race condition?? */
+	sched_thd_parameter_set(idle->id, sp[0].v, sp[1].v, sp[2].v);
 	printc("Idle thread has id %d with priority %s.\n", idle->id, "i");
 
 	if (!boot_threads) return;
 
 	sp[0].c.type = SCHEDP_INIT;
-	t = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)(int)BOOT_SPD, 1);	
+	t = sched_setup_thread_arg(fp_create_spd_thd, (void*)(int)BOOT_SPD, 5);
 	assert(t);
+	sched_thd_parameter_set(t->id, sp[0].v, sp[1].v, sp[2].v);
 	printc("Initialization thread has id %d.\n", t->id);
-	/* t = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)(int)6, 1);	 */
-	/* assert(t); */
-	/* printc("Initialization thread has id %d.\n", t->id); */
+#endif
 }
 
 /* Initialize data-structures */
@@ -1659,7 +1702,6 @@ __sched_init(void)
 	sched_init_thd(&graveyard, 0, THD_FREE);
 	sched_ds_init();
 	sched_initialization();
-
 	return;
 }
 
@@ -1670,6 +1712,7 @@ parent_sched_child_cntl_thd(spdid_t spdid);
 static void 
 sched_child_init(void)
 {
+	printc("sched_child_init\n");
 	/* Child scheduler */
 	sched_type = SCHED_CHILD;
 	__sched_init();
@@ -1718,8 +1761,10 @@ int sched_root_init(void)
 	assert(init);
 
 	sched_init_create_threads(1);
+
 	/* Create the clock tick (timer) thread */
 	fp_create_timer();
+	/* assert(0); */
 
 	new = schedule(NULL);
 	if ((ret = cos_switch_thread(new->id, 0))) {
@@ -1739,9 +1784,11 @@ extern int parent_sched_isroot(void);
 int
 sched_init(void)
 {
-	printc("Sched init has thread %d\n", cos_get_thd_id());
-	/* assert(0); */
+	/* printc("Sched init has thread %d\n", cos_get_thd_id()); */
+
 	/* Promote us to a scheduler! */
+	/* When failed, we probably already found that
+	 e.g, spd->parent_sched is set*/
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
 	if (cos_sched_cntl(COS_SCHED_EVT_REGION, 0, (long)&cos_sched_notifications)) BUG();
 
@@ -1758,6 +1805,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		sched_timer_tick();
 		break;
 	case COS_UPCALL_BOOTSTRAP:
+		/* printc("UPCALL into Scheduler: thread %d\n", cos_get_thd_id()); */
 		sched_init();
 		break;
 	case COS_UPCALL_CREATE:

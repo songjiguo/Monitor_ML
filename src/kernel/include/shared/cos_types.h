@@ -42,6 +42,11 @@ struct cos_sched_next_thd {
 	volatile u16_t next_thd_id, next_thd_flags;
 };
 
+struct user_thread_id {
+	unsigned int id;
+	struct user_thread_id *next;
+};
+
 #define COS_SCHED_EVT_NEXT(evt)    (evt)->nfu.v.next
 #define COS_SCHED_EVT_FLAGS(evt)   (evt)->nfu.v.flags
 #define COS_SCHED_EVT_URGENCY(evt) (evt)->nfu.v.urgency
@@ -283,6 +288,7 @@ enum {
 /* cos_brand_cntl -> */
 	COS_BRAND_CREATE,
 	COS_BRAND_ADD_THD,
+	COS_BRAND_REMOVE_THD,
 	COS_BRAND_CREATE_HW,
 /* cos_brand_upcall -> */
 	COS_BRAND_TAILCALL,  /* tailcall brand to upstream spd
@@ -388,6 +394,13 @@ enum {
 	COS_SCHED_REMOVE_THD,
 	COS_SCHED_BREAK_PREEMPTION_CHAIN
 };
+
+/* operations for sched introspect */
+enum {
+	COS_SCHED_HAS_PARENT,
+	COS_SCHED_THD_EXIST
+};
+
 
 enum {
 	COS_TRANS_DIR_INVAL = 0,

@@ -105,6 +105,8 @@ struct sched_thd {
 	 * to call the fp_create_spd_thd function with a specific
 	 * spdid...stored here. */
 	spdid_t spdid;
+
+	unsigned short int desired_id;
 };
 
 struct sched_crit_section {

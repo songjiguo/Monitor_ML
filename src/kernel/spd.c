@@ -16,6 +16,7 @@
 #include "include/debug.h"
 #include "include/page_pool.h"
 #include "include/recovery.h"
+
 /* 
  * This is the layout in virtual memory of the spds.  Spd's virtual
  * ranges are allocated (currently) on the granularity of a pgd, thus
@@ -423,6 +424,8 @@ struct spd *spd_alloc(unsigned short int num_caps, struct usr_inv_cap *user_cap_
 
 	spd->composite_member_next = spd->composite_member_prev = spd;
 
+	spd->scheduler_all_threads = NULL;
+
 	for (i = 0 ; i < MAX_SPD_VAS_LOCATIONS ; i++) spd->location[i].size = 0;
 
 	init_spd_fault_cnt(spd);
@@ -615,7 +618,7 @@ static struct invocation_cap *spd_get_cap(struct spd *spd, int cap)
 int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd)
 {
 	struct invocation_cap *c = spd_get_cap(spd, cap);
-
+	/* printk("cos: cap set --> spd %d  cap %d dspd %d\n", spd_get_index(spd), cap, spd_get_index(dspd)); */
 	if (!c) return -1;
 	c->destination = dspd;
 	/* c->fault.cnt   = dspd->fault.cnt; */

@@ -29,7 +29,7 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	/* if (regs_active) BUG(); */
 	/* regs_active = 1; */
 	/* cos_regs_save(tid, spdid, fault_addr, &regs); */
-	printc("Thread %d faults in spd %d @ %p\n",
+	printc("PGFAULT: thd %d faults in spd %d @ %p\n",
 	       tid, spdid, fault_addr);
 	/* cos_regs_print(&regs); */
 	/* regs_active = 0; */
@@ -65,3 +65,25 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 
 	return 0;
 }
+
+#ifdef NOTIF_TEST
+int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
+{
+	/* unsigned long r_ip; */
+	/* int tid = cos_get_thd_id(); */
+	printc("Fault FLT Notif : \n");
+	/* printc("Fault Notif : thd %d faults in spd %d @ %p\n", */
+	/*        tid, spdid, fault_addr); */
+	
+	/* if ((int)ip == 1) failure_notif_wait(cos_spd_id(), spdid); */
+	/* else         failure_notif_fail(cos_spd_id(), spdid); */
+
+	/* assert(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)); */
+	/* assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0)); */
+	/* assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8)); */
+
+	/* assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0)); */
+
+	return 0;
+}
+#endif

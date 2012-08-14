@@ -3,6 +3,7 @@
 #include <sched.h>
 #include <mem_mgr.h>
 #include <base_pong.h>
+#include <pgfault.h>
 
 #include <pingpong_test.h>
 
@@ -56,4 +57,3 @@ void pong(void)
 	number = 0;
 }
 #endif
-

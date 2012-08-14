@@ -927,6 +927,18 @@ cos_init(void *arg)
 	static int first = 1;
 
 	if (first) {
+#ifdef SCHEDULER_TEST
+		union sched_param sp;
+		int thd_id;
+		first = 0;
+		INIT_LIST(&threads, next, prev);
+		init_spds();
+
+		if (!(thd_id = sched_create_thd(cos_spd_id(), 0))) BUG();
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 5;
+		sched_thd_parameter_set(thd_id, sp.v, 0, 0);
+#else
 		union sched_param sp;
 
 		first = 0;
@@ -937,6 +949,7 @@ cos_init(void *arg)
 		sp.c.value = 5;
 
 		if (sched_create_thd(cos_spd_id(), sp.v, 0, 0) == 0) BUG();
+#endif
 		return;
 	}
 	DOUT("thd %d Tmem policy running.....\n", cos_get_thd_id());

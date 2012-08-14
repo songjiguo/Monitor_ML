@@ -11,7 +11,7 @@ void cos_init(void)
 {
 	static int first = 0;
 	union sched_param sp;
-	int thd_id;
+	int thd_id, thdid;
 
 	/* printc("<<< STK MICRO BENCHMARK TEST  >>>\n"); */
 	if(first == 0){
@@ -19,6 +19,17 @@ void cos_init(void)
 
 		thd_id = cos_get_thd_id();
 
+#ifdef SCHEDULER_TEST
+		thdid = sched_create_thd(cos_spd_id(), 0);
+		sp.c.type  = SCHEDP_PRIO;
+		sp.c.value = 10;
+		sched_thd_parameter_set(thdid, sp.v, 0, 0);
+
+		thdid = sched_create_thd(cos_spd_id(), 0);
+		sp.c.type  = SCHEDP_PRIO;
+		sp.c.value = 11;
+		sched_thd_parameter_set(thdid, sp.v, 0, 0);
+#else
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 10;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
@@ -26,6 +37,7 @@ void cos_init(void)
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 11;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+#endif
 	} else {
 		call_stk();
 	}
