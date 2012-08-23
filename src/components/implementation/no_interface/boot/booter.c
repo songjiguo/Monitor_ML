@@ -316,13 +316,10 @@ unsigned int *boot_sched;
 static int 
 boot_spd_thd(spdid_t spdid)
 {
-	int thd_id;
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
 
 	/* Create a thread IF the component requested one */
-	if ((thd_id = sched_create_thread_default(spdid, 0)) < 0) return -1;
-	sched_thd_parameter_set(thd_id, sp.v, 0, 0);
-
+	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
 	return 0;
 }
 

@@ -69,11 +69,22 @@ static inline void fp_add_thd(struct sched_thd *t, unsigned short int prio)
 	assert(sched_thd_ready(t));
 	assert(!sched_thd_suspended(t));
 
+	if (unlikely(cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
+		if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
+	}
+
 	sched_get_metric(t)->priority = prio;
 	sched_set_thd_urgency(t, prio);
+	printc("add onto runqueue!!!\n");
 	fp_move_end_runnable(t);
 
 	return;
+}
+
+void thread_reset(struct sched_thd *t, unsigned short int prio)
+{
+	printc("on recovery path!!!\n");
+	return fp_add_thd(t, prio);
 }
 
 static inline void fp_rem_thd(struct sched_thd *t)

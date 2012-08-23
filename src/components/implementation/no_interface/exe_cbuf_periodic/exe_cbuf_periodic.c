@@ -141,27 +141,6 @@ void cos_init(void *arg)
 //	static int pre_run = 0;
 
 	if (first) {
-#ifdef SCHEDULER_TEST
-		int i, thd_id;
-		union sched_param sp;
-		first = 0;
-		parse_initstr();
-		assert(priority);
-
-		if (!(thd_id = sched_create_thd(cos_spd_id(), 0))) BUG();
-
-		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = priority;
-		sched_thd_parameter_set(thd_id, sp.v, 0, 0);
-
-		if (priority == 30) { //best effort thds
-			printc("thd num %d\n",thd_num);
-			for (i=0; i<(thd_num-1); i++) {
-				thd_id = sched_create_thd(cos_spd_id(), 0);
-				sched_thd_parameter_set(thd_id, sp.v, 0, 0);
-			}
-		}
-#else
 		union sched_param sp;
 		int i;
 		first = 0;
@@ -173,10 +152,8 @@ void cos_init(void *arg)
 		if (sched_create_thd(cos_spd_id(), sp.v, 0, 0) == 0) BUG();
 		if (priority == 30) { //best effort thds
 			printc("thd num %d\n",thd_num);
-				for (i=0; i<(thd_num-1); i++)
-				sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+			for (i=0; i<(thd_num-1); i++) sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 		}
-#endif
 		return;
 	}
 

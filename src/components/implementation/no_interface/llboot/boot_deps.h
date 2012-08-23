@@ -49,7 +49,8 @@ printc(char *fmt, ...)
 static int          alpha, init_thd, recovery_thd;	
 static volatile int prev_thd, recover_spd;
 
-static volatile vaddr_t page_addr;
+static volatile vaddr_t recovery_arg;
+static volatile int operation;
 
 enum { /* hard-coded initialization schedule */
 	LLBOOT_SCHED = 2,
@@ -83,11 +84,8 @@ typedef void (*crt_thd_fn_t)(void);
 
 /* We'll do all of our own initialization... */
 static int
-sched_create_thread_default(spdid_t spdid, unsigned int desired_thd_id)
-{ return 0; }
-
-static int
-sched_thd_parameter_set(unsigned int thd_id, u32_t sched_param0, u32_t sched_param1, u32_t sched_param2)
+sched_create_thread_default(spdid_t spdid, u32_t sched_param_0, 
+			    u32_t sched_param_1, unsigned int desired_thd)
 { return 0; }
 
 static void
@@ -139,15 +137,16 @@ llboot_thd_done(void)
 	}
 	
 	while (1) {
-		int     pthd = prev_thd;
-		spdid_t rspd = recover_spd;
-		vaddr_t addr = page_addr;
+		int     pthd  = prev_thd;
+		spdid_t rspd  = recover_spd;
+		int     op    = operation;
+		vaddr_t arg  =  recovery_arg;
 				
 		assert(tid == recovery_thd);
 		if (rspd) {             /* need to recover a component */
 			assert(pthd);
 			recover_spd = 0;
-			cos_upcall_args(rspd, addr); /* This will escape from the loop */
+			cos_upcall_args(op, rspd, arg); /* This will escape from the loop */
 			assert(0);
 		} else {		/* ...done reinitializing...resume */
 			assert(pthd && pthd != tid);
@@ -159,13 +158,14 @@ llboot_thd_done(void)
 
 /* can only be called from mmgr/scheduler */
 int
-recovery_upcall(spdid_t spdid, spdid_t dest, vaddr_t arg)
+recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 {
 	printc("LL: llbooter upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)arg, cos_get_thd_id());
 
-	recover_spd = dest;
-	prev_thd    = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread in sys */
-	page_addr   = arg;
+	prev_thd     = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread */
+	recover_spd  = dest;
+	operation    = op;
+	recovery_arg = arg;
 	
 	while (prev_thd == cos_get_thd_id()) cos_switch_thread(recovery_thd, 0);
 
@@ -185,6 +185,9 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	unsigned long r_ip; 	/* the ip to return to */
 
 	int tid = cos_get_thd_id();
+
+	int reboot;
+	reboot = (spdid == 2) ? 1:0;
 
 	first++;
 	if(first == 5) {
@@ -212,7 +215,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
 
-		recovery_upcall(cos_spd_id(), spdid, 0);
+		recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, reboot);
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */
 		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */
@@ -224,8 +227,9 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	 * The thread was created in the failed component...just use
 	 * it to restart the component!  This might even be the
 	 * initial thread.
-	 */	
-	cos_upcall(spdid); 	/* FIXME: give back stack... */
+	 */
+	if (reboot) cos_upcall_args(COS_UPCALL_FAILURE_NOTIF, spdid, 0);
+	else cos_upcall(spdid); 	/* FIXME: give back stack... */
 	BUG();
 
 	return 0;
@@ -252,7 +256,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
-		recovery_upcall(cos_spd_id(), spdid, 0);
+		recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 		return 0;
 	}
 	cos_upcall(spdid); 	/* FIXME: give back stack... */
@@ -365,7 +369,7 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 #include <sched_hier.h>
 
 void cos_init(void);
-int  sched_init(void)   { cos_init(); return 0; }
+int  sched_init(int reboot)   { cos_init(); return 0; }
 int  sched_isroot(void) { return 1; }
 void 
 sched_exit(void)

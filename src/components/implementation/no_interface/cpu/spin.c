@@ -18,6 +18,8 @@
 #ifdef SCHEDULER_TEST
 #include <res_spec.h>
 
+#include <pong.h>
+
 int high, low;
 static int num = 0;
 
@@ -32,29 +34,17 @@ void cos_init(void *arg)
 		first = 1;
 		num = 1;
 
-#ifdef SCHEDULER_TEST
-		high = sched_create_thd(cos_spd_id(), 0);
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 10;
-		sched_thd_parameter_set(high, sp.v, 0, 0);
-
-
-		low = sched_create_thd(cos_spd_id(), 0);
-		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 11;
-		sched_thd_parameter_set(low, sp.v, 0, 0);
-#else
-		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 10;
-		high = sched_create_thd(cos_spd_id(), 0);
+		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 11;
-		low = sched_create_thd(cos_spd_id(), 0);
-#endif
+		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
+		/* pong(); */
 	} else {
-		while (num < 10) {
+		while (num < 5) {
 			if (cos_get_thd_id() == high){
 				num++;
 				printc("high %d running and to block\n", cos_get_thd_id());

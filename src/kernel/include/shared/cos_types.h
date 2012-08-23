@@ -111,6 +111,9 @@ struct cos_event_notification {
  * the cos_se_values, which in this case limits us to 256.
  */
 #define NUM_SCHED_EVTS 128 //256
+#if NUM_SCHED_EVTS < MAX_NUM_THREADS
+#error "Cannot have more threads than there are event slots for the scheduler."
+#endif
 
 struct cos_sched_data_area {
 	struct cos_sched_next_thd cos_next;
@@ -280,6 +283,7 @@ typedef enum {
 	COS_UPCALL_CREATE,
 	COS_UPCALL_DESTROY,
 	COS_UPCALL_RECOVERY,
+	COS_UPCALL_FAILURE_NOTIF,
 	COS_UPCALL_UNHANDLED_FAULT
 } upcall_type_t;
 
@@ -392,13 +396,17 @@ enum {
 	COS_SCHED_GRANT_SCHED,
 	COS_SCHED_REVOKE_SCHED,
 	COS_SCHED_REMOVE_THD,
+	COS_SCHED_RECORD_PRIO,	/* for recovery purpose only */
 	COS_SCHED_BREAK_PREEMPTION_CHAIN
 };
 
 /* operations for sched introspect */
 enum {
 	COS_SCHED_HAS_PARENT,
-	COS_SCHED_THD_EXIST
+	COS_SCHED_THD_EXIST,
+	COS_SCHED_THD_RETRIEVE,
+	COS_SCHED_THD_NUMBERS,
+	COS_SCHED_THD_PRIO
 };
 
 

@@ -53,9 +53,9 @@ struct thd_sched_info {
  * User level scheduler record two priority, so later on they can be
  * introspected 
 */
-struct sched_introspect {
-	unsigned short int create_priority;
-	unsigned short int switch_priority;
+struct usr_prio_info {
+	unsigned int create_prio;
+	unsigned int switch_prio;
 };
 
 #define THD_STATE_PREEMPTED     0x1   /* Complete register info is saved in regs */
@@ -122,13 +122,20 @@ struct thread {
 
 	struct thread *freelist_next;
 
+	/* fault tolerance related */
+
+	struct usr_prio_info usr_sched_prio;
 	/* Linked list of the threads created in scheduler */
 	struct thread *sched_prev, *sched_next;
+	int thd_cnts;
 
-	struct sched_introspect *usr_sched_prio;
+	/* thread creation chain */
+	struct thread *crt_tail_thd, *crt_next_thd;
+	struct spd *crt_in_spd;
+
 } CACHE_ALIGNED;
 
-struct thread *thd_alloc(struct spd *spd);
+struct thread *thd_alloc(struct spd *spd, int flag);
 void thd_free(struct thread *thd);
 void thd_free_all(void);
 void thd_init(void);

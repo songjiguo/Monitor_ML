@@ -220,8 +220,10 @@ struct spd {
 	/* Linked list of the members of a non-depricated, current composite spd */
 	struct spd *composite_member_next, *composite_member_prev;
 
+	/* fault tolerance related */
+
 	struct thread *scheduler_all_threads;
-	
+
 } CACHE_ALIGNED; //cache line size
 
 paddr_t spd_alloc_pgtbl(void);

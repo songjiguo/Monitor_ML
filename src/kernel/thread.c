@@ -17,6 +17,10 @@ static struct thread *thread_freelist_head = NULL;
 
 struct thread scheduler_thread_head;
 
+struct thread SRT_threads_head;	/* soft real time threads */
+struct thread HRT_threads_head; /* hard real time threads */
+struct thread BST_threads_head; /* best effort threads */
+
 /* like "current" in linux */
 struct thread *current_thread = NULL;
 
@@ -42,6 +46,23 @@ int thd_validate_spd_in_callpath(struct thread *t, struct spd *s)
 	return -1;
 }
 
+/* initialize the fault tolerance related DS */
+static void thd_ft_init(struct thread *thd, int thd_id)  
+{
+	if (!thd_id) thd->thread_id = 0; /* only for these heads */
+
+	thd->usr_sched_prio.create_prio = 0;
+	thd->usr_sched_prio.switch_prio = 0;
+	thd->sched_next = NULL;
+	thd->sched_prev = NULL;
+
+	thd->crt_tail_thd = NULL;
+	thd->crt_next_thd = NULL;
+	thd->crt_in_spd = NULL;
+
+	return;
+}
+
 void thd_init_all(struct thread *thds)
 {
 	int i;
@@ -50,11 +71,18 @@ void thd_init_all(struct thread *thds)
 		/* adjust the thread id to avoid using thread 0 clear */
 		thds[i].thread_id = i+1;
 		thds[i].freelist_next  = (i == (MAX_NUM_THREADS-1)) ? NULL : &thds[i+1];
-		thds[i].sched_next = thds[i].sched_prev = NULL;
+		
+		thd_ft_init(&thds[i], 1);
 	}
 
 	thread_freelist_head = thds;
-	scheduler_thread_head.thread_id = 0;
+
+	thd_ft_init(&scheduler_thread_head, 0);
+	scheduler_thread_head.thd_cnts = 0;
+
+	thd_ft_init(&SRT_threads_head, 0);
+	thd_ft_init(&HRT_threads_head, 0);
+	thd_ft_init(&BST_threads_head, 0);
 
 	return;
 }
@@ -62,7 +90,8 @@ void thd_init_all(struct thread *thds)
 extern void *va_to_pa(void *va);
 extern void thd_publish_data_page(struct thread *thd, vaddr_t page);
 
-struct thread *thd_alloc(struct spd *spd)
+/* flag 1 means recording the thread in kernel, otherwise not */
+struct thread *thd_alloc(struct spd *spd, int flag)
 {
 	struct thread *thd;
 	unsigned short int id;
@@ -108,8 +137,8 @@ struct thread *thd_alloc(struct spd *spd)
 	 * separate spd so that they can be replay later*/
 	
 	/* for now, just save all threads for simplcity */
-	if (spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
-		/* printk("cos: add thread %d onto spd %d list\n", thd_get_id(thd), spd_get_index(spd));		 */
+	if (flag && spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
+		printk("cos: add thread %d onto spd %d list\n", thd_get_id(thd), spd_get_index(spd));
 		if (!spd->scheduler_all_threads) {
 			/* initialize the list head */
 			scheduler_thread_head.sched_next = scheduler_thread_head.sched_prev = &scheduler_thread_head;
@@ -127,6 +156,7 @@ struct thread *thd_alloc(struct spd *spd)
 			scheduler_thread_head.sched_next = thd;
 			thd->sched_next->sched_prev = thd;
 		}
+		spd->scheduler_all_threads->thd_cnts++;
 	}
 
 	return thd;

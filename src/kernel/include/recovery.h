@@ -11,19 +11,18 @@
 #include "thread.h"
 
 /*---------Threads that created by scheduler--------*/
+
 static struct thread*
 sched_thread_lookup(struct spd *spd, int thd_id)
 {
-	struct thread *thd, *n_thd;
+	struct thread *thd;
 
 	if (!(thd = spd->scheduler_all_threads)) return NULL;
 
 	for (thd = thd->sched_prev; thd->thread_id != 0;) {
-		n_thd = thd->sched_prev;
 		/* printk("<<< thd %d  and look up id %d>>>\n", thd->thread_id, thd_id); */
 		if (thd->thread_id == thd_id) {
-			/* printk("found thd %d\n", thd->thread_id); */
-			
+			/* printk("found thd %d\n", thd->thread_id);			 */
 			/* optimization for look up desired thread id */
 			/* /\* "remove" the found thd from original location *\/ */
 			thd->sched_next->sched_prev = thd->sched_prev;
@@ -36,10 +35,40 @@ sched_thread_lookup(struct spd *spd, int thd_id)
 
 			return thd;
 		}
-		thd = n_thd;
+		thd = thd->sched_prev;;
 	}
-	/* printk("Can not find an existing thread id %d!!\n", thd_id); */
+	printk("Can not find an existing thread id %d!!\n", thd_id);
 	return NULL;
+}
+
+static struct thread*
+sched_thread_retrieve(struct spd *spd)
+{
+	struct thread *thd;
+
+	printk("retrieve thread info\n");
+	if (!(thd = spd->scheduler_all_threads)) return NULL;
+
+	thd = spd->scheduler_all_threads->sched_prev;
+	printk("<<< thd %d >>>\n", thd->thread_id);
+
+	/* /\* "remove" the found thd from original location *\/ */
+	thd->sched_next->sched_prev = thd->sched_prev;
+	thd->sched_prev->sched_next = thd->sched_next;
+
+	/* /\* put the found thd to the front of list *\/ */
+	thd->sched_next = spd->scheduler_all_threads->sched_next;
+	thd->sched_prev = spd->scheduler_all_threads;
+	spd->scheduler_all_threads->sched_next = thd;
+	thd->sched_next->sched_prev = thd;
+
+	return thd;
+}
+
+static int
+sched_thread_cnts(struct spd *spd)
+{
+	return spd->scheduler_all_threads->thd_cnts;
 }
 
 #if RECOVERY_ENABLE == 1

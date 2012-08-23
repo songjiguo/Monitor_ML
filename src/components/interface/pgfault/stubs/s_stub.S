@@ -6,7 +6,6 @@
  */
 
 #include <cos_asm_server_stub_simple_stack.h>
-//#include "/home/songjiguo/research/composite/src/kernel/include/shared/cos_config.h"
 #include "../../../../kernel/include/shared/cos_config.h"
 	
 .text

@@ -713,7 +713,7 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
 
 	printc("\n[.....entering upcall helper........] thd %d\n", cos_get_thd_id());
 	thd = cos_get_thd_id();
-	recovery_upcall(cos_spd_id(), spd, addr);
+	recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, spd, addr);
 	assert(thd == cos_get_thd_id());
 
 	/* a upcall list that facilitates upcall should have been
@@ -724,7 +724,7 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
 	n = FIRST_LIST(m, next, prev);
 	while (n != m) {
 		/* printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id()); */
-		recovery_upcall(cos_spd_id(), n->spdid, n->addr);
+		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, n->spdid, n->addr);
 		p = FIRST_LIST(n, next, prev);
 		REM_LIST(n, next, prev);
 		n = p;
@@ -738,7 +738,7 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
 
 #include <sched_hier.h>
 
-int  sched_init(void)   { return 0; }
+int  sched_init(int reboot)   { return 0; }
 extern void parent_sched_exit(void);
 void
 sched_exit(void)

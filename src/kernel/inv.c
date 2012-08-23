@@ -407,7 +407,7 @@ struct thread *ready_boot_thread(struct spd *init)
 
 	assert(NULL != init);
 
-	thd = thd_alloc(init);
+	thd = thd_alloc(init, 0);
 	if (NULL == thd) {
 		printk("cos: Could not allocate boot thread.\n");
 		return NULL;
@@ -532,7 +532,11 @@ COS_SYSCALL int
 cos_syscall_create_thread(int spd_id, int a, int b, int c)
 {
 	struct thread *thd, *curr;
-	struct spd *curr_spd;
+	struct spd *curr_spd, *spd;
+
+	/* can we use c as a parameter to build the thread creation
+	 * chain of default threads? */
+	/* if c == 1, we know this is called to create default thread */
 
 	/*
 	 * Lets make sure that the current spd is a scheduler and has
@@ -557,13 +561,15 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 		return -1;
 	}
 
-	thd = thd_alloc(curr_spd);
+	/* for now, we record all threads created in scheduler */
+	thd = thd_alloc(curr_spd, 1);
 	if (thd == NULL) {
 		printk("cos: Could not allocate thread\n");
 		return -1;
 	}
 
-	/* FIXME: switch to using upcall_setup here */
+	printk("thread is created %d\n", thd_get_id(thd));
+        /* FIXME: switch to using upcall_setup here */
 	thd->stack_ptr = 0;
 	thd->stack_base[0].current_composite_spd = curr_spd->composite_spd;
 	thd->stack_base[0].spd = curr_spd;
@@ -579,7 +585,38 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 
 	thd->flags |= THD_STATE_CYC_CNT;
 	initialize_sched_info(thd, curr_spd);
+
 	
+	struct thread *test;
+	/* record all threads that are created by curr, and in which spd the thread is created */
+	/* a->fn, b->dest_spd, c->0, for now */
+	/* printk("cos: In cos_create_thread now and b is %d\n", b); */
+	if (b) {  		/* no init and recovery thread, 6 for timer brand */
+		spd = spd_get_by_index(b); /* i.e. timer brand id 6, but no spd for it */
+		if (!spd) goto done;
+
+		if (!thd->crt_in_spd) {
+			thd->crt_in_spd = spd;
+		}
+		
+		if (!curr->crt_next_thd) {
+			curr->crt_next_thd = curr->crt_tail_thd = thd;
+		} else {
+			curr->crt_tail_thd->crt_next_thd = thd;
+			curr->crt_tail_thd = thd;
+		}
+
+		/* ****** */
+		/* print info for debug */
+		test = curr;
+		printk("HEAD: thread %d\n", thd_get_id(test));
+		while((test = test->crt_next_thd)) {
+			printk("NODE: thread %d created in spd %d by thd %d\n", 
+			       thd_get_id(test), spd_get_index(test->crt_in_spd),thd_get_id(curr));
+		}
+		/* ****** */
+	}
+done:	
 	return thd_get_id(thd);
 }
 
@@ -808,25 +845,28 @@ static inline unsigned short int
 switch_thread_parse_data_area(struct cos_sched_data_area *da, int *ret_code)
 {
 	unsigned short int next_thd;
-
+	printk("6.1\n");
 	if (unlikely(da->cos_evt_notif.pending_event)) {
 		cos_meas_event(COS_MEAS_RESCHEDULE_PEND);
 		*ret_code = COS_SCHED_RET_AGAIN;
 		goto ret_err;
 	}
+	printk("6.2\n");
 	if (unlikely(da->cos_evt_notif.pending_cevt)) {
 		cos_meas_event(COS_MEAS_RESCHEDULE_CEVT);
 		*ret_code = COS_SCHED_RET_CEVT;
 		goto ret_err;
 	}
-
+	printk("6.3\n");
 	next_thd = da->cos_next.next_thd_id;
 	da->cos_next.next_thd_id = 0;
 	if (unlikely(0 == next_thd)) {
+		printk("next thd is 0\n");
 		*ret_code = COS_SCHED_RET_AGAIN;
 		goto ret_err;
 	}
 	/* FIXME: mask out the locking flags as they cannot apply */
+	printk("next thd is %d\n", next_thd);
 	return next_thd;
 ret_err:
 	return 0;
@@ -839,6 +879,7 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 	struct thread *thd;
 
 	thd = thd_get_by_id(tid);
+	printk("first in get_target: thd->flags %x\n", thd->flags);
 	/* error cases */
 	if (unlikely(thd == curr)) {
 		cos_meas_event(COS_MEAS_SWITCH_SELF);
@@ -846,6 +887,7 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 		goto ret_err;
 	}
 	if (unlikely(NULL == thd)) {
+		printk("thd is null, uncommon case\n");
 		/* 
 		 * Uncommon, but valid case: between when the current thread
 		 * executed through the scheduler and when the switch_thread
@@ -867,14 +909,97 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 	}
 
 	/* We have valid threads, lets make sure we can schedule them! */
-	if (unlikely(!thd_scheduled_by(curr, curr_spd) ||
-		     !thd_scheduled_by(thd, curr_spd))) {
-		*ret_code = COS_SCHED_RET_ERROR;
-		goto ret_err;
+	/* except recovery thread */
+	if (likely(thd_get_id(curr) != 2)) {
+		if (unlikely(!thd_scheduled_by(curr, curr_spd) ||
+			     !thd_scheduled_by(thd, curr_spd))) {
+			*ret_code = COS_SCHED_RET_ERROR;
+			goto ret_err;
+		}
 	}
 
+	/* struct thread *test_thd; */
+	/* assert(spd_is_scheduler(curr_spd)); */
+	/* test_thd = sched_thread_lookup(curr_spd, tid); */
+
+	/* if (test_thd) { */
+	/* 	printk("*********** Before update: thd %d ***********\n", thd_get_id(test_thd)); */
+	/* 	printk("test_thd->stack_ptr %x\n",test_thd->stack_ptr); */
+	/* 	printk("test_thd->stack_base[0].spd %d\n",spd_get_index(test_thd->stack_base[0].spd)); */
+
+	/* 	printk("test_thd->regs.cx %lu\n",test_thd->regs.cx); */
+	/* 	printk("test_thd->regs.dx %lu\n",test_thd->regs.dx); */
+	/* 	printk("test_thd->regs.bx %lu\n",test_thd->regs.bx); */
+	/* 	printk("test_thd->regs.di %lu\n",test_thd->regs.di); */
+	/* 	printk("test_thd->regs.si %lu\n",test_thd->regs.si); */
+	/* 	printk("test_thd->regs.ax %lu\n",test_thd->regs.ax); */
+
+	/* 	printk("test_thd->flags %x\n",test_thd->flags); */
+
+	/* 	printk("**********************\n"); */
+	/* } */
+
+	/* if (thd_get_id(curr) == 2 && thd_get_id(thd) == 7) { */
+	/* 	printk("update thread 7 registers\n"); */
+	/* 	thd->stack_ptr = 0; */
+	/* 	thd->stack_base[0].current_composite_spd = curr_spd->composite_spd; */
+	/* 	thd->stack_base[0].spd = curr_spd; */
+	/* 	spd_mpd_ipc_take((struct composite_spd *)curr_spd->composite_spd); */
+	
+	/* 	thd->flags &= ~THD_STATE_READY_UPCALL; */
+	/* 	thd->flags |= THD_STATE_ACTIVE_UPCALL; */
+
+	/* 	thd->regs.cx = COS_UPCALL_CREATE; */
+	/* 	thd->regs.dx = curr_spd->upcall_entry; */
+
+	/* 	thd->regs.bx = 1103113505; */
+	/* 	thd->regs.di = 6; */
+	/* 	thd->regs.si = 0; */
+
+	/* 	thd->regs.ax = thd_get_id(thd); */
+	/* 	thd->flags |= THD_STATE_CYC_CNT; */
+	/* 	initialize_sched_info(thd, curr_spd); */
+	/* } */
+
+	/* if (thd_get_id(curr) == 7 && thd_get_id(thd) == 5) { */
+	/* 	printk("update thread 5 registers\n"); */
+	/* 	thd->stack_ptr = 0; */
+	/* 	thd->stack_base[0].current_composite_spd = curr_spd->composite_spd; */
+	/* 	thd->stack_base[0].spd = curr_spd; */
+	/* 	spd_mpd_ipc_take((struct composite_spd *)curr_spd->composite_spd); */
+	
+	/* 	thd->regs.cx = COS_UPCALL_CREATE; */
+	/* 	thd->regs.dx = curr_spd->upcall_entry; */
+
+	/* 	thd->regs.bx = 1103113553; */
+	/* 	thd->regs.di = 5; */
+	/* 	thd->regs.si = 0; */
+
+	/* 	thd->regs.ax = thd_get_id(thd); */
+	/* 	thd->flags |= THD_STATE_CYC_CNT; */
+	/* 	initialize_sched_info(thd, curr_spd); */
+	/* } */
+
+	/* if (test_thd) { */
+	/* 	printk("*********** After update: thd %d ***********\n", thd_get_id(test_thd)); */
+	/* 	printk("test_thd->stack_ptr %x\n",test_thd->stack_ptr); */
+	/* 	printk("test_thd->stack_base[0].spd %d\n",spd_get_index(test_thd->stack_base[0].spd)); */
+
+	/* 	printk("test_thd->regs.cx %lu\n",test_thd->regs.cx); */
+	/* 	printk("test_thd->regs.dx %lu\n",test_thd->regs.dx); */
+	/* 	printk("test_thd->regs.bx %lu\n",test_thd->regs.bx); */
+	/* 	printk("test_thd->regs.di %lu\n",test_thd->regs.di); */
+	/* 	printk("test_thd->regs.si %lu\n",test_thd->regs.si); */
+	/* 	printk("test_thd->regs.ax %lu\n",test_thd->regs.ax); */
+
+	/* 	printk("test_thd->flags %x\n",test_thd->flags); */
+
+	/* 	printk("**********************\n"); */
+	/* } */
+	
 	/* we cannot schedule to run an upcall thread that is not running */
 	if (unlikely(thd->flags & THD_STATE_READY_UPCALL)) {
+		printk("READY_UPCALL thd %d\n", thd_get_id(thd));
 		cos_meas_event(COS_MEAS_UPCALL_INACTIVE);
 		*ret_code = COS_SCHED_RET_INVAL;
 		goto ret_err;
@@ -933,16 +1058,17 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	struct cos_sched_data_area *da;
 	int ret_code = COS_SCHED_RET_ERROR;
 
+	printk("1\n");
 	*preempt = 0;
 	curr = thd_get_current();
 	curr_spd = thd_validate_get_current_spd(curr, spd_id);
 	if (unlikely(!curr_spd)) goto ret_err;
-
+	printk("2\n");
 	assert(!(curr->flags & THD_STATE_PREEMPTED));
 
 	da = curr_spd->sched_shared_page;
 	if (unlikely(!da)) goto ret_err;
-
+	printk("3\n");
 	/* 
 	 * So far all flags should be taken in the context of the
 	 * actual invoking thread (they effect the thread switching
@@ -953,6 +1079,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	switch_thread_update_flags(da, &flags);
 
 	if (unlikely(flags)) {
+		printk("4\n");		
 		thd = switch_thread_slowpath(curr, flags, curr_spd, rthd_id, da, &ret_code, 
 					     &curr_sched_flags, &thd_sched_flags);
 		/* If we should return immediately back to this
@@ -961,13 +1088,20 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 		if (ret_code == COS_SCHED_RET_SUCCESS && thd == curr) goto ret;
 		if (thd == curr) goto_err(ret_err, "sloooow\n");
 	} else {
+		printk("5 -- thd %d\n", thd_get_id(thd_get_current()));
 		next_thd = switch_thread_parse_data_area(da, &ret_code);
 		if (unlikely(0 == next_thd)) goto_err(ret_err, "data_area\n");
-
+		printk("5.1\n");
 		thd = switch_thread_get_target(next_thd, curr, curr_spd, &ret_code);
-		
+		printk("5.2\n");
 		if (unlikely(NULL == thd)) goto_err(ret_err, "get target");
+		printk("5.3\n");
 	}
+
+	/* print something here, lalala */
+	printk("<<<<<");
+	printk("cos_switch: curr %d in spd %d -> thread %d", thd_get_id(curr), spd_get_index(curr_spd), thd_get_id(thd));
+	printk(">>>>>\n");
 
 	/* If a thread is involved in a scheduling decision, we should
 	 * assume that any preemption chains that existed aren't valid
@@ -975,6 +1109,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	break_preemption_chain(curr);
 
 	switch_thread_context(curr, thd);
+	printk("5.4\n");
 	if (thd->flags & THD_STATE_PREEMPTED) {
 		cos_meas_event(COS_MEAS_SWITCH_PREEMPT);
 		remove_preempted_status(thd);
@@ -987,6 +1122,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	/* success for this current thread */
 	curr->regs.ax = COS_SCHED_RET_SUCCESS;
 
+	printk("7 -- switch curr %d thd %d\n", thd_get_id(curr), thd_get_id(thd));
 	event_record("switch_thread", thd_get_id(curr), thd_get_id(thd));
 
 	return &thd->regs;
@@ -1005,6 +1141,7 @@ switch_thread_slowpath(struct thread *curr, unsigned short int flags, struct spd
 	struct thread *thd;
 	unsigned short int next_thd;
 
+	printk("COS: in switch_thread_slowpath\n");
 	if (flags & (COS_SCHED_SYNC_BLOCK | COS_SCHED_SYNC_UNBLOCK)) {
 		next_thd = rthd_id;
 		/* FIXME: mask out all flags that can't apply here  */
@@ -1298,6 +1435,7 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 
 	break_preemption_chain(curr);
 
+	printk("COS: in brand_completion_switch_to\n");
 	curr->flags &= ~THD_STATE_ACTIVE_UPCALL;
 	curr->flags |= THD_STATE_READY_UPCALL;
 	/* 
@@ -1599,7 +1737,7 @@ cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 		struct thd_invocation_frame *f;
 		int clear = 0, i;
 
-		new_thd = thd_alloc(curr_spd);
+		new_thd = thd_alloc(curr_spd, 0);
 		if (NULL == new_thd) return -1;
 
 		/* the brand thread holds the invocation stack record: */
@@ -2125,14 +2263,17 @@ static int verify_trust(struct spd *truster, struct spd *trustee)
  */
 extern void cos_syscall_upcall(void);
 COS_SYSCALL int 
-cos_syscall_upcall_cont(int this_spd_id, int spd_id, int arg, struct pt_regs **regs)
+cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **regs)
 {
 	struct spd *dest, *curr_spd;
 	struct thread *thd;
+	int op, spd_id;
 
 	assert(regs);
 	*regs = NULL;
 
+	op     = op_spd >> 16;
+	spd_id = 0xFFFF & op_spd;
 	dest = spd_get_by_index(spd_id);
 	thd = thd_get_current();
 	curr_spd = thd_validate_get_current_spd(thd, this_spd_id);
@@ -2160,8 +2301,10 @@ cos_syscall_upcall_cont(int this_spd_id, int spd_id, int arg, struct pt_regs **r
 	spd_mpd_ipc_release((struct composite_spd *)thd_get_thd_spdpoly(thd));//curr_spd->composite_spd);
 	//spd_mpd_ipc_take((struct composite_spd *)dest->composite_spd);
 
-	if (!arg) upcall_setup(thd, dest, COS_UPCALL_BOOTSTRAP, 0, 0, 0);
-	else      upcall_setup(thd, dest, COS_UPCALL_RECOVERY, arg, 0, 0);
+	upcall_setup(thd, dest, op, arg, 0, 0);
+	/* if (!arg) upcall_setup(thd, dest, COS_UPCALL_BOOTSTRAP, 0, 0, 0); */
+	/* if (1 == arg) upcall_setup(thd, dest, COS_UPCALL_REBOOT, 0, 0, 0); */
+	/* if (arg > 1) upcall_setup(thd, dest, COS_UPCALL_RECOVERY, arg, 0, 0); */
 	*regs = &thd->regs;
 
 	cos_meas_event(COS_MEAS_UPCALLS);
@@ -2209,6 +2352,7 @@ static int update_evt_list(struct thd_sched_info *tsi)
 	/* same intention as previous line, but this deprecates the
 	 * previous */
 	da->cos_evt_notif.pending_event = 1;
+	printk("evt notif has pending...\n");
 			
 	evts = da->cos_events;
 	prev_evt = sched->prev_notification;
@@ -2315,9 +2459,11 @@ static void update_sched_evts(struct thread *new, int new_flags,
 	}
 	
 	if (new_flags != COS_SCHED_EVT_NIL) {
+		printk("update_sched_evts1: update_thd_evt_state()\n");
 		update_thd_evt_state(new, new_flags, 0);
 	}
 	if (elapsed || prev_flags != COS_SCHED_EVT_NIL) {
+		printk("update_sched_evts2: update_thd_evt_state()\n");
 		update_thd_evt_state(prev, prev_flags, elapsed);
 	}
 
@@ -2404,6 +2550,7 @@ brand_higher_urgency(struct thread *upcall, struct thread *prev)
 				  prev, COS_SCHED_EVT_NIL);
 		return 1;
 	} else {
+		printk("brand_higher_urgency: update_thd_evt_state()\n");
 		update_thd_evt_state(upcall, COS_SCHED_EVT_BRAND_ACTIVE, 1);
 		return 0;
 	}
@@ -2431,6 +2578,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	/* Assume here that we only have one upcall thread */
 	struct thread *upcall = brand->upcall_threads;
 
+	printk("COS: in brand_next_thread\n");
 	assert(brand->flags & (THD_STATE_BRAND|THD_STATE_HW_BRAND));
 	assert(upcall && upcall->thread_brand == brand);
 
@@ -2570,7 +2718,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 COS_SYSCALL int 
 cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 {
-	struct thread *thd, *exist_thd;
+	struct thread *thd, *ret_thd;
 	struct spd *spd;
 	int ret = 0;
 
@@ -2584,7 +2732,7 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 		struct spd *child = spd_get_by_index(arg);
 		ret = 0;
 		if (child->parent_sched == spd) {
-			printk("cos: already has a parent\n");
+			/* printk("cos: already has a parent\n"); */
 			ret = -1;
 		}
 		break;
@@ -2592,7 +2740,26 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 	case COS_SCHED_THD_EXIST:
 	{
 		assert(spd_is_scheduler(spd));
-		if ((exist_thd = sched_thread_lookup(spd, thd_id))) ret = thd_get_id(exist_thd);
+		if (sched_thread_lookup(spd, thd_id)) ret = 1;
+		break;
+	}
+	case COS_SCHED_THD_RETRIEVE:
+	{
+		assert(spd_is_scheduler(spd));
+		if ((ret_thd = sched_thread_retrieve(spd))) 
+			ret = ((thd_get_id(ret_thd) << 16) | (ret_thd->usr_sched_prio.create_prio & 0xFFFF));
+		break;
+	}	
+	case COS_SCHED_THD_PRIO:
+	{
+		assert(spd_is_scheduler(spd));
+		if ((ret_thd = sched_thread_lookup(spd, thd_id))) ret = ret_thd->usr_sched_prio.create_prio;
+		break;
+	}
+	case COS_SCHED_THD_NUMBERS:
+	{
+		assert(spd_is_scheduler(spd));
+		ret = sched_thread_cnts(spd);
 		break;
 	}
 	default:
@@ -2773,6 +2940,30 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 			child_tsi = thd_get_sched_info(target_thd, i);
 			child_tsi->scheduler = NULL;
 		}
+	}
+	case COS_SCHED_RECORD_PRIO:
+	{
+		struct thread *thd;
+		struct thd_sched_info *tsi;
+		
+		thd = thd_get_by_id(thd_id);
+		if (!thd) {
+			printk("cos: thd id %d invalid (when record prio)\n", (unsigned int)thd_id);
+			return -1;
+		}
+		
+		tsi = thd_get_sched_info(thd, spd->sched_depth);
+		if (tsi->scheduler != spd) {
+			printk("cos: spd %d not the scheduler of %d\n",
+			       spd_get_index(spd), (unsigned int)thd_id);
+			return -1;
+		}
+		
+		/* printk("cos: record prio %d\n", (unsigned int) option); */
+		thd->usr_sched_prio.create_prio = (unsigned int)option;
+		thd->usr_sched_prio.switch_prio = 0; /* when to update this value?? */
+
+		break;
 	}
 	case COS_SCHED_BREAK_PREEMPTION_CHAIN:
 	{

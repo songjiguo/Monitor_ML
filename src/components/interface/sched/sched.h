@@ -14,11 +14,9 @@ unsigned long sched_timestamp(void);
 unsigned long sched_timer_stopclock(void);
 int sched_priority(unsigned short int tid);
 
-int sched_create_thd(spdid_t spdid, unsigned int desired_thd);
-int sched_thd_parameter_set(unsigned int thd_id, u32_t sched_param0, u32_t sched_param1, u32_t sched_param2);
-
+int sched_create_thd(spdid_t spdid, u32_t sched_param_0, u32_t sched_param_1, unsigned int desired_thd);
 /* Should only be called by the booter/loader */
-int sched_create_thread_default(spdid_t spdid, unsigned int desired_thd);
+int sched_create_thread_default(spdid_t spdid, u32_t sched_param_0, u32_t sched_param_1, unsigned int desired_thd);
 
 /* This function is deprecated...use sched_create_thd instead. */
 int sched_create_thread(spdid_t spdid, struct cos_array *data);
