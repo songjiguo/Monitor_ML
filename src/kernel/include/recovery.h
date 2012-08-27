@@ -11,58 +11,48 @@
 #include "thread.h"
 
 /*---------Threads that created by scheduler--------*/
-
 static struct thread*
-sched_thread_lookup(struct spd *spd, int thd_id)
+find_thd(struct spd *spd, struct thread *thd)
 {
-	struct thread *thd;
-
-	if (!(thd = spd->scheduler_all_threads)) return NULL;
-
-	for (thd = thd->sched_prev; thd->thread_id != 0;) {
-		/* printk("<<< thd %d  and look up id %d>>>\n", thd->thread_id, thd_id); */
-		if (thd->thread_id == thd_id) {
-			/* printk("found thd %d\n", thd->thread_id);			 */
-			/* optimization for look up desired thread id */
-			/* /\* "remove" the found thd from original location *\/ */
-			thd->sched_next->sched_prev = thd->sched_prev;
-			thd->sched_prev->sched_next = thd->sched_next;
-			/* /\* put the found thd to the front of list *\/ */
-			thd->sched_next = spd->scheduler_all_threads->sched_next;
-			thd->sched_prev = spd->scheduler_all_threads;
-			spd->scheduler_all_threads->sched_next = thd;
-			thd->sched_next->sched_prev = thd;
-
-			return thd;
-		}
-		thd = thd->sched_prev;;
-	}
-	printk("Can not find an existing thread id %d!!\n", thd_id);
-	return NULL;
-}
-
-static struct thread*
-sched_thread_retrieve(struct spd *spd)
-{
-	struct thread *thd;
-
-	printk("retrieve thread info\n");
-	if (!(thd = spd->scheduler_all_threads)) return NULL;
-
-	thd = spd->scheduler_all_threads->sched_prev;
-	printk("<<< thd %d >>>\n", thd->thread_id);
-
-	/* /\* "remove" the found thd from original location *\/ */
+	/* "remove" the found thd from original location */
 	thd->sched_next->sched_prev = thd->sched_prev;
 	thd->sched_prev->sched_next = thd->sched_next;
 
-	/* /\* put the found thd to the front of list *\/ */
+	/* put the found thd to the front of list */
 	thd->sched_next = spd->scheduler_all_threads->sched_next;
 	thd->sched_prev = spd->scheduler_all_threads;
 	spd->scheduler_all_threads->sched_next = thd;
 	thd->sched_next->sched_prev = thd;
 
 	return thd;
+}
+
+static struct thread*
+sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums)
+{
+	struct thread *thd;
+	int i, cnt;;
+
+	if (!(thd = spd->scheduler_all_threads)) return NULL;
+	cnt = spd->scheduler_all_threads->thd_cnts;
+	i = cnt - thd_nums;
+	
+	if (thd_id > 0) {
+		while(cnt) {
+			/* printk("<<< cnt %d thd %d  and look up id %d>>>\n", cnt, thd->thread_id, thd_id); */
+			/* if (thd->thread_id == thd_id) return find_thd(spd, thd); */
+			if (thd->thread_id == thd_id) return thd;
+			thd = thd->sched_prev;
+			cnt--;
+		}
+		printk("Can not find an existing thread id %d!!\n", thd_id);
+		return NULL;
+	} else {
+		while(i--) thd = thd->sched_prev;
+		/* thd = find_thd(spd, thd); */
+		printk("<<< thd %d >>>\n", thd->thread_id);
+		return thd;
+	}
 }
 
 static int

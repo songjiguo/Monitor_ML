@@ -53,8 +53,7 @@
  * versions of interfaces, such as mmgr, schduler, cbuf, torrent. To
  * use it, run python set_symbolic_link.py under composite/tools */
 
-#define RECOVERY_ENABLE 0               // 1 will enable the fault notification in Composite kernel
-//#define NOTIF_TEST  		        /* test purpose only */
-#define SCHEDULER_TEST  		/* test purpose only */
+#define RECOVERY_ENABLE 1               // 1 will enable the fault notification in Composite kernel
+#define NOTIF_TEST  		        /* test purpose only */
 
 #endif /* COS_CONFIG_H */

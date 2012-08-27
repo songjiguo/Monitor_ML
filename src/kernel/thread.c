@@ -15,8 +15,6 @@
 struct thread threads[MAX_NUM_THREADS];
 static struct thread *thread_freelist_head = NULL;
 
-struct thread scheduler_thread_head;
-
 struct thread SRT_threads_head;	/* soft real time threads */
 struct thread HRT_threads_head; /* hard real time threads */
 struct thread BST_threads_head; /* best effort threads */
@@ -49,16 +47,22 @@ int thd_validate_spd_in_callpath(struct thread *t, struct spd *s)
 /* initialize the fault tolerance related DS */
 static void thd_ft_init(struct thread *thd, int thd_id)  
 {
+	int i;
+
 	if (!thd_id) thd->thread_id = 0; /* only for these heads */
 
-	thd->usr_sched_prio.create_prio = 0;
-	thd->usr_sched_prio.switch_prio = 0;
+	for (i = 0 ; i < MAX_SCHED_HIER_DEPTH; i++) {
+		thd->sched_info[i].thread_user_prio = 0;
+		thd->sched_info[i].thread_fn        = NULL;
+		thd->sched_info[i].thread_dest      = NULL;
+	}
+
 	thd->sched_next = NULL;
 	thd->sched_prev = NULL;
 
 	thd->crt_tail_thd = NULL;
 	thd->crt_next_thd = NULL;
-	thd->crt_in_spd = NULL;
+	thd->crt_in_spd   = NULL;
 
 	return;
 }
@@ -77,9 +81,6 @@ void thd_init_all(struct thread *thds)
 
 	thread_freelist_head = thds;
 
-	thd_ft_init(&scheduler_thread_head, 0);
-	scheduler_thread_head.thd_cnts = 0;
-
 	thd_ft_init(&SRT_threads_head, 0);
 	thd_ft_init(&HRT_threads_head, 0);
 	thd_ft_init(&BST_threads_head, 0);
@@ -91,7 +92,7 @@ extern void *va_to_pa(void *va);
 extern void thd_publish_data_page(struct thread *thd, vaddr_t page);
 
 /* flag 1 means recording the thread in kernel, otherwise not */
-struct thread *thd_alloc(struct spd *spd, int flag)
+struct thread *thd_alloc(struct spd *spd)
 {
 	struct thread *thd;
 	unsigned short int id;
@@ -130,34 +131,6 @@ struct thread *thd_alloc(struct spd *spd, int flag)
 	thd->thread_brand = NULL;
 	thd->pending_upcall_requests = 0;
 	thd->freelist_next = NULL;
-
-	/* It will be better if the threads created by scheduler
-	 * internally are only saved in kernel, then all client's
-	 * requests to create threads will be saved somewhere, i.e. a
-	 * separate spd so that they can be replay later*/
-	
-	/* for now, just save all threads for simplcity */
-	if (flag && spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
-		printk("cos: add thread %d onto spd %d list\n", thd_get_id(thd), spd_get_index(spd));
-		if (!spd->scheduler_all_threads) {
-			/* initialize the list head */
-			scheduler_thread_head.sched_next = scheduler_thread_head.sched_prev = &scheduler_thread_head;
-
-			thd->sched_next = scheduler_thread_head.sched_next;
-			thd->sched_prev = &scheduler_thread_head;
-			scheduler_thread_head.sched_next = thd;
-			thd->sched_next->sched_prev = thd;
-			
-			/* initialize the list entry in scheduler spd */
-			spd->scheduler_all_threads = &scheduler_thread_head;
-		} else {
-			thd->sched_next = scheduler_thread_head.sched_next;
-			thd->sched_prev = &scheduler_thread_head;
-			scheduler_thread_head.sched_next = thd;
-			thd->sched_next->sched_prev = thd;
-		}
-		spd->scheduler_all_threads->thd_cnts++;
-	}
 
 	return thd;
 }

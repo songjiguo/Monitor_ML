@@ -160,7 +160,7 @@ llboot_thd_done(void)
 int
 recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 {
-	printc("LL: llbooter upcall to spd %d, addr %x thd %d\n", dest, (unsigned int)arg, cos_get_thd_id());
+	printc("LL: llbooter upcall to spd %d, arg %x thd %d\n", dest, (unsigned int)arg, cos_get_thd_id());
 
 	prev_thd     = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread */
 	recover_spd  = dest;
@@ -215,7 +215,8 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
 
-		recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, reboot);
+		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
+		else recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */
 		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */

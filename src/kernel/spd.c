@@ -283,6 +283,7 @@ static void spd_init_all(struct spd *spds)
 		spds[i].spd_info.flags = SPD_FREE;
 		spds[i].composite_spd = &spds[i].spd_info;
 		spds[i].freelist_next = (i == (MAX_NUM_SPDS-1)) ? NULL : &spds[i+1];
+		spds[i].scheduler_all_threads = NULL;
 	}
 
 	spd_freelist_head = spds;
@@ -423,8 +424,6 @@ struct spd *spd_alloc(unsigned short int num_caps, struct usr_inv_cap *user_cap_
 	spd->parent_sched = NULL;
 
 	spd->composite_member_next = spd->composite_member_prev = spd;
-
-	spd->scheduler_all_threads = NULL;
 
 	for (i = 0 ; i < MAX_SPD_VAS_LOCATIONS ; i++) spd->location[i].size = 0;
 

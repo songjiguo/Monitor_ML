@@ -1106,24 +1106,22 @@ static int
 create_thread_fn(int fn, int d, unsigned short int desired_thd)
 {
 	int ret_id = 0;
+	int exist = 0;
 
 	if (likely(!desired_thd)) { /* normal path */
 		printc("normal path (spd %d desired_thd %d)\n", d, desired_thd);
-		ret_id = cos_create_thread(fn, d, 0); /* can we pass in the thread id of the creator? */
+		ret_id = cos_create_thread(fn, d, 0);
 		assert(0 != ret_id);
+	} else {
+		ret_id = desired_thd;
+		exist = cos_sched_introspect(COS_SCHED_THD_EXIST, d, desired_thd);
+		if (unlikely(!exist)) {
+			printc("still create the thread\n");
+			ret_id = cos_create_thread(fn, d, 0);
+			assert(0 != ret_id);
+		}
+		printc("(spd %d desired_thd %d) already existed\n", d, ret_id);
 	}
-
-	/* } else {     		/\* some system thread and replay *\/ */
-	/* 	printc("passed desired thd path (spd %d desired_thd %d)\n", d, desired_thd); */
-	/* 	ret_id = cos_sched_introspect(COS_SCHED_THD_EXIST, d, desired_thd); */
-	/* 	/\* can we also introspect all threads that created from this if it is default thread? *\/ */
-	/* 	if (unlikely(!ret_id)) { */
-	/* 		printc("still create the thread\n"); */
-	/* 		ret_id = cos_create_thread(fn, d, 0); */
-	/* 		assert(0 != ret_id); */
-	/* 	} */
-	/* } */
-
 	return ret_id;
 }
 
@@ -1155,7 +1153,7 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 	}
 	thread_new(new);
 	if (parm) thread_param_set(new,  (struct sched_param_s *)metric_str);
-	else      thread_params_set(new, (char *)metric_str);
+	else      thread_params_set(new, (char *)metric_str); /* deprecated way to create the thread */
 	
 	return new;
 }
@@ -1733,10 +1731,14 @@ print_config_info(void)
 /* Initialize the root scheduler */
 int sched_root_init(int reboot)
 {
-	struct sched_thd *new, *old;
+	struct sched_thd *new, *rec_thd;
 	int ret;
-	int thd_id, thd_nums;
+	int thd_id, thd_nums, type;
 	unsigned short int prio;
+	void *fn, *dest;
+
+	union sched_param sp[2] = {{.c = {.type = SCHEDP_NOOP}},
+				   {.c = {.type = SCHEDP_NOOP}}};
 
 	print_config_info();
 
@@ -1749,32 +1751,53 @@ int sched_root_init(int reboot)
 
 
 	if (unlikely(reboot)) {
-		printc("rebuild scheduler...\n");
-		
 		thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0);
-
-		ret = cos_sched_introspect(COS_SCHED_THD_RETRIEVE, cos_spd_id(), 0);
-		thd_id = ret >> 16;
-		prio    = ret & 0xFFFF;
-		printc("thread %d with prio %d\n", thd_id, prio);
-		assert(thd_id);
-		assert(thd_nums > 0);
-		
-		while(thd_nums--) {
-			old = __sched_setup_thread_no_policy(thd_id);
-			thread_reset(old, prio);
-
-			ret = cos_sched_introspect(COS_SCHED_THD_RETRIEVE, cos_spd_id(), 0);
+		printc("rebuild scheduler... %d threads have been recorded\n", thd_nums);
+		while(thd_nums) {
+			printc("thd_num is %d\n", thd_nums);
+			ret    = cos_sched_introspect(COS_SCHED_THD_GET, thd_nums, 0);
 			thd_id = ret >> 16;
-			prio    = ret & 0xFFFF;
+			assert(thd_id);
+			prio   = ret & 0xFFFF;
+
+			fn    = (void *)cos_sched_introspect(COS_SCHED_THD_FN, cos_spd_id(), thd_id);
+			dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
+			type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id);
 			printc("thread %d with prio %d\n", thd_id, prio);
+			printc("fn %x dest %d\n", (unsigned int)fn, (int)dest);
+			printc("type is %d\n", type);
+
+			switch (type) {
+			case SCHEDP_IDLE: /* idle */
+				idle = rec_thd;
+				break;
+			case SCHEDP_TIMER: /* timer */
+				timer = rec_thd;
+				break;
+			case SCHEDP_INIT: /* boot thread */
+				break;
+			case SCHEDP_RPRIO: /* thread that has relative priority, now change to prio */
+				type = SCHEDP_PRIO;
+				sp[0].c.value = prio;
+				break;
+			case SCHEDP_RLPRIO: /* thread that has relative priority */
+				type = SCHEDP_PRIO;
+				sp[0].c.value = prio;
+				break;
+			default:
+				break;
+			}
+
+			sp[0].c.type = type;
+			rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
+
+			thd_nums--;
 		}
 
 		if (cos_sched_pending_event()) {
 			printc("sched_init: clear_events(), for recovery thread\n");
 			cos_sched_clear_events();
 		}
-
 	} else {
 		sched_init_create_threads(1); /* idle and booter */
 		/* Create the clock tick (timer) thread */
@@ -1791,6 +1814,15 @@ int sched_root_init(int reboot)
 	assert(0);
 
 	return 0;
+}
+
+static void 
+sched_on_failure_notif()
+{
+	/* need save parameters for timer, idle threads */
+	/* need introspect kernel to get the those parameters back  */
+	/* then start executing in their function */
+	return;
 }
 
 int 
@@ -1814,15 +1846,6 @@ sched_init(int reboot)
 	return 0;
 }
 
-static void 
-sched_on_failure_notif()
-{
-	/* need save parameters for timer, idle threads */
-	/* need introspect kernel to get the those parameters back  */
-	/* then start executing in their function */
-	return;
-}
-
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
@@ -1830,11 +1853,15 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		sched_timer_tick();
 		break;
 	case COS_UPCALL_BOOTSTRAP:
-		printc("UPCALL into Scheduler: thread %d Reboot? %d\n", cos_get_thd_id(), (int)arg3);
-		sched_init((int)arg3);
+		printc("UPCALL into Scheduler: BOOTSTRAP\n");
+		sched_init(0);
+		break;
+	case COS_UPCALL_REBOOT:
+		printc("UPCALL into Scheduler: REBOOTING \n");
+		sched_init(1);
 		break;
 	case COS_UPCALL_FAILURE_NOTIF:
-		printc("UPCALL Failure_Notif on fault notification: thread %d \n", cos_get_thd_id());
+		printc("UPCALL into Scheduler: FAILURENOTIF\n");
 		sched_on_failure_notif();
 		break;
 	case COS_UPCALL_CREATE:

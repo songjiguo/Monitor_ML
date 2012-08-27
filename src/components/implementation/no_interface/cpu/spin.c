@@ -15,6 +15,8 @@
 
 #include <sched.h>
 
+#define SCHEDULER_TEST  		/* test purpose only */
+
 #ifdef SCHEDULER_TEST
 #include <res_spec.h>
 

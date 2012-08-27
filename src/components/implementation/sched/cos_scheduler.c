@@ -176,6 +176,7 @@ short int sched_alloc_event(struct sched_thd *thd)
 			/* add to evt thd -> thread map */
 			sched_map_evt_thd[i] = thd;
 			thd->evt_id = i;
+			printc("evt id %d thread id %d\n", thd->evt_id, thd->id);
 			if (cos_sched_cntl(COS_SCHED_THD_EVT, thd->id, i)) {
 				printc("failed to allocate event. (%d%d%d)\n",1,1,1);
 				COS_SCHED_EVT_FLAGS(se) |= COS_SCHED_EVT_FREE;

@@ -69,10 +69,6 @@ static inline void fp_add_thd(struct sched_thd *t, unsigned short int prio)
 	assert(sched_thd_ready(t));
 	assert(!sched_thd_suspended(t));
 
-	if (unlikely(cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
-		if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
-	}
-
 	sched_get_metric(t)->priority = prio;
 	sched_set_thd_urgency(t, prio);
 	printc("add onto runqueue!!!\n");
@@ -355,9 +351,12 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 {
 	unsigned int prio = PRIO_LOWEST;
 	struct sched_thd *c;
-	
+
+	struct sched_param_s *t_ps = ps;
+
 	assert(t);
 	while (ps->type != SCHEDP_NOOP) {
+		printc("type is %d\n", ps->type);
 		switch (ps->type) {
 		case SCHEDP_RPRIO:
 		case SCHEDP_RLPRIO:
@@ -416,7 +415,14 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 	}
 	if (sched_thd_ready(t)) fp_rem_thd(t);
 	fp_add_thd(t, prio);
-	
+
+	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
+		printc("start recording...\n");
+		if (cos_sched_cntl(COS_SCHED_RECORD_THD, t->id, 0)) BUG();
+		if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
+		if (cos_sched_cntl(COS_SCHED_RECORD_VALUE, t->id, (int)t_ps->type)) BUG();
+	}
+
 	return 0;
 }
 
