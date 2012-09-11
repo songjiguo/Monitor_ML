@@ -55,13 +55,13 @@ void pong(void)
 {
 	union sched_param sp;
 	
-	sp.c.type = SCHEDP_PRIO;
-	sp.c.value = 12;
-	sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+	/* sp.c.type = SCHEDP_PRIO; */
+	/* sp.c.value = 12; */
+	/* sched_create_thd(cos_spd_id(), sp.v, 0, 0); */
 
-	sp.c.type = SCHEDP_PRIO;
-	sp.c.value = 13;
-	sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+	/* sp.c.type = SCHEDP_PRIO; */
+	/* sp.c.value = 13; */
+	/* sched_create_thd(cos_spd_id(), sp.v, 0, 0); */
 
 	return;
 	number = 0;

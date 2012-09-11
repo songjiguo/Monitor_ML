@@ -43,11 +43,12 @@ ping_pong_test()
 	printc("<<< thd %d TEST_SWITCH_RECOVERY BEGIN! >>>\n", cos_get_thd_id());
 	int i = 0;
 	while(i++ <= NUM) {
-		if (cos_get_thd_id() == high) {
+		if (cos_get_thd_id() == 11) {
 			printc("thd %d wait for 10 ticks\n", cos_get_thd_id());
-			timed_event_block(cos_spd_id(), 10);
+			timed_event_block(cos_spd_id(), 2);
 			printc("thd %d wake\n", cos_get_thd_id());
 		}
+		printc("thread %d calls pong\n", cos_get_thd_id());
 		pong();
 	}
 	return;
@@ -92,6 +93,7 @@ ping_pong_test()
 void 
 cos_init(void)
 {
+	printc("<<< SIMPLE PPONG TEST BEGIN hhhhhhh >>>\n");
 	static int first = 0;
 	union sched_param sp;
 

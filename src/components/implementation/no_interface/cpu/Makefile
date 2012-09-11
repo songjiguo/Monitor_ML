@@ -2,7 +2,7 @@ C_OBJS=spin.o
 ASM_OBJS=
 COMPONENT=cpu.o
 INTERFACES=
-DEPENDENCIES=sched printc mem_mgr pong
+DEPENDENCIES=sched printc mem_mgr pong pgfault
 IF_LIB=
 
 include ../../Makefile.subsubdir

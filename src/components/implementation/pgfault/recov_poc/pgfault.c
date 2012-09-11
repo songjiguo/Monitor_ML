@@ -48,41 +48,34 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	 * frame. Otherwise the following remove frame will confuse
 	 * the frame fault_cnt */
 
-	if ((int)ip == 1) failure_notif_wait(cos_spd_id(), spdid);
-	else         failure_notif_fail(cos_spd_id(), spdid);
-
 	/* remove from the invocation stack the faulting component! */
 	assert(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0));
-
 	/* Manipulate the return address of the component that called
 	 * the faulting component... */
 	assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 	/* ...and set it to its value -8, which is the fault handler
 	 * of the stub. */
 	assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
-
 	assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0)); /* increase the spd.fault_cnt in kernel */
+
+	if ((int)ip == 1) failure_notif_wait(cos_spd_id(), spdid);
+	else         failure_notif_fail(cos_spd_id(), spdid);
 
 	return 0;
 }
 
+
+static  int test = 0;
 #ifdef NOTIF_TEST
-int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
+int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 {
 	/* unsigned long r_ip; */
-	/* int tid = cos_get_thd_id(); */
-	printc("Fault FLT Notif : \n");
-	/* printc("Fault Notif : thd %d faults in spd %d @ %p\n", */
-	/*        tid, spdid, fault_addr); */
-	
-	/* if ((int)ip == 1) failure_notif_wait(cos_spd_id(), spdid); */
-	/* else         failure_notif_fail(cos_spd_id(), spdid); */
-
-	/* assert(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)); */
-	/* assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0)); */
-	/* assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8)); */
-
-	/* assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0)); */
+	int tid = cos_get_thd_id();
+	printc("para: spdid %d\n", spdid);
+	printc("<< thd %d in Fault FLT Notif >> \n", cos_get_thd_id());
+	printc("....kevin.....andy.....\n");
+	/* assert(0); */
+	if (test++ == 1) assert(0);
 
 	return 0;
 }

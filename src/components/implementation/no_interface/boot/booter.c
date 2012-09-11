@@ -403,6 +403,7 @@ void
 failure_notif_wait(spdid_t caller, spdid_t failed)
 {
 	/* wait for the other thread to finish rebooting the component */
+	printc("failure notif wait\n");
 	LOCK();	
 	UNLOCK();
 }
@@ -413,7 +414,7 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 {
 
 	/* unsigned long long start, end; */
-
+	printc("failure notif fail\n");
 	struct spd_local_md *md;
 
 	/* rdtscll(start); */
@@ -426,7 +427,7 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 	if (boot_spd_map_populate(md->h, failed, md->comp_info)) BUG();
 	/* can fail if component had no boot threads: */
 	if (boot_spd_caps(md->h, failed)) BUG();  /* do this first ??? */
-	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed); /* do this second ??? */	
+	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
 //	boot_spd_caps_chg_activation(failed, 1);
 
 	UNLOCK();

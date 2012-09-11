@@ -73,6 +73,10 @@ redo:
 CSTUB_ASM_2(sched_wakeup, spdid, dep_thd)
 
        if (unlikely (fault)){
+	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+		       printc("set cap_fault_cnt failed\n");
+		       BUG();
+	       }
        	       fcounter++;
        	       goto redo;
        }
@@ -87,6 +91,10 @@ redo:
 CSTUB_ASM_2(sched_block, spdid, thd_id)
 
        if (unlikely (fault)){
+	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+		       printc("set cap_fault_cnt failed\n");
+		       BUG();
+	       }
        	       fcounter++;
        	       goto redo;
        }

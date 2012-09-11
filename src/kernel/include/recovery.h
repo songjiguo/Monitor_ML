@@ -94,6 +94,8 @@ inv_frame_fault_cnt_update(struct thread *thd, struct spd *spd)
 	struct thd_invocation_frame *inv_frame;
 	inv_frame = thd_invstk_top(thd);
 	inv_frame->fault.cnt = spd->fault.cnt;
+	/* printk("spd %d 's fault count updates ", spd_get_index(spd)); */
+	/* printk("inv_frame's spd %d\n", spd_get_index(inv_frame->spd)); */
 	return 0;
 }
 
@@ -105,37 +107,28 @@ ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 }
 
 static inline int
-pop_fault_detect(struct thd_invocation_frame *curr_frame)
+pop_fault_detect(struct thd_invocation_frame *inv_frame, struct thd_invocation_frame *curr_frame)
 {
-	if (curr_frame->fault.cnt != curr_frame->spd->fault.cnt) return 1;
+	if (inv_frame->fault.cnt != curr_frame->spd->fault.cnt) return 1;
 	else return 0;
 }
 
 static inline int
 switch_thd_fault_detect(struct thread *next)
 {
-	struct spd *n;
+	struct spd *n_spd;
 	struct thd_invocation_frame *tif;
 
-	tif  = thd_invstk_top(next);
-	n    = tif->spd;
+	tif    = thd_invstk_top(next);
+	n_spd  = tif->spd;
 	
-	/*  * Has the component we're returning to faulted since we were */
-	/*  * last executing in it?  If so, return to the calling */
-	/*  * component at eip-8 (at the fault handler). */
-
-	if (unlikely(tif->fault.cnt != n->fault.cnt)) {
-		printk("Fault is detected when context switch\n");
-		next->flags  |= THD_STATE_PREEMPTED;
-		next->regs.ip = tif->ip-8;
-		next->regs.sp = tif->sp;
-		tif = thd_invocation_pop(next);
-		if (unlikely(!tif)) {
-			next->regs.ip = 0;
-			next->regs.sp = 0;
-		}
+	if (tif->fault.cnt != n_spd->fault.cnt) 
+	{
+		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
+		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
+		return 1;
 	}
-	return 0;
+	else return 0;
 }
 
 static inline int
@@ -276,7 +269,7 @@ ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 }
 
 static inline int
-pop_fault_detect(struct thd_invocation_frame *curr_frame)
+pop_fault_detect(struct thd_invocation_frame *inv_frame, struct thd_invocation_frame *curr_frame)
 {
 	return 0;
 }

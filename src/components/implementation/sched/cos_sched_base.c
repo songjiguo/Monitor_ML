@@ -412,7 +412,7 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 		 * scheduled.
 		 */
 		if (cos_sched_pending_event()) {
-			printc("sched_switch_thread_target: clear_events()\n");
+			printc("pending event...clear events\n");
 			cos_sched_clear_events();
 			cos_sched_process_events(evt_callback, 0);
 		}
@@ -490,7 +490,7 @@ done:
 
 static inline int sched_switch_thread(int flags, report_evt_t evt)
 {
-	printc("C\n");
+	printc("actually in calling sched_switch_thread\n");
 	return sched_switch_thread_target(flags, evt, NULL);
 }
 
@@ -574,6 +574,7 @@ static void sched_timer_tick(void)
 		sched_process_wakeups();
 
 		timer_tick(1);
+		printc("sched_timer_tick calls sst\n");
 		sched_switch_thread(COS_SCHED_BRAND_WAIT, TIMER_SWITCH_LOOP);
 		/* Tailcall out of the loop */
 	}
@@ -585,6 +586,7 @@ static void fp_event_completion(struct sched_thd *e)
 
 	while (1) {
 		cos_sched_lock_take();
+		printc("fp_event_completion calls sst\n");
 		sched_switch_thread(COS_SCHED_TAILCALL, EVT_CMPLETE_LOOP);
 	}
 	BUG();
@@ -621,6 +623,7 @@ static void fp_idle_loop(void *d)
 		if (cos_sched_pending_event()) {
 			report_event(IDLE_SCHED);
  			cos_sched_lock_take();
+			printc("fp_idle_loop calls sst\n");
 			sched_switch_thread(0, IDLE_SCHED_SWITCH);
 		}
 		report_event(IDLE_SCHED_LOOP);
@@ -689,6 +692,7 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 		return;
 	}
 	fp_block(thd, cos_spd_id());
+	printc("sched_timeout calls sst\n");
 	sched_switch_thread(0, TIMEOUT_LOOP);	
 
 	return;
@@ -795,6 +799,7 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 	}
 
 	assert(!sched_thd_dependent(thd));
+	printc("sched_wakeup calls sst\n");
 	sched_switch_thread(0, WAKE_LOOP);
 done:
 	return 0;
@@ -924,7 +929,6 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	while (0 == thd->wake_cnt) {
 		if (dependency_thd) {
 			assert(dep && dep == thd->dependency_thd);
-			printc("B\n");
 			sched_switch_thread_target(0, BLOCK_LOOP, dep);
 			cos_sched_lock_take();
 			report_event(BLOCKED_W_DEPENDENCY);
@@ -938,7 +942,7 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 			 * on a blocked thread, we actually run the
 			 * dependent thread.  Thus when we wake up
 			 * here, we will still be dependent
-			 * (otherwise, we would be scheduled because
+5B5B			 * (otherwise, we would be scheduled because
 			 * the dependency thread executed
 			 * sched_wakeup).  So in this case, we want to
 			 * remove the dependency, execute the thread,
@@ -957,6 +961,7 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 				goto unblock;
 			}
 		} else {
+			printc("sched_block calls sst\n");
 			sched_switch_thread(0, BLOCK_LOOP);
 			cos_sched_lock_take();
 			if (!first) { report_event(RETRY_BLOCK); }
@@ -995,7 +1000,7 @@ int sched_component_take(spdid_t spdid)
 	struct sched_thd *holder, *curr;
 	int first = 1;
 
-	/* printc("sched take %d\n", spdid); */
+	printc("sched take %d\n", spdid);
 
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
@@ -1015,7 +1020,6 @@ int sched_component_take(spdid_t spdid)
 		/* FIXME: proper handling of recursive locking */
 		assert(curr != holder);
 		report_event(COMP_TAKE_CONTENTION);
-		printc("A\n");
 		sched_switch_thread_target(0, NULL_EVT, holder);
 		cos_sched_lock_take();
 		if (first) {
@@ -1046,6 +1050,7 @@ int sched_component_release(spdid_t spdid)
 		printc("fprr: error releasing spd %d's critical section (contended %d)\n", 
 		       spdid, curr->contended_component);
 	}
+	printc("sched_component_release calls sst\n");
 	sched_switch_thread(0, NULL_EVT);
 	assert(!sched_thd_dependent(curr));
 
@@ -1072,6 +1077,7 @@ static int fp_kill_thd(struct sched_thd *t)
 	REM_LIST(t, next, prev);
 	ADD_LIST(&graveyard, t, prio_next, prio_prev);
 
+	printc("fp_kill_thd calls sst\n");
 	sched_switch_thread(0, NULL_EVT);
 
 	/* reincarnated!!! */
@@ -1109,7 +1115,7 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 	int exist = 0;
 
 	if (likely(!desired_thd)) { /* normal path */
-		printc("normal path (spd %d desired_thd %d)\n", d, desired_thd);
+		/* printc("normal path (spd %d desired_thd %d)\n", d, desired_thd); */
 		ret_id = cos_create_thread(fn, d, 0);
 		assert(0 != ret_id);
 	} else {
@@ -1191,11 +1197,11 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
 
-	if (ttt++>=1) {
-		printc("\nBefore ASSERT!!!");
-		assert(0);
-		printc("\nAfter ASSERT!!!");
-	}
+	/* if (ttt++>=1) { */
+	/* 	printc("\nBefore ASSERT!!!"); */
+	/* 	assert(0); */
+	/* 	printc("\nAfter ASSERT!!!"); */
+	/* } */
 
 	sp[0] = ((union sched_param)sched_param0).c;
 	sp[1] = ((union sched_param)sched_param1).c;
@@ -1253,6 +1259,7 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	
 	cos_sched_lock_take();
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, desired_thd, 1);
+	printc("sched_create_thread_default calls sst\n");
 	sched_switch_thread(0, NULL_EVT);
 	if (!new) return -1;
 	printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n",
@@ -1300,6 +1307,7 @@ static void deactivate_child_sched(struct sched_thd *t)
 		fp_block(t, 0);
 		while (0 == t->wake_cnt) {
 			assert(sched_thd_blocked(t));
+			printc("deactivate_child_sched calls sst\n");
 			sched_switch_thread(0, PARENT_CHILD_DEACTIVATE);
 			cos_sched_lock_take();
 		}
@@ -1552,6 +1560,7 @@ static void sched_child_evt_thd(void)
 		
 		report_event(CHILD_SWITCH_THD);
 		/* When there are no more events, schedule */
+		printc("sched_child_evt_thd calls sst\n");
 		sched_switch_thread(0, NULL_EVT);
 		assert(EMPTY_LIST(timer, prio_next, prio_prev));
 	} /* no return */

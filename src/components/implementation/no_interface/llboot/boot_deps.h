@@ -215,6 +215,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
 
+		printc("Try to recover the spd\n");
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
 		else recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 		/* after the recovery thread is done, it should switch back to us. */
@@ -244,10 +245,9 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	unsigned long r_ip;
 
 	int tid = cos_get_thd_id();
-
-	second = second + 1;
-	if(second == 10) BUG();
-	printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
+	printc("<< LL notif >> : thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
+	while(1);
+	if(second++ == 1) assert(0); /* this will result in endless triggering */
 
 	if (cos_get_thd_id() == 3) assert(0);
 
@@ -370,7 +370,7 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 #include <sched_hier.h>
 
 void cos_init(void);
-int  sched_init(int reboot)   { cos_init(); return 0; }
+int  sched_init(int reboot)   { printc("llboot sched_init\n"); cos_init(); return 0; }
 int  sched_isroot(void) { return 1; }
 void 
 sched_exit(void)

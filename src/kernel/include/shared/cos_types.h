@@ -489,6 +489,15 @@ enum {
 	COS_CAP_FAULT_UPDATE
 };
 
+/* fault notification types */
+enum {
+	COS_FAULT_TYPE_INV,
+	COS_FAULT_TYPE_RET,
+	COS_FAULT_TYPE_CSW,
+	COS_FAULT_TYPE_INT
+};
+
+
 enum {
 	COS_MMAP_GRANT,
 	COS_MMAP_REVOKE,

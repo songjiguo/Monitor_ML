@@ -19,7 +19,7 @@
 
 #ifdef SCHEDULER_TEST
 #include <res_spec.h>
-
+#include <pgfault.h>
 #include <pong.h>
 
 int high, low;
@@ -27,7 +27,7 @@ static int num = 0;
 
 void cos_init(void *arg)
 {
-	printc("thd %d running \n", cos_get_thd_id());
+	printc("Testing: thd %d running \n", cos_get_thd_id());
 
 	static int first = 0;
 	union sched_param sp;

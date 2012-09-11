@@ -356,7 +356,7 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 
 	assert(t);
 	while (ps->type != SCHEDP_NOOP) {
-		printc("type is %d\n", ps->type);
+		/* printc("type is %d\n", ps->type); */
 		switch (ps->type) {
 		case SCHEDP_RPRIO:
 		case SCHEDP_RLPRIO:
@@ -417,7 +417,7 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 	fp_add_thd(t, prio);
 
 	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
-		printc("start recording...\n");
+		/* printc("start recording...\n"); */
 		if (cos_sched_cntl(COS_SCHED_RECORD_THD, t->id, 0)) BUG();
 		if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
 		if (cos_sched_cntl(COS_SCHED_RECORD_VALUE, t->id, (int)t_ps->type)) BUG();

@@ -738,7 +738,7 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
 
 #include <sched_hier.h>
 
-int  sched_init(int reboot)   { return 0; }
+int  sched_init(int reboot)   { printc("mem sched_init\n");return 0; }
 extern void parent_sched_exit(void);
 void
 sched_exit(void)
