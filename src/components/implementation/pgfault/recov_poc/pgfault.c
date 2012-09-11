@@ -74,7 +74,14 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 	printc("para: spdid %d\n", spdid);
 	printc("<< thd %d in Fault FLT Notif >> \n", cos_get_thd_id());
 	printc("....kevin.....andy.....\n");
-	/* assert(0); */
+
+	unsigned long r_ip; 	/* the ip to return to */
+
+	/* assert(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)); */
+	/* assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0)); */
+	/* assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-4)); */
+
+	assert(0);
 	if (test++ == 1) assert(0);
 
 	return 0;

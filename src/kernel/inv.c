@@ -145,6 +145,8 @@ static void __fault_notif(struct thread *thd, int fault_type)
 	assert(old);
 	spd_mpd_ipc_release(old);
 
+	printk("spd_mpd_release old!!\n");
+
 	thd->regs.ax = thd->thread_id;
 	thd->regs.bx = spd_get_index(flt_notif_cap_entry->owner);
 	thd->regs.cx = thd->regs.bx;
@@ -154,21 +156,11 @@ static void __fault_notif(struct thread *thd, int fault_type)
 	thd->regs.bp = thd->regs.ip;
 
 	thd_invocation_push(thd, notif_spd, thd->regs.sp, thd->regs.ip);
-
-	/* inv_frame_fault_cnt_update(thd, thd_frame->spd); */
-	/* struct thd_invocation_frame *test_frame; */
-	/* test_frame = thd_invstk_top(thd); */
-	/* printk("spd %d 's fault count updates, flt_cnt %d ", spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt); */
-	/* printk("inv_frame's spd %d flt_cnt %d\n", spd_get_index(test_frame->spd), test_frame->fault.cnt); */
+	inv_frame_fault_cnt_update(thd, thd_frame->spd);
 
 	thd->regs.ip = thd->regs.dx = flt_notif_cap_entry->dest_entry_instruction;	
 
-	/* this is running a thread from that spd, so stack_base[0] */
-	/* thd->regs.sp = 0; */
-	/* thd->stack_ptr = 0; */
-	/* thd->stack_base[0].current_composite_spd = notif_spd->composite_spd; */
-	/* thd->stack_base[0].spd = notif_spd; */
-
+	printk("spd_mpd_ipc_take new!!\n");
 	spd_mpd_ipc_take((struct composite_spd *)notif_spd->composite_spd);
 	struct composite_spd *new = notif_spd->composite_spd;
 	open_close_spd(&new->spd_info, &old->spd_info);
@@ -375,6 +367,8 @@ again:
 #endif
 	}
 
+
+	/* printk("no fault on POP\n"); */
 	/* for now just assume we always close the server spd */
 	open_close_spd_ret(curr_frame->current_composite_spd);
 
@@ -396,7 +390,7 @@ again:
 		return NULL;
 	}
 
-	/* printk("%d: ->%d\n", thd_get_id(curr), spd_get_index(curr_frame->spd)); */
+	printk("%d: ->%d\n", thd_get_id(curr), spd_get_index(curr_frame->spd));
 
 	return inv_frame;	
 }
@@ -528,13 +522,6 @@ thd_switch_fault_notif(struct thread *thd)
 static inline void switch_thread_context(struct thread *curr, struct thread *next)
 {
 	struct spd_poly *nspd, *cspd;
-	int fault_ret;
-
-        /* detect fault when switch thread */
-	if(unlikely(fault_ret = switch_thd_fault_detect(next))){
-		printk("Fault is detected on CONTEXT SWITCH\n");
-		thd_switch_fault_notif(next);
-	}
 	
 	cspd = thd_get_thd_spdpoly(curr);
 	__switch_thread_context(curr, next, cspd);
@@ -1186,6 +1173,15 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	printk("<<<<<");
 	printk("cos_switch: curr %d in spd %d -> thread %d", thd_get_id(curr), spd_get_index(curr_spd), thd_get_id(thd));
 	printk(">>>>>\n");
+
+
+	int fault_ret;
+        /* detect fault when switch thread */
+	if(unlikely(fault_ret = switch_thd_fault_detect(thd))){
+		printk("Fault is detected on CONTEXT SWITCH\n");
+		thd_switch_fault_notif(curr);
+		return &curr->regs;
+	}
 
 	/* If a thread is involved in a scheduling decision, we should
 	 * assume that any preemption chains that existed aren't valid
