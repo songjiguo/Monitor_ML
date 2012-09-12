@@ -29,7 +29,7 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	/* if (regs_active) BUG(); */
 	/* regs_active = 1; */
 	/* cos_regs_save(tid, spdid, fault_addr, &regs); */
-	printc("PGFAULT: thd %d faults in spd %d @ %p\n",
+	printc("\nPGFAULT: thd %d faults in spd %d @ %p\n",
 	       tid, spdid, fault_addr);
 	/* cos_regs_print(&regs); */
 	/* regs_active = 0; */
@@ -77,11 +77,11 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 
 	unsigned long r_ip; 	/* the ip to return to */
 
-	/* assert(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)); */
-	/* assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0)); */
-	/* assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-4)); */
+	assert(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0));
+	assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
+	assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 
-	assert(0);
+	/* assert(0); */
 	if (test++ == 1) assert(0);
 
 	return 0;

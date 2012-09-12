@@ -246,7 +246,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	int tid = cos_get_thd_id();
 	printc("<< LL notif >> : thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
-	while(1);
+	/* while(1); */
 	if(second++ == 1) assert(0); /* this will result in endless triggering */
 
 	if (cos_get_thd_id() == 3) assert(0);

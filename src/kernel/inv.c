@@ -116,75 +116,6 @@ struct inv_ret_struct {
 	int spd_id;
 };
 
-
-/* fault notification for pop, context switch */
-static void __fault_notif(struct thread *thd, int fault_type)
-{
-	print_regs(&thd->regs);
-	
-	struct thread* curr;
-	curr = thd_get_current();
-	printk("current thread is %d\n", thd_get_id(curr));
-	
-	struct thd_invocation_frame *thd_frame;
-	thd_frame = thd_invstk_top(thd);
-	printk("passed thread is %d\n", thd_get_id(thd));
-
-	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
-	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
-	struct spd *notif_spd = flt_notif_cap_entry->destination;
-
-	if (fltnotif_cap - thd_frame->spd->cap_base > COS_FLT_MAX) {
-		flt_notif_cap_entry->dest_entry_instruction = 0;
-		/* set next ip and sp to be 0 */
-		/* return ip */
-		printk("handler is not defined !!!\n");
-	}
-
-	struct composite_spd *old = (struct composite_spd *)thd_get_thd_spdpoly(thd);
-	assert(old);
-	spd_mpd_ipc_release(old);
-
-	printk("spd_mpd_release old!!\n");
-
-	thd->regs.ax = thd->thread_id;
-	thd->regs.bx = spd_get_index(flt_notif_cap_entry->owner);
-	thd->regs.cx = thd->regs.bx;
-
-	thd->regs.si = 0;
-	thd->regs.di = 0;
-	thd->regs.bp = thd->regs.ip;
-
-	thd_invocation_push(thd, notif_spd, thd->regs.sp, thd->regs.ip);
-	inv_frame_fault_cnt_update(thd, thd_frame->spd);
-
-	thd->regs.ip = thd->regs.dx = flt_notif_cap_entry->dest_entry_instruction;	
-
-	printk("spd_mpd_ipc_take new!!\n");
-	spd_mpd_ipc_take((struct composite_spd *)notif_spd->composite_spd);
-	struct composite_spd *new = notif_spd->composite_spd;
-	open_close_spd(&new->spd_info, &old->spd_info);
-
-	switch(fault_type){
-	case COS_FAULT_TYPE_INV:
-		printk("INVOCATION fault notification\n");
-		break;
-	case COS_FAULT_TYPE_RET:
-		printk("POP fault notification\n");
-		break;
-	case COS_FAULT_TYPE_CSW:
-		printk("CONTEXT SWITCH fault notification update\n");
-		break;
-	case COS_FAULT_TYPE_INT:
-		printk("INTERRUPT fault notification\n");
-		break;
-	default:
-		break;
-	}
-
-	return;
-}
-
 /* 
  * FIXME: 1) should probably return the static capability to allow
  * isolation level isolation access from caller, 2) all return 0
@@ -313,11 +244,101 @@ static struct pt_regs *thd_ret_term_upcall(struct thread *t);
 static struct pt_regs *thd_ret_upcall_type(struct thread *t, upcall_type_t type);
 
 /* "invoke" fault notif spd */
-static struct pt_regs *
-thd_ret_fault_notif(struct thread *curr)
+static void
+thd_switch_fault_notif(struct thread *curr, struct thread *next)
 {
-	__fault_notif(curr, COS_FAULT_TYPE_RET);
-	return &curr->regs;
+	print_regs(&curr->regs);
+	printk("current thread is %d\n", thd_get_id(curr));
+	print_regs(&next->regs);
+	printk("next thread is %d\n", thd_get_id(next));
+	
+	struct thd_invocation_frame *thd_frame;
+	thd_frame = thd_invstk_top(next);
+	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
+	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
+	struct spd *notif_spd = flt_notif_cap_entry->destination;
+
+	if (fltnotif_cap - thd_frame->spd->cap_base > COS_FLT_MAX) {
+		flt_notif_cap_entry->dest_entry_instruction = 0;
+		/* set next ip and sp to be 0 */
+		/* return ip */
+		printk("handler is not defined !!!\n");
+	}
+
+	struct composite_spd *old = (struct composite_spd *)thd_get_thd_spdpoly(curr);
+	assert(old);
+	spd_mpd_ipc_release(old);
+
+	printk("spd_mpd_release old!!\n");
+
+	curr->regs.ax = curr->thread_id;
+	curr->regs.bx = spd_get_index(thd_frame->spd);
+	curr->regs.cx = curr->regs.bx;
+
+	curr->regs.si = 0;
+	curr->regs.di = 0;
+	curr->regs.bp = curr->regs.ip;
+
+	thd_invocation_push(curr, notif_spd, curr->regs.sp, curr->regs.ip);
+	inv_frame_fault_cnt_update(next, thd_frame->spd);
+
+	curr->regs.ip = curr->regs.dx = flt_notif_cap_entry->dest_entry_instruction;	
+
+	printk("spd_mpd_ipc_take new!!\n");
+	spd_mpd_ipc_take((struct composite_spd *)notif_spd->composite_spd);
+	struct composite_spd *new = notif_spd->composite_spd;
+	open_close_spd(&new->spd_info, &old->spd_info);
+
+	return;
+}
+
+static struct pt_regs *
+thd_ret_fault_notif(struct thread *thd)
+{
+	print_regs(&thd->regs);
+	
+	printk("5B5Bcurrent thread is %d\n", thd_get_id(thd));
+	
+	struct thd_invocation_frame *thd_frame;
+	thd_frame = thd_invstk_top(thd);
+	printk("passed thread is %d\n", thd_get_id(thd));
+
+	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
+	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
+	struct spd *notif_spd = flt_notif_cap_entry->destination;
+
+	if (fltnotif_cap - thd_frame->spd->cap_base > COS_FLT_MAX) {
+		flt_notif_cap_entry->dest_entry_instruction = 0;
+		/* set next ip and sp to be 0 */
+		/* return ip */
+		printk("handler is not defined !!!\n");
+	}
+
+	struct composite_spd *old = (struct composite_spd *)thd_get_thd_spdpoly(thd);
+	assert(old);
+	spd_mpd_ipc_release(old);
+
+	printk("spd_mpd_release old!!\n");
+
+	thd->regs.ax = thd->thread_id;
+	thd->regs.bx = spd_get_index(thd_frame->spd);
+	thd->regs.cx = thd->regs.bx;
+
+	thd->regs.si = 0;
+	thd->regs.di = 0;
+	thd->regs.bp = thd->regs.ip;
+
+	thd_invocation_push(thd, notif_spd, thd->regs.sp, thd->regs.ip);
+	/* inv_frame_fault_cnt_update(thd, thd_frame->spd); */
+
+	thd->regs.ip = thd->regs.dx = flt_notif_cap_entry->dest_entry_instruction;	
+
+	printk("spd_mpd_ipc_take new!!\n");
+	spd_mpd_ipc_take((struct composite_spd *)notif_spd->composite_spd);
+	struct composite_spd *new = notif_spd->composite_spd;
+	open_close_spd(&new->spd_info, &old->spd_info);
+
+	return &thd->regs;
 }
 /*
  * Return from an invocation by popping off of the invocation stack an
@@ -355,8 +376,11 @@ again:
 		printk("curr thd %d \n", thd_get_id(curr));
 		printk("curr spd %d \n", spd_get_index(curr_frame->spd));
 		printk("inv spd %d \n", spd_get_index(inv_frame->spd));
+		printk("inv_frame fault cnt %d\n", inv_frame->fault.cnt);
+		printk("curr frame spd fault cnt %d\n", curr_frame->spd->fault.cnt);
+
 #ifdef NOTIF_TEST
-		/* fill *regs_restore */
+		/* KEVIN fill *regs_restore */
 		*regs_restore = thd_ret_fault_notif(curr);
 		return NULL;
 #else
@@ -390,7 +414,7 @@ again:
 		return NULL;
 	}
 
-	printk("%d: ->%d\n", thd_get_id(curr), spd_get_index(curr_frame->spd));
+	/* printk("%d: ->%d\n", thd_get_id(curr), spd_get_index(curr_frame->spd)); */
 
 	return inv_frame;	
 }
@@ -509,13 +533,6 @@ static inline void __switch_thread_context(struct thread *curr, struct thread *n
 	ud->current_thread = ntid;
 	ud->argument_region = (void*)((ntid * PAGE_SIZE) + COS_INFO_REGION_ADDR);
 
-	return;
-}
-
-static void
-thd_switch_fault_notif(struct thread *thd)
-{
-	__fault_notif(thd,COS_FAULT_TYPE_CSW);
 	return;
 }
 
@@ -1176,10 +1193,10 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 
 
 	int fault_ret;
-        /* detect fault when switch thread */
+        /* ANDY detect fault when switch thread */
 	if(unlikely(fault_ret = switch_thd_fault_detect(thd))){
 		printk("Fault is detected on CONTEXT SWITCH\n");
-		thd_switch_fault_notif(curr);
+		thd_switch_fault_notif(curr, thd);
 		return &curr->regs;
 	}
 
