@@ -275,7 +275,7 @@ thd_switch_fault_notif(struct thread *curr, struct thread *next)
 	curr->regs.bx = spd_get_index(thd_frame->spd);
 	curr->regs.cx = curr->regs.bx;
 
-	curr->regs.si = 0;
+	curr->regs.si = thd_get_id(next);
 	curr->regs.di = 0;
 	curr->regs.bp = curr->regs.ip;
 
@@ -289,6 +289,8 @@ thd_switch_fault_notif(struct thread *curr, struct thread *next)
 	struct composite_spd *new = notif_spd->composite_spd;
 	open_close_spd(&new->spd_info, &old->spd_info);
 
+	next->regs.ip = next->regs.ip-8; /* can we switch thread back to a failed spd? Or just replay? */
+
 	return;
 }
 
@@ -297,7 +299,7 @@ thd_ret_fault_notif(struct thread *thd)
 {
 	print_regs(&thd->regs);
 	
-	printk("5B5Bcurrent thread is %d\n", thd_get_id(thd));
+	printk("current thread is %d\n", thd_get_id(thd));
 	
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
@@ -324,12 +326,12 @@ thd_ret_fault_notif(struct thread *thd)
 	thd->regs.bx = spd_get_index(thd_frame->spd);
 	thd->regs.cx = thd->regs.bx;
 
-	thd->regs.si = 0;
+	thd->regs.si = thd_get_id(thd);
 	thd->regs.di = 0;
 	thd->regs.bp = thd->regs.ip;
 
 	thd_invocation_push(thd, notif_spd, thd->regs.sp, thd->regs.ip);
-	/* inv_frame_fault_cnt_update(thd, thd_frame->spd); */
+	inv_frame_fault_cnt_update(thd, thd_frame->spd);
 
 	thd->regs.ip = thd->regs.dx = flt_notif_cap_entry->dest_entry_instruction;	
 
