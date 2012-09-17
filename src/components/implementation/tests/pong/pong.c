@@ -34,12 +34,14 @@ unsigned long long counter = 0;
 int pong(void)
 {
 	if(cos_get_thd_id() == 12) {
+		printc("I am thread 12 in pong\n");
 		while(1) {
 			counter++;
 			if (counter%5000000 == 0) printc("thd %d counter %llu\n", cos_get_thd_id(), counter);
 		}
 	}
 	if (cos_get_thd_id() == 11) {
+		printc("I am thread 11 in pong\n");
 		if (number++ == 3) assert(0);
 	}
 
@@ -47,7 +49,18 @@ int pong(void)
 }
 #endif
 #ifdef TEST_INTERRUPT_RECOVERY
-/* ... */
+unsigned long long counter = 0;
+int pong(void)
+{
+	printc("I am in pong\n");
+	while(1) {
+		counter++;
+		if (counter%500000 == 0) {
+			break;
+		}
+	}
+	return 0;
+}
 #endif
 
 #ifdef SIMPLE_PPONG

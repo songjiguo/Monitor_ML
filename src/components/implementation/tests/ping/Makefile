@@ -2,7 +2,7 @@ C_OBJS=ping.o
 ASM_OBJS=
 COMPONENT=pi.o
 INTERFACES=
-DEPENDENCIES=sched printc lock mem_mgr pong lock timed_blk pgfault
+DEPENDENCIES=sched printc lock mem_mgr pong lock timed_blk pgfault ping2
 IF_LIB=
 
 include ../../Makefile.subsubdir

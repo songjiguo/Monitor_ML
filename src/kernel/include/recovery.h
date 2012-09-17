@@ -10,6 +10,7 @@
 #include "spd.h"
 #include "thread.h"
 
+
 /*---------Threads that created by scheduler--------*/
 static struct thread*
 find_thd(struct spd *spd, struct thread *thd)
@@ -94,8 +95,22 @@ inv_frame_fault_cnt_update(struct thread *thd, struct spd *spd)
 	struct thd_invocation_frame *inv_frame;
 	inv_frame = thd_invstk_top(thd);
 	inv_frame->fault.cnt = spd->fault.cnt;
-	/* printk("spd %d 's fault count updates ", spd_get_index(spd)); */
-	/* printk("inv_frame's spd %d\n", spd_get_index(inv_frame->spd)); */
+	/* if (thd_get_id(thd) == 12){ */
+	/* 	printk("spd %d 's fault count (%d) updates\n ", spd_get_index(spd),spd->fault.cnt ); */
+	/* 	printk("thd %d top_frame's fault cnt (%d)\n", thd_get_id(thd), inv_frame->fault.cnt); */
+	/* } */
+	return 0;
+}
+
+
+static inline int
+interrupt_fault_update(struct thread *curr, struct spd *curr_spd)
+{
+	/* update when wait for an interrupt, this might be from a home spd */
+	struct thd_invocation_frame *curr_frame;
+	curr_frame = thd_invstk_top(curr);
+	curr_frame->fault.cnt = curr_spd->fault.cnt;
+	
 	return 0;
 }
 
@@ -114,17 +129,17 @@ pop_fault_detect(struct thd_invocation_frame *inv_frame, struct thd_invocation_f
 }
 
 static inline int
-switch_thd_fault_detect(struct thread *next)
+check_frame_fltcnt(struct thread *thd)
 {
 	struct spd *n_spd;
 	struct thd_invocation_frame *tif;
 
-	tif    = thd_invstk_top(next);
+	tif    = thd_invstk_top(thd);
 	n_spd  = tif->spd;
 	
 	if (tif->fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
+		printk("thread %d fault cnt %d\n", thd_get_id(thd), tif->fault.cnt);
 		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
 		return 1;
 	}
@@ -132,20 +147,15 @@ switch_thd_fault_detect(struct thread *next)
 }
 
 static inline int
-interrupt_fault_update(struct thread *curr, struct spd *curr_spd)
+switch_thd_fault_detect(struct thread *next)
 {
-	/* update when wait for an interrupt, this might be from a home spd */
-	struct thd_invocation_frame *curr_frame;
-	curr_frame = thd_invstk_top(curr);
-	curr_frame->fault.cnt = curr_spd->fault.cnt;
-	
-	return 0;
+	return check_frame_fltcnt(next);
 }
 
 static inline int
-interrupt_fault_detect(struct thread *next)
+interrupt_fault_detect(struct thread *next) /* for now, this is the timer thread */
 {
-	return 0;
+	return check_frame_fltcnt(next);
 }
 
 extern struct invocation_cap invocation_capabilities[MAX_STATIC_CAP];

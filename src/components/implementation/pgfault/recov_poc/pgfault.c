@@ -67,24 +67,23 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 
 static  int test = 0;
 #ifdef NOTIF_TEST
-int fault_flt_notif_handler(spdid_t spdid, int thdid, int type, void *ip)
+int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 {
 	/* unsigned long r_ip; */
 	int tid = cos_get_thd_id();
 	printc("para: spdid %d\n", spdid);
-	printc("para: thread %d\n", thdid);
 	printc("<< thd %d in Fault FLT Notif >> \n", cos_get_thd_id());
 	printc("....kevin.....andy.....\n");
 
 	unsigned long r_ip; 	/* the ip to return to */
 
-	/* assert(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)); */
-	/* assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0)); */
-	/* assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8)); */
+	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
+		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
+		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
+		return 0;
+	}
 
 	assert(0);
-	if (test++ == 1) assert(0);
-
 	return 0;
 }
 #endif

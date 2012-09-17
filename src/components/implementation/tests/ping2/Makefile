@@ -1,8 +1,12 @@
 C_OBJS=ping2.o
 ASM_OBJS=
 COMPONENT=pi2.o
-INTERFACES=
-DEPENDENCIES=sched printc lock mem_mgr pong lock
+INTERFACES=ping2
+DEPENDENCIES=sched printc lock mem_mgr pong
 IF_LIB=
 
 include ../../Makefile.subsubdir
+ifeq (${ENABLE_STACK_MANAGER},1)
+# $(info Using Simple Stack)
+ MANDITORY_LIB=simple_stklib.o
+endif

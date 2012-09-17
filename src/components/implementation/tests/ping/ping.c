@@ -5,6 +5,7 @@
 #include <sched.h>
 #include <timed_blk.h>
 #include <pong.h>
+#include <ping2.h>
 #include <pgfault.h>
 
 #include <pingpong_test.h>
@@ -21,7 +22,9 @@ ping_pong_test()
 {
 	printc("<<< thd %d TEST_INVOCATION_RECOVERY BEGIN! >>>\n", cos_get_thd_id());
 	int i = 0;
-	while(i++ <= NUM) pong();
+	
+	if (cos_get_thd_id() == 12) ping2();	
+	while(i++ <= 3) pong();
 	
 	return;
 }
@@ -55,13 +58,14 @@ ping_pong_test()
 }
 #endif
 #ifdef TEST_INTERRUPT_RECOVERY
-/* ... */
 static void
 ping_pong_test()
 {
 	printc("<<< thd %d TEST_INTERRUPT_RECOVERY BEGIN! >>>\n", cos_get_thd_id());
 	int i = 0;
-	while(i++ <= NUM) pong();
+	if (cos_get_thd_id() == 11) {
+		while(1) pong();
+	}
 	return;
 }
 #endif

@@ -546,7 +546,9 @@ static void sched_process_wakeups(void)
 
 static void sched_timer_tick(void)
 {
+	printc("user: sched_timer_ticker\n");
 	while (1) {
+		printc("thread %d in while(1)\n", cos_get_thd_id());
 		cos_sched_lock_take();
 
 		report_event(TIMER_TICK);
@@ -572,7 +574,7 @@ static void sched_timer_tick(void)
 		
 		ticks++;
 		sched_process_wakeups();
-
+		
 		timer_tick(1);
 		printc("sched_timer_tick calls sst\n");
 		sched_switch_thread(COS_SCHED_BRAND_WAIT, TIMER_SWITCH_LOOP);
@@ -1197,11 +1199,11 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
 
-	/* if (ttt++>=1) { */
-	/* 	printc("\nBefore ASSERT!!!"); */
-	/* 	assert(0); */
-	/* 	printc("\nAfter ASSERT!!!"); */
-	/* } */
+	if (ttt++>=1) {
+		printc("\n<<<Before ASSERT!!!>>>\n");
+		assert(0);
+		printc("\n<<<After ASSERT!!!>>>\n");
+	}
 
 	sp[0] = ((union sched_param)sched_param0).c;
 	sp[1] = ((union sched_param)sched_param1).c;

@@ -41,6 +41,7 @@
 #include "../../../kernel/include/thread.h"
 #include "../../../kernel/include/measurement.h"
 #include "../../../kernel/include/mmap.h"
+#include "../../../kernel/include/recovery.h"
 
 #include "./hw_ints.h"
 
@@ -949,6 +950,7 @@ extern int fault_update_mpd_pgtbl(struct thread *thd, struct pt_regs *regs, vadd
 extern void
 fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_regs *regs, int fault_num);
 
+
 /* the composite specific page fault handler */
 static int 
 cos_handle_page_fault(struct thread *thd, vaddr_t fault_addr, 
@@ -960,6 +962,19 @@ cos_handle_page_fault(struct thread *thd, vaddr_t fault_addr,
 	return 0;
 }
 
+extern void
+fault_int_notif(struct thread *thd, struct spd *spd, unsigned int cap_num, struct pt_regs *regs, int fault_num);
+
+/* the composite specific page fault handler */
+static int 
+cos_fault_int_notif(struct thread *thd, struct spd *spd,
+		    unsigned int cap_num, struct pt_regs *regs)
+{
+	/* cos_record_fault_regs(thd, fault_addr, ecode, regs); */
+	fault_int_notif(thd, spd, cap_num, regs, COS_FLT_FLT_NOTIF);
+		
+	return 0;
+}
 
 //#define FAULT_DEBUG
 /*
@@ -1616,6 +1631,35 @@ static void host_idle_wakeup(void)
 	}
 }
 
+static void
+thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
+{
+	printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n");
+
+	struct thd_invocation_frame *thd_frame;
+	thd_frame = thd_invstk_top(thd);
+
+	printk("thread is %d\n", thd_get_id(thd));
+	printk("fault count is %d\n", thd_frame->fault.cnt);
+	printk("spd %d fault count is %d\n",
+	       spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt);
+	printk("attached spd is %d\n", spd_get_index(thd_frame->spd));
+
+	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
+	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
+	struct spd *notif_spd = flt_notif_cap_entry->destination;
+	printk("notif spd is %d\n", spd_get_index(notif_spd));
+	if (fltnotif_cap - thd_frame->spd->cap_base > COS_FLT_MAX) {
+		flt_notif_cap_entry->dest_entry_instruction = 0;
+		/* set thd ip and sp to be 0 */
+		/* return ip */
+		printk("handler is not defined !!!\n");
+	}
+	cos_fault_int_notif(thd, notif_spd, fltnotif_cap, regs);
+
+	return;
+}
+
 int host_can_switch_pgtbls(void) { return current == composite_thread; }
 
 int host_attempt_brand(struct thread *brand)
@@ -1637,7 +1681,7 @@ int host_attempt_brand(struct thread *brand)
 		/* See comment in cosnet.c:cosnet_xmit_packet */
 		if (host_in_syscall() || host_in_idle()) {
 			struct thread *next;
-
+			printk("\na.....!....host_in_syscall()? %d.....!.......a\n", host_in_syscall());
 			//next = brand_next_thread(brand, cos_current, 2);
 			/* 
 			 * _FIXME_: Here we are kludging a problem over.
@@ -1722,8 +1766,8 @@ int host_attempt_brand(struct thread *brand)
 		 */
 		if (likely(!(regs->sp == 0 && regs->ss == 0))
                     /* && (regs->xcs & SEGMENT_RPL_MASK) == USER_RPL*/) {
+			printk("hijack: b.....!.........!.......b\n");
 			struct thread *next;
- 			
 			if ((regs->cs & SEGMENT_RPL_MASK) == USER_RPL) {
 				cos_meas_event(COS_MEAS_INT_PREEMPT_USER);
 			} else {
@@ -1732,6 +1776,8 @@ int host_attempt_brand(struct thread *brand)
 
 			/* the major work here: */
 			next = brand_next_thread(brand, cos_current, 1);
+			printk("\nhijack: current thd(%d)\n", thd_get_id(cos_current));
+			printk("hijack: next thd(%d)\n", thd_get_id(next));
 			if (next != cos_current) {
 				thd_save_preempted_state(cos_current, regs);
 				if (!(next->flags & THD_STATE_ACTIVE_UPCALL)) {
@@ -1739,18 +1785,25 @@ int host_attempt_brand(struct thread *brand)
 					       thd_get_id(next));
 					///*assert*/BUG_ON(!(next->flags & THD_STATE_ACTIVE_UPCALL));
 				}
-				thd_check_atomic_preempt(cos_current);
-				regs->bx = next->regs.bx;
-				regs->di = next->regs.di;
-				regs->si = next->regs.si;
-				regs->cx = next->regs.cx;
-				regs->ip = next->regs.ip;
-				regs->dx = next->regs.dx;
-				regs->ax = next->regs.ax;
-				regs->orig_ax = next->regs.ax;
-				regs->sp = next->regs.sp;
-				regs->bp = next->regs.bp;
-				//cos_meas_event(COS_MEAS_BRAND_UC);
+				if (unlikely(interrupt_fault_detect(next))) {
+				/* if (thd_get_id(cos_current) == 8) {  // test 8 for spin, 11 for pong */
+					/* Peter: update the register to the fault_notif */
+					thd_interrupt_fault_notif(next, regs);
+				} else {
+
+					thd_check_atomic_preempt(cos_current);
+					regs->bx = next->regs.bx;
+					regs->di = next->regs.di;
+					regs->si = next->regs.si;
+					regs->cx = next->regs.cx;
+					regs->ip = next->regs.ip;
+					regs->dx = next->regs.dx;
+					regs->ax = next->regs.ax;
+					regs->orig_ax = next->regs.ax;
+					regs->sp = next->regs.sp;
+					regs->bp = next->regs.bp;
+					//cos_meas_event(COS_MEAS_BRAND_UC);
+				}
 			}
 			cos_meas_event(COS_MEAS_INT_PREEMPT);
 
@@ -1771,6 +1824,7 @@ static void timer_interrupt(unsigned long data)
 	BUG_ON(composite_thread == NULL);
 	mod_timer_pinned(&timer, jiffies+1);
 
+	/* printk("\nhijack: timer interrupt.....!!!!thread(%d)\n", thd_get_id(thd_get_current())); */
 	if (!(cos_timer_brand_thd && cos_timer_brand_thd->upcall_threads)) {
 		return;
 	}

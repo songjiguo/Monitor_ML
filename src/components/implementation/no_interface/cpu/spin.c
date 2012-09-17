@@ -27,7 +27,7 @@ static int num = 0;
 
 void cos_init(void *arg)
 {
-	printc("Testing: thd %d running \n", cos_get_thd_id());
+	printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id());
 
 	static int first = 0;
 	union sched_param sp;
@@ -69,10 +69,11 @@ int spin_var = 0, other;
 
 void cos_init(void *arg)
 {
-//	BUG();
-//	spin_var = *(int*)NULL;
-	printc("<<**Running!**>>\n");
-//	while (1) if (spin_var) other = 1;
+	printc("\n<<**Running!**>>\n");
+	while(1);
+
+	spin_var = *(int*)NULL;
+	while (1) if (spin_var) other = 1;
 	return;
 }
 

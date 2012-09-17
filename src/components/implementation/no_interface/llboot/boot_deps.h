@@ -238,28 +238,27 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 }
 
 #ifdef NOTIF_TEST
-static int second = 0;
 int
 fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
 	unsigned long r_ip;
 
 	int tid = cos_get_thd_id();
-	printc("<< LL notif >> : thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
+	printc("<< LL fault notification handler >> : thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
 	/* while(1); */
-	if(second++ == 1) assert(0); /* this will result in endless triggering */
-
 	if (cos_get_thd_id() == 3) assert(0);
 
-	failure_notif_fail(cos_spd_id(), spdid);
+	/* do something here? */
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
+		if (cos_get_thd_id() == 7) assert(0);
 		recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 		return 0;
 	}
+	if (cos_get_thd_id() == 7) assert(0); /* test only. For timer thread, the stack should be given back */
 	cos_upcall(spdid); 	/* FIXME: give back stack... */
 	BUG();
 
