@@ -346,7 +346,7 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_t ip, struct inv_ret_struct *ret)
 {
-	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n"); */
 
 	struct inv_ret_struct r;
 
@@ -362,7 +362,7 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_
 		printk("handler is not defined !!!\n");
 	}
 
-	printk("notif_spd %d dest_spd %d \n", spd_get_index(notif_spd), spd_get_index(dest_spd));
+	/* printk("notif_spd %d dest_spd %d \n", spd_get_index(notif_spd), spd_get_index(dest_spd)); */
 	vaddr_t addr;
 	addr = ipc_walk_static_cap(thd, fltnotif_cap<<20, thd->regs.sp, thd->regs.ip, &r);
 
@@ -383,23 +383,23 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_
 	/* thd_invocation_push(thd, notif_spd, sp, ip); */
 	/* /\* fault notif handler address *\/ */
 	/* thd->regs.dx = thd->regs.ip = flt_notif_cap_entry->dest_entry_instruction; */
-	printk("r.spd %d \n", r.spd_id);
+	/* printk("r.spd %d \n", r.spd_id); */
 	return addr;
 }
 
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
-	printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
 
-	print_regs(&thd->regs);	
-	printk("current thread is %d\n", thd_get_id(thd));
+	/* print_regs(&thd->regs);	 */
+	/* printk("current thread is %d\n", thd_get_id(thd)); */
 
 	struct inv_ret_struct r;
 	
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
-	printk("passed thread is %d\n", thd_get_id(thd));
+	/* printk("passed thread is %d\n", thd_get_id(thd)); */
 
 	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
 	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
@@ -452,11 +452,11 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n"); */
 
-	printk("current thread is %d\n", thd_get_id(thd_get_current()));
-	print_regs(&thd->regs);
-	printk("thd thread is %d\n", thd_get_id(thd));
+	/* printk("current thread is %d\n", thd_get_id(thd_get_current())); */
+	/* print_regs(&thd->regs); */
+	/* printk("thd thread is %d\n", thd_get_id(thd)); */
 
 	struct inv_ret_struct r;
 	
@@ -474,8 +474,8 @@ thd_switch_fault_notif(struct thread *thd)
 	}
 
 	/* inv_frame_fault_cnt_update(thd, thd_frame->spd); */
-	printk("thread %d fault cnt %d\n", thd_get_id(thd), thd_frame->fault.cnt);
-	printk("spd %d fault cnt %d\n", spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt);
+	/* printk("thread %d fault cnt %d\n", thd_get_id(thd), thd_frame->fault.cnt); */
+	/* printk("spd %d fault cnt %d\n", spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt); */
 
 	struct thd_invocation_frame *test_frame;
 	test_frame = thd_invstk_top(thd);
@@ -527,9 +527,9 @@ fault_int_notif(struct thread *thd, struct spd *notif_spd, unsigned int cap_num,
 	vaddr_t addr;
 	assert(fault_num < COS_FLT_MAX);
 
-	printk("stk_ptr %d\n", thd->stack_ptr);
+	/* printk("stk_ptr %d\n", thd->stack_ptr); */
 	addr = ipc_walk_static_cap(thd, cap_num<<20, regs->sp, regs->ip, &r);
-	printk("stk_ptr %d\n", thd->stack_ptr);
+	/* printk("stk_ptr %d\n", thd->stack_ptr); */
 	/* setup the registers for the interrupt fault notification */
 	regs->ax = r.thd_id;
 	regs->bx = regs->cx = r.spd_id;
