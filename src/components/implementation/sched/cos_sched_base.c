@@ -1140,7 +1140,7 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 	int exist = 0;
 
 	if (likely(!desired_thd)) { /* normal path */
-		printc("normal path (spd %d desired_thd %d)\n", d, desired_thd);
+		/* printc("normal path (spd %d desired_thd %d)\n", d, desired_thd); */
 		ret_id = cos_create_thread(fn, d, 0);
 		assert(0 != ret_id);
 	} else {
@@ -1151,7 +1151,7 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 			ret_id = cos_create_thread(fn, d, 0);
 			assert(0 != ret_id);
 		}
-		printc("(spd %d desired_thd %d) already existed\n", d, ret_id);
+		/* printc("(spd %d desired_thd %d) already existed\n", d, ret_id); */
 	}
 	return ret_id;
 }
@@ -1173,7 +1173,7 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 		REM_LIST(new, prio_next, prio_prev);
 		sched_init_thd(new, new->id, THD_READY);
 		new->spdid = (spdid_t)(unsigned int)d;
-		printc("use an already created thd %d\n", new->id);
+		/* printc("use an already created thd %d\n", new->id); */
 	} else {
 		tid = (sched_is_root())                                    ?
 			create_thread_fn((int)fn, (int)d, desired_thd) :
@@ -1186,7 +1186,7 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 
 	struct sched_param_s *test;
 	test = (struct sched_param_s *)metric_str;
-	printc("test value is %d\n", test->value);
+	/* printc("test value is %d\n", test->value); */
 	if (parm) thread_param_set(new,  (struct sched_param_s *)metric_str);
 	else      thread_params_set(new, (char *)metric_str); /* deprecated way to create the thread */
 	
@@ -1242,8 +1242,8 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, d, desired_thd, 1);
 	cos_sched_lock_release();
-	printc("sched %d: created thread %d in spdid %d (requested by %d)\n",
-	       (unsigned int)cos_spd_id(), new->id, spdid, curr->id);
+	/* printc("sched %d: created thread %d in spdid %d (requested by %d)\n", */
+	/*        (unsigned int)cos_spd_id(), new->id, spdid, curr->id); */
 
 	return new->id;
 }
