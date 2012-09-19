@@ -160,7 +160,7 @@ llboot_thd_done(void)
 int
 recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 {
-	printc("LL: llbooter upcall to spd %d, arg %x thd %d\n", dest, (unsigned int)arg, cos_get_thd_id());
+	/* printc("LL: llbooter upcall to spd %d, arg %x thd %d\n", dest, (unsigned int)arg, cos_get_thd_id()); */
 
 	prev_thd     = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread */
 	recover_spd  = dest;

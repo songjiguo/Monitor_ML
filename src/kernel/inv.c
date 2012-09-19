@@ -1305,7 +1305,7 @@ switch_thread_slowpath(struct thread *curr, unsigned short int flags, struct spd
 	struct thread *thd;
 	unsigned short int next_thd;
 
-	printk("COS: in switch_thread_slowpath\n");
+	/* printk("COS: in switch_thread_slowpath\n"); */
 	if (flags & (COS_SCHED_SYNC_BLOCK | COS_SCHED_SYNC_UNBLOCK)) {
 		next_thd = rthd_id;
 		/* FIXME: mask out all flags that can't apply here  */
@@ -1606,7 +1606,7 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 
 	break_preemption_chain(curr);
 
-	printk("COS: in brand_completion_switch_to\n");
+	/* printk("COS: in brand_completion_switch_to\n"); */
 	curr->flags &= ~THD_STATE_ACTIVE_UPCALL;
 	curr->flags |= THD_STATE_READY_UPCALL;
 	/* 
@@ -2526,7 +2526,7 @@ static int update_evt_list(struct thd_sched_info *tsi)
 	/* same intention as previous line, but this deprecates the
 	 * previous */
 	da->cos_evt_notif.pending_event = 1;
-	printk("evt notif has pending...\n");
+	/* printk("evt notif has pending...\n"); */
 			
 	evts = da->cos_events;
 	prev_evt = sched->prev_notification;
@@ -2633,11 +2633,11 @@ static void update_sched_evts(struct thread *new, int new_flags,
 	}
 	
 	if (new_flags != COS_SCHED_EVT_NIL) {
-		printk("update_sched_evts1: update_thd_evt_state()\n");
+		/* printk("update_sched_evts1: update_thd_evt_state()\n"); */
 		update_thd_evt_state(new, new_flags, 0);
 	}
 	if (elapsed || prev_flags != COS_SCHED_EVT_NIL) {
-		printk("update_sched_evts2: update_thd_evt_state()\n");
+		/* printk("update_sched_evts2: update_thd_evt_state()\n"); */
 		update_thd_evt_state(prev, prev_flags, elapsed);
 	}
 
@@ -2752,7 +2752,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	/* Assume here that we only have one upcall thread */
 	struct thread *upcall = brand->upcall_threads;
 
-	printk("COS: in brand_next_thread\n");
+	/* printk("COS: in brand_next_thread\n"); */
 	assert(brand->flags & (THD_STATE_BRAND|THD_STATE_HW_BRAND));
 	assert(upcall && upcall->thread_brand == brand);
 

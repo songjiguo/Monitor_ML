@@ -41,12 +41,12 @@ struct rec_data_sched {
 CSTUB_FN_ARGS_4(int, sched_create_thd, spdid_t, spdid, u32_t, sched_param0, u32_t, sched_param1, unsigned int, desired_thd)
 
 redo:
-       printc("thread %d calls << sched_create_thd >>\n", cos_get_thd_id());
+       /* printc("thread %d calls << sched_create_thd >>\n", cos_get_thd_id()); */
 
 CSTUB_ASM_4(sched_create_thd, spdid, sched_param0, sched_param1, desired_thd)
 
        if (unlikely (fault)){
-	       printc("failed!! now update the cap flt.cnt\n");
+	       /* printc("failed!! now update the cap flt.cnt\n"); */
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
 		       BUG();
@@ -62,7 +62,7 @@ CSTUB_POST
 CSTUB_FN_ARGS_4(int, sched_create_thread_default, spdid_t, spdid, u32_t, sched_param0, u32_t, sched_param1, unsigned int, desired_thd)
 
 redo:
-       printc("<< sched_create_thread_default cli thread required by %d>>\n", cos_get_thd_id());
+       /* printc("<< sched_create_thread_default cli thread required by %d>>\n", cos_get_thd_id()); */
 
 CSTUB_ASM_4(sched_create_thread_default, spdid, sched_param0, sched_param1, desired_thd)
 
@@ -77,7 +77,7 @@ CSTUB_POST
 CSTUB_FN_ARGS_2(int, sched_wakeup, spdid_t, spdid, unsigned short int, dep_thd)
 
 redo:
-	printc("thread %d calls << sched_wakeup >>\n",cos_get_thd_id());
+	/* printc("thread %d calls << sched_wakeup >>\n",cos_get_thd_id()); */
 
 CSTUB_ASM_2(sched_wakeup, spdid, dep_thd)
 
@@ -97,12 +97,12 @@ CSTUB_FN_ARGS_2(int, sched_block, spdid_t, spdid, unsigned short int, thd_id)
 
 redo:
 
-	printc("thread %d calls << sched_block >>\n",cos_get_thd_id());
+	/* printc("thread %d calls << sched_block >>\n",cos_get_thd_id()); */
 
 CSTUB_ASM_2(sched_block, spdid, thd_id)
 
        if (unlikely (fault)){
-	       printc("failed!! now update the cap flt.cnt, block\n");
+	       /* printc("failed!! now update the cap flt.cnt, block\n"); */
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
 		       BUG();
@@ -117,7 +117,7 @@ CSTUB_POST
 CSTUB_FN_ARGS_1(int, sched_component_take, spdid_t, spdid)
 
 redo:
-	printc("thread %d calls << sched_component_take >>\n",cos_get_thd_id());
+	/* printc("thread %d calls << sched_component_take >>\n",cos_get_thd_id()); */
 
 CSTUB_ASM_1(sched_component_take, spdid)
 
@@ -132,7 +132,7 @@ CSTUB_POST
 CSTUB_FN_ARGS_1(int, sched_component_release, spdid_t, spdid)
 
 redo:
-	printc("thread %d calls << sched_component_release >>\n",cos_get_thd_id());
+	/* printc("thread %d calls << sched_component_release >>\n",cos_get_thd_id()); */
 
 CSTUB_ASM_1(sched_component_release, spdid)
 

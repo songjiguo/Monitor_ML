@@ -1837,7 +1837,7 @@ int sched_root_init(int reboot)
 		}
 
 		if (cos_sched_pending_event()) {
-			printc("sched_init: clear_events(), for recovery thread\n");
+			/* printc("sched_init: clear_events(), for recovery thread\n"); */
 			cos_sched_clear_events();
 		}
 		/* printc("recover thread now returns back to ll\n"); */

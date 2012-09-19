@@ -414,7 +414,7 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 {
 
 	/* unsigned long long start, end; */
-	printc("failure notif fail\n");
+	/* printc("failure notif fail\n"); */
 	struct spd_local_md *md;
 
 	/* rdtscll(start); */
