@@ -71,7 +71,7 @@ static inline void fp_add_thd(struct sched_thd *t, unsigned short int prio)
 
 	sched_get_metric(t)->priority = prio;
 	sched_set_thd_urgency(t, prio);
-	printc("add onto runqueue!!!\n");
+	/* printc("add onto runqueue!!!\n"); */
 	fp_move_end_runnable(t);
 
 	return;
@@ -350,8 +350,8 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 
 	assert(t);
 	while (ps->type != SCHEDP_NOOP) {
-		printc("type is %d\n", ps->type);
-		printc("value is %d\n", ps->value);
+		/* printc("type is %d\n", ps->type); */
+		/* printc("value is %d\n", ps->value); */
 		switch (ps->type) {
 		case SCHEDP_RPRIO:
 		case SCHEDP_RLPRIO:
@@ -371,7 +371,7 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 		case SCHEDP_PRIO:
 			/* absolute priority */
 			prio = ps->value;
-			printc("fprr PRIO: prio is set to %d\n", prio);
+			/* printc("fprr PRIO: prio is set to %d\n", prio); */
 			break;
 		case SCHEDP_IDLE:
 			/* idle thread */
@@ -380,7 +380,7 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 		case SCHEDP_INIT:
 			/* init thread */
 			prio = PRIO_LOW;
-			printc("fprr INIT: prio is set to %d\n", prio);
+			/* printc("fprr INIT: prio is set to %d\n", prio); */
 			break;
 		case SCHEDP_TIMER:
 			/* timer thread */
@@ -418,8 +418,8 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 		goto done;
 	else {
 		if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
-			printc("start recording...\n");
-			printc("prio is %d\n", prio);
+			/* printc("start recording...\n"); */
+			/* printc("prio is %d\n", prio); */
 			if (cos_sched_cntl(COS_SCHED_RECORD_THD, t->id, 0)) BUG();
 			if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
 			if (cos_sched_cntl(COS_SCHED_RECORD_VALUE, t->id, (int)t_ps->type)) BUG();

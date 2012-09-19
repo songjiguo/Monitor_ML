@@ -477,23 +477,23 @@ thd_switch_fault_notif(struct thread *thd)
 	/* printk("thread %d fault cnt %d\n", thd_get_id(thd), thd_frame->fault.cnt); */
 	/* printk("spd %d fault cnt %d\n", spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt); */
 
-	struct thd_invocation_frame *test_frame;
-	test_frame = thd_invstk_top(thd);
-	printk("A:test frame info:\n");
-	printk("spd %d\n", spd_get_index(test_frame->spd));
-	printk("fault cnt %d\n", test_frame->fault.cnt);
-	printk("curr fault cnt %d\n", test_frame->curr_fault.cnt);
-	printk("stack_ptr %d\n", thd->stack_ptr);
+	/* struct thd_invocation_frame *test_frame; */
+	/* test_frame = thd_invstk_top(thd); */
+	/* printk("A:test frame info:\n"); */
+	/* printk("spd %d\n", spd_get_index(test_frame->spd)); */
+	/* printk("fault cnt %d\n", test_frame->fault.cnt); */
+	/* printk("curr fault cnt %d\n", test_frame->curr_fault.cnt); */
+	/* printk("stack_ptr %d\n", thd->stack_ptr); */
 
 	vaddr_t addr;
 	addr = ipc_walk_static_cap(thd, fltnotif_cap<<20, thd->regs.sp, thd->regs.ip, &r);
 
-	test_frame = thd_invstk_top(thd);
-	printk("B:test frame info:\n");
-	printk("spd %d\n", spd_get_index(test_frame->spd));
-	printk("fault cnt %d\n", test_frame->fault.cnt);
-	printk("curr fault cnt %d\n", test_frame->curr_fault.cnt);
-	printk("stack_ptr %d\n", thd->stack_ptr);
+	/* test_frame = thd_invstk_top(thd); */
+	/* printk("B:test frame info:\n"); */
+	/* printk("spd %d\n", spd_get_index(test_frame->spd)); */
+	/* printk("fault cnt %d\n", test_frame->fault.cnt); */
+	/* printk("curr fault cnt %d\n", test_frame->curr_fault.cnt); */
+	/* printk("stack_ptr %d\n", thd->stack_ptr); */
 
 	/* setup the registers */
 	thd->regs.ax = r.thd_id;
@@ -740,9 +740,9 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 	 * requests to create threads will be saved somewhere, i.e. a
 	 * separate spd so that they can be replay later*/
 	
-	printk("thread %d is created\n", thd_get_id(thd));
-	printk("fn %d\n", a);
-	printk("dest spd %d\n", b);
+	/* printk("thread %d is created\n", thd_get_id(thd)); */
+	/* printk("fn %d\n", a); */
+	/* printk("dest spd %d\n", b); */
 
 	/* for now, just save all threads for simplcity */
 	thd->sched_info[curr_spd->sched_depth].thread_fn = (void *)a;
@@ -830,7 +830,7 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 	{
 		int frame_offset = arg1;
 
-		printk("I am in frame_rem....thd %d curr %d frame offset %d\n",thd_get_id(thd), thd_get_id(curr), frame_offset);
+		/* printk("I am in frame_rem....thd %d curr %d frame offset %d\n",thd_get_id(thd), thd_get_id(curr), frame_offset); */
 
 		if (thd == curr && frame_offset < 1)       return -1;
 		/* thd_invocation_pop(thd); */
@@ -1239,7 +1239,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	switch_thread_update_flags(da, &flags);
 
 	if (unlikely(flags)) {
-		printk("SLOW PATH\n");		
+		/* printk("SLOW PATH\n");		 */
 		thd = switch_thread_slowpath(curr, flags, curr_spd, rthd_id, da, &ret_code, 
 					     &curr_sched_flags, &thd_sched_flags);
 		/* If we should return immediately back to this
@@ -1255,9 +1255,9 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 		if (unlikely(NULL == thd)) goto_err(ret_err, "get target");
 	}
 	/* print something here */
-	printk("<<<<<");
-	printk("cos_switch: curr %d in spd %d -> thread %d", thd_get_id(curr), spd_get_index(curr_spd), thd_get_id(thd));
-	printk(">>>>>\n");
+	/* printk("<<<<<"); */
+	/* printk("cos_switch: curr %d in spd %d -> thread %d", thd_get_id(curr), spd_get_index(curr_spd), thd_get_id(thd)); */
+	/* printk(">>>>>\n"); */
 
 	/* If a thread is involved in a scheduling decision, we should
 	 * assume that any preemption chains that existed aren't valid
@@ -1278,7 +1278,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	/* success for this current thread */
 	curr->regs.ax = COS_SCHED_RET_SUCCESS;
 
-	printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd));
+	/* printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
 	event_record("switch_thread", thd_get_id(curr), thd_get_id(thd));
 
 	int fault_ret;
@@ -3211,7 +3211,7 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 		}
 
 		if (spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
-			printk("cos: add thread %d onto spd %d list\n", thd_id, spd_get_index(spd));
+			/* printk("cos: add thread %d onto spd %d list\n", thd_id, spd_get_index(spd)); */
 			if (!spd->scheduler_all_threads) {
 				/* initialize the list head */
 				spd->scheduler_all_threads = thd;
