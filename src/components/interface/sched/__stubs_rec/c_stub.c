@@ -102,6 +102,7 @@ redo:
 CSTUB_ASM_2(sched_block, spdid, thd_id)
 
        if (unlikely (fault)){
+	       printc("failed!! now update the cap flt.cnt, block\n");
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
 		       BUG();

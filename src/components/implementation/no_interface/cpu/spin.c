@@ -57,6 +57,7 @@ void cos_init(void *arg)
 				sched_wakeup(cos_spd_id(), high);
 			}
 		}
+		printc("THE ending......\n");
 	}
 	
 	return;

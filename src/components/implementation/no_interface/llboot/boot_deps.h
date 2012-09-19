@@ -253,8 +253,8 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		return 0;
 	}
 
-	if (tid == 7) cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);
-	else cos_upcall(flags);	/* upcall to ths dest spd */
+	if (tid == 7) cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);	/* timer thread */
+	else cos_upcall(flags);	/* upcall to ths dest spd, for other threads */
 
 	assert(0);
 }

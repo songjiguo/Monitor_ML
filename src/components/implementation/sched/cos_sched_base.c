@@ -762,13 +762,12 @@ static aaa = 0;
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
-	
 
-	if (aaa++>=50) {
-		printc("\n<<<wakeup Before ASSERT!!!>>>\n");
-		assert(0);
-		printc("\n<<<wakeup After ASSERT!!!>>>\n");
-	}
+	/* if (aaa++>=2) { */
+	/* 	printc("\n<<<wakeup Before ASSERT!!!>>>\n"); */
+	/* 	assert(0); */
+	/* 	printc("\n<<<wakeup After ASSERT!!!>>>\n"); */
+	/* } */
 
 	cos_sched_lock_take();
 		
@@ -869,11 +868,18 @@ static void fp_block(struct sched_thd *thd, spdid_t spdid)
  * FIXME: should verify that the blocks and wakes come from the same
  * component.  This is the externally visible function.
  */
+static int bbb;
 int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 {
 	struct sched_thd *thd, *dep = NULL;
 	int ret;
 	int first = 1;
+
+	/* if (bbb++>=2) { */
+	/* 	printc("\n<<<block Before ASSERT!!!>>>\n"); */
+	/* 	assert(0); */
+	/* 	printc("\n<<<block After ASSERT!!!>>>\n"); */
+	/* } */
 
 	// Added by Gabe 08/19
 	if (unlikely(dependency_thd == cos_get_thd_id())) return -EINVAL;
@@ -1007,12 +1013,19 @@ unblock:
  * component.  Further synchronization primitives can be built up
  * using this in those external components.
  */
+static int ccc = 0;
 int sched_component_take(spdid_t spdid)
 {
 	struct sched_thd *holder, *curr;
 	int first = 1;
 
-	printc("sched take %d\n", spdid);
+	printc("\component take\n");
+	if (ccc++>=1) {
+		printc("\n<<<comp_take Before ASSERT!!!>>>\n");
+		assert(0);
+		printc("\n<<<comp_take After ASSERT!!!>>>\n");
+	}
+	assert(0);
 
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
@@ -1213,11 +1226,11 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
 
-	if (ttt++>=1 && sched_param1 == 0) {
-		printc("\n<<<Before ASSERT!!!>>>\n");
-		assert(0);
-		printc("\n<<<After ASSERT!!!>>>\n");
-	}
+	/* if (ttt++>=1 && sched_param1 == 0) { */
+	/* 	printc("\n<<<create Before ASSERT!!!>>>\n"); */
+	/* 	assert(0); */
+	/* 	printc("\n<<<create After ASSERT!!!>>>\n"); */
+	/* } */
 
 	sp[0] = ((union sched_param)sched_param0).c;
 	sp[1] = ((union sched_param)sched_param1).c;
@@ -1831,7 +1844,8 @@ int sched_root_init(int reboot)
 		return 0;
 
 	} else {
-		sched_init_create_threads(1); /* idle and booter */
+		/* idle and booter thread */
+		sched_init_create_threads(1);
 		/* Create the clock tick (timer) thread */
 		fp_create_timer();
 	}

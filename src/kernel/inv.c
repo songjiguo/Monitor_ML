@@ -346,7 +346,7 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_t ip, struct inv_ret_struct *ret)
 {
-	printk("[[[ cos: Fault is detected on INVOCATION ]]]\n");
+	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
 
 	struct inv_ret_struct r;
 
@@ -362,14 +362,15 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_
 		printk("handler is not defined !!!\n");
 	}
 
+	printk("notif_spd %d dest_spd %d \n", spd_get_index(notif_spd), spd_get_index(dest_spd));
 	vaddr_t addr;
 	addr = ipc_walk_static_cap(thd, fltnotif_cap<<20, thd->regs.sp, thd->regs.ip, &r);
 
 	thd->regs.ax = r.thd_id;
 	thd->regs.bx = thd->regs.cx = r.spd_id;
 	thd->regs.sp = 0;
-	thd->regs.si = 0;
-	thd->regs.di = 0;
+	thd->regs.si = 11;
+	thd->regs.di = 22;
 	thd->regs.bp = thd->regs.ip;
 
 	/* fault notif handler address */
@@ -382,14 +383,14 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_
 	/* thd_invocation_push(thd, notif_spd, sp, ip); */
 	/* /\* fault notif handler address *\/ */
 	/* thd->regs.dx = thd->regs.ip = flt_notif_cap_entry->dest_entry_instruction; */
-
+	printk("r.spd %d \n", r.spd_id);
 	return addr;
 }
 
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
-	printk("[[[ cos: Fault is detected on POP ]]]\n");
+	printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n");
 
 	print_regs(&thd->regs);	
 	printk("current thread is %d\n", thd_get_id(thd));
@@ -451,7 +452,7 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	printk("[[[ cos: Fault is detected on CONTEXT SWITCH ]]]\n");
+	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n");
 
 	printk("current thread is %d\n", thd_get_id(thd_get_current()));
 	print_regs(&thd->regs);
@@ -481,6 +482,7 @@ thd_switch_fault_notif(struct thread *thd)
 	printk("A:test frame info:\n");
 	printk("spd %d\n", spd_get_index(test_frame->spd));
 	printk("fault cnt %d\n", test_frame->fault.cnt);
+	printk("curr fault cnt %d\n", test_frame->curr_fault.cnt);
 	printk("stack_ptr %d\n", thd->stack_ptr);
 
 	vaddr_t addr;
@@ -490,6 +492,7 @@ thd_switch_fault_notif(struct thread *thd)
 	printk("B:test frame info:\n");
 	printk("spd %d\n", spd_get_index(test_frame->spd));
 	printk("fault cnt %d\n", test_frame->fault.cnt);
+	printk("curr fault cnt %d\n", test_frame->curr_fault.cnt);
 	printk("stack_ptr %d\n", thd->stack_ptr);
 
 	/* setup the registers */
@@ -1026,7 +1029,7 @@ switch_thread_parse_data_area(struct cos_sched_data_area *da, int *ret_code)
 		goto ret_err;
 	}
 	/* FIXME: mask out the locking flags as they cannot apply */
-	printk("next thd is %d\n", next_thd);
+	/* printk("next thd is %d\n", next_thd); */
 	return next_thd;
 ret_err:
 	return 0;
@@ -1039,7 +1042,7 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 	struct thread *thd;
 
 	thd = thd_get_by_id(tid);
-	printk("first in get_target: thd->flags %x\n", thd->flags);
+	/* printk("first in get_target: thd->flags %x\n", thd->flags); */
 	/* error cases */
 	if (unlikely(thd == curr)) {
 		cos_meas_event(COS_MEAS_SWITCH_SELF);
@@ -1245,7 +1248,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 		if (ret_code == COS_SCHED_RET_SUCCESS && thd == curr) goto ret;
 		if (thd == curr) goto_err(ret_err, "sloooow\n");
 	} else {
-		printk("5 -- thd %d\n", thd_get_id(thd_get_current()));
+		/* printk("5 -- thd %d\n", thd_get_id(thd_get_current())); */
 		next_thd = switch_thread_parse_data_area(da, &ret_code);
 		if (unlikely(0 == next_thd)) goto_err(ret_err, "data_area\n");
 		thd = switch_thread_get_target(next_thd, curr, curr_spd, &ret_code);
