@@ -1287,11 +1287,11 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	
 	cos_sched_lock_take();
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, desired_thd, 1);
-	printc("sched_create_thread_default calls sst\n");
+	/* printc("sched_create_thread_default calls sst\n"); */
 	sched_switch_thread(0, NULL_EVT);
 	if (!new) return -1;
-	printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n",
-	       (unsigned int)cos_spd_id(), new->id, spdid, sched_get_current()->id, spdid);
+	/* printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n", */
+	/*        (unsigned int)cos_spd_id(), new->id, spdid, sched_get_current()->id, spdid); */
 
 	return 0;
 }
@@ -1335,7 +1335,7 @@ static void deactivate_child_sched(struct sched_thd *t)
 		fp_block(t, 0);
 		while (0 == t->wake_cnt) {
 			assert(sched_thd_blocked(t));
-			printc("deactivate_child_sched calls sst\n");
+			/* printc("deactivate_child_sched calls sst\n"); */
 			sched_switch_thread(0, PARENT_CHILD_DEACTIVATE);
 			cos_sched_lock_take();
 		}
@@ -1588,7 +1588,7 @@ static void sched_child_evt_thd(void)
 		
 		report_event(CHILD_SWITCH_THD);
 		/* When there are no more events, schedule */
-		printc("sched_child_evt_thd calls sst\n");
+		/* printc("sched_child_evt_thd calls sst\n"); */
 		sched_switch_thread(0, NULL_EVT);
 		assert(EMPTY_LIST(timer, prio_next, prio_prev));
 	} /* no return */
@@ -1654,7 +1654,7 @@ int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short
 extern void parent_sched_exit(void);
 void sched_exit(void)
 {
-	printc("Switching to %d\n", init->id);
+	/* printc("Switching to %d\n", init->id); */
 	cos_sched_clear_events();
 //	cos_switch_thread_release(init->id, 0);
 	while (1) {
@@ -1695,17 +1695,17 @@ sched_init_create_threads(int boot_threads)
 				   {.c = {.type = SCHEDP_NOOP}}};
 
 	/* create the idle thread */
-	printc("create idle thread\n");
+	/* printc("create idle thread\n"); */
 	idle = sched_setup_thread_arg(&sp, fp_idle_loop, NULL, 0, 1);
 	assert(idle);
-	printc("Idle thread has id %d with priority %s.\n", idle->id, "i");
+	/* printc("Idle thread has id %d with priority %s.\n", idle->id, "i"); */
 
 	if (!boot_threads) return;
 
 	sp[0].c.type = SCHEDP_INIT;
 	t = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)(int)BOOT_SPD, 0, 1);
 	assert(t);
-	printc("Initialization thread has id %d.\n", t->id);
+	/* printc("Initialization thread has id %d.\n", t->id); */
 }
 
 /* Initialize data-structures */
@@ -1732,7 +1732,7 @@ parent_sched_child_cntl_thd(spdid_t spdid);
 static void 
 sched_child_init(int reboot)
 {
-	printc("sched_child_init\n");
+	/* printc("sched_child_init\n"); */
 	/* Child scheduler */
 	sched_type = SCHED_CHILD;
 	__sched_init();
@@ -1789,9 +1789,9 @@ int sched_root_init(int reboot)
 
 	if (unlikely(reboot)) {
 		thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0);
-		printc("rebuild scheduler... %d threads have been recorded\n", thd_nums);
+		/* printc("rebuild scheduler... %d threads have been recorded\n", thd_nums); */
 		while(thd_nums) {
-			printc("thd_num is %d\n", thd_nums);
+			/* printc("thd_num is %d\n", thd_nums); */
 			ret    = cos_sched_introspect(COS_SCHED_THD_GET, thd_nums, 0);
 			thd_id = ret >> 16;
 			assert(thd_id);
@@ -1800,10 +1800,10 @@ int sched_root_init(int reboot)
 			fn    = (void *)cos_sched_introspect(COS_SCHED_THD_FN, cos_spd_id(), thd_id);
 			dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
 			type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id);
-			printc("thread %d with prio %d\n", thd_id, prio);
-			printc("fn %x dest %d\n", (unsigned int)fn, (int)dest);
-			printc("type is %d\n", type);
-			printc("prio is %d\n", prio);
+			/* printc("thread %d with prio %d\n", thd_id, prio); */
+			/* printc("fn %x dest %d\n", (unsigned int)fn, (int)dest); */
+			/* printc("type is %d\n", type); */
+			/* printc("prio is %d\n", prio); */
 
 			switch (type) {
 			case SCHEDP_IDLE: /* idle */
@@ -1830,7 +1830,7 @@ int sched_root_init(int reboot)
 			}
 
 			sp[0].c.type = type;
-			printc("again test val is %d\n", sp[0].c.value);
+			/* printc("again test val is %d\n", sp[0].c.value); */
 			rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
 
 			thd_nums--;
@@ -1840,7 +1840,7 @@ int sched_root_init(int reboot)
 			printc("sched_init: clear_events(), for recovery thread\n");
 			cos_sched_clear_events();
 		}
-		printc("recover thread now returns back to ll\n");
+		/* printc("recover thread now returns back to ll\n"); */
 		return 0;
 
 	} else {
@@ -1851,7 +1851,7 @@ int sched_root_init(int reboot)
 	}
 	
 	new = schedule(NULL);
-	printc("thd %d ready to pick up a new thread (%d) to run\n", cos_get_thd_id(), new->id);
+	/* printc("thd %d ready to pick up a new thread (%d) to run\n", cos_get_thd_id(), new->id); */
 	if ((ret = cos_switch_thread(new->id, 0))) {
 		printc("switch thread failed with %d\n", ret);
 	}
@@ -1878,7 +1878,7 @@ extern int parent_sched_isroot(void);
 int
 sched_init(int reboot)
 {
-	printc("Sched init has thread %d\n", cos_get_thd_id());
+	/* printc("Sched init has thread %d\n", cos_get_thd_id()); */
 
 	/* Promote us to a scheduler! */
 	/* When failed, we probably already found that
