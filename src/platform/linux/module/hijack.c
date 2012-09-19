@@ -1637,16 +1637,16 @@ thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
 
-	printk("thread is %d\n", thd_get_id(thd));
-	printk("fault count is %d\n", thd_frame->fault.cnt);
-	printk("spd %d fault count is %d\n",
-	       spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt);
-	printk("attached spd is %d\n", spd_get_index(thd_frame->spd));
+	/* printk("thread is %d\n", thd_get_id(thd)); */
+	/* printk("fault count is %d\n", thd_frame->fault.cnt); */
+	/* printk("spd %d fault count is %d\n", */
+	/*        spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt); */
+	/* printk("attached spd is %d\n", spd_get_index(thd_frame->spd)); */
 
 	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
 	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
 	struct spd *notif_spd = flt_notif_cap_entry->destination;
-	printk("notif spd is %d\n", spd_get_index(notif_spd));
+	/* printk("notif spd is %d\n", spd_get_index(notif_spd)); */
 	if (fltnotif_cap - thd_frame->spd->cap_base > COS_FLT_MAX) {
 		flt_notif_cap_entry->dest_entry_instruction = 0;
 		/* set thd ip and sp to be 0 */
@@ -1679,7 +1679,7 @@ int host_attempt_brand(struct thread *brand)
 		/* See comment in cosnet.c:cosnet_xmit_packet */
 		if (host_in_syscall() || host_in_idle()) {
 			struct thread *next;
-			printk("\na.....!....host_in_syscall()? %d.....!.......a\n", host_in_syscall());
+			/* printk("\na.....!....host_in_syscall()? %d.....!.......a\n", host_in_syscall()); */
 			//next = brand_next_thread(brand, cos_current, 2);
 			/* 
 			 * _FIXME_: Here we are kludging a problem over.
@@ -1764,7 +1764,7 @@ int host_attempt_brand(struct thread *brand)
 		 */
 		if (likely(!(regs->sp == 0 && regs->ss == 0))
                     /* && (regs->xcs & SEGMENT_RPL_MASK) == USER_RPL*/) {
-			printk("hijack: b.....!.........!.......b\n");
+			/* printk("hijack: b.....!.........!.......b\n"); */
 			struct thread *next;
 			if ((regs->cs & SEGMENT_RPL_MASK) == USER_RPL) {
 				cos_meas_event(COS_MEAS_INT_PREEMPT_USER);
@@ -1774,8 +1774,8 @@ int host_attempt_brand(struct thread *brand)
 
 			/* the major work here: */
 			next = brand_next_thread(brand, cos_current, 1);
-			printk("\nhijack: current thd(%d)\n", thd_get_id(cos_current));
-			printk("hijack: next thd(%d)\n", thd_get_id(next));
+			/* printk("\nhijack: current thd(%d)\n", thd_get_id(cos_current)); */
+			/* printk("hijack: next thd(%d)\n", thd_get_id(next)); */
 			if (next != cos_current) {
 				thd_save_preempted_state(cos_current, regs);
 				if (!(next->flags & THD_STATE_ACTIVE_UPCALL)) {
