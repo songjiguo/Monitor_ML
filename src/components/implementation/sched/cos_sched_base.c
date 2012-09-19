@@ -432,6 +432,7 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 				 * upcall completing execution */
 				timer_start(&tfp);
 				next = schedule(current);
+				printc("next thread %d is picked\n", next->id);
 				timer_end(&tfp);
 				assert(sched_is_root() || timer != next);
 				assert(next != current);
@@ -756,10 +757,19 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
  * FIXME: should verify that the blocks and wakes come from the same
  * component.  This is the external interface.
  */
+
+static aaa = 0;
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
 	
+
+	if (aaa++>=50) {
+		printc("\n<<<wakeup Before ASSERT!!!>>>\n");
+		assert(0);
+		printc("\n<<<wakeup After ASSERT!!!>>>\n");
+	}
+
 	cos_sched_lock_take();
 		
 	/* printc("thread %d waking up thread %d. %d\n", cos_get_thd_id(), thd_id, 0); */
@@ -1117,7 +1127,7 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 	int exist = 0;
 
 	if (likely(!desired_thd)) { /* normal path */
-		/* printc("normal path (spd %d desired_thd %d)\n", d, desired_thd); */
+		printc("normal path (spd %d desired_thd %d)\n", d, desired_thd);
 		ret_id = cos_create_thread(fn, d, 0);
 		assert(0 != ret_id);
 	} else {
@@ -1160,6 +1170,10 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 		new = __sched_setup_thread_no_policy(tid);
 	}
 	thread_new(new);
+
+	struct sched_param_s *test;
+	test = (struct sched_param_s *)metric_str;
+	printc("test value is %d\n", test->value);
 	if (parm) thread_param_set(new,  (struct sched_param_s *)metric_str);
 	else      thread_params_set(new, (char *)metric_str); /* deprecated way to create the thread */
 	
@@ -1199,7 +1213,7 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
 
-	if (ttt++>=1) {
+	if (ttt++>=1 && sched_param1 == 0) {
 		printc("\n<<<Before ASSERT!!!>>>\n");
 		assert(0);
 		printc("\n<<<After ASSERT!!!>>>\n");
@@ -1222,7 +1236,6 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 }
 
 #define SCHED_STR_SZ 64
-
 
 int 
 sched_thread_params(spdid_t spdid, u16_t thd_id, res_spec_t rs)
@@ -1777,6 +1790,7 @@ int sched_root_init(int reboot)
 			printc("thread %d with prio %d\n", thd_id, prio);
 			printc("fn %x dest %d\n", (unsigned int)fn, (int)dest);
 			printc("type is %d\n", type);
+			printc("prio is %d\n", prio);
 
 			switch (type) {
 			case SCHEDP_IDLE: /* idle */
@@ -1786,6 +1800,9 @@ int sched_root_init(int reboot)
 				timer = rec_thd;
 				break;
 			case SCHEDP_INIT: /* boot thread */
+				break;
+			case SCHEDP_PRIO: /* thread that has relative priority */
+				sp[0].c.value = prio;
 				break;
 			case SCHEDP_RPRIO: /* thread that has relative priority, now change to prio */
 				type = SCHEDP_PRIO;
@@ -1800,6 +1817,7 @@ int sched_root_init(int reboot)
 			}
 
 			sp[0].c.type = type;
+			printc("again test val is %d\n", sp[0].c.value);
 			rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
 
 			thd_nums--;
@@ -1809,6 +1827,9 @@ int sched_root_init(int reboot)
 			printc("sched_init: clear_events(), for recovery thread\n");
 			cos_sched_clear_events();
 		}
+		printc("recover thread now returns back to ll\n");
+		return 0;
+
 	} else {
 		sched_init_create_threads(1); /* idle and booter */
 		/* Create the clock tick (timer) thread */
@@ -1816,7 +1837,7 @@ int sched_root_init(int reboot)
 	}
 	
 	new = schedule(NULL);
-	printc("ready to pick up a new thread (%d) to run\n", new->id);
+	printc("thd %d ready to pick up a new thread (%d) to run\n", cos_get_thd_id(), new->id);
 	if ((ret = cos_switch_thread(new->id, 0))) {
 		printc("switch thread failed with %d\n", ret);
 	}

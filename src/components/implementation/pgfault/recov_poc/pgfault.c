@@ -76,14 +76,13 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 	printc("....kevin.....andy.....\n");
 
 	unsigned long r_ip; 	/* the ip to return to */
-
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
+		printc("return 0\n");
 		return 0;
 	}
 
 	assert(0);
-	return 0;
 }
 #endif

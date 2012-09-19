@@ -86,34 +86,11 @@ static inline int
 init_invframe_fault_cnt(struct thd_invocation_frame *inv_frame)
 {
 	inv_frame->fault.cnt = 0;
+	inv_frame->curr_fault.cnt = 0;
 	return 0;
 }
 
-static inline int
-inv_frame_fault_cnt_update(struct thread *thd, struct spd *spd)
-{
-	struct thd_invocation_frame *inv_frame;
-	inv_frame = thd_invstk_top(thd);
-	inv_frame->fault.cnt = spd->fault.cnt;
-	/* if (thd_get_id(thd) == 12){ */
-	/* 	printk("spd %d 's fault count (%d) updates\n ", spd_get_index(spd),spd->fault.cnt ); */
-	/* 	printk("thd %d top_frame's fault cnt (%d)\n", thd_get_id(thd), inv_frame->fault.cnt); */
-	/* } */
-	return 0;
-}
-
-
-static inline int
-interrupt_fault_update(struct thread *curr, struct spd *curr_spd)
-{
-	/* update when wait for an interrupt, this might be from a home spd */
-	struct thd_invocation_frame *curr_frame;
-	curr_frame = thd_invstk_top(curr);
-	curr_frame->fault.cnt = curr_spd->fault.cnt;
-	
-	return 0;
-}
-
+/**************  detect ************/
 static inline int
 ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
@@ -129,17 +106,17 @@ pop_fault_detect(struct thd_invocation_frame *inv_frame, struct thd_invocation_f
 }
 
 static inline int
-check_frame_fltcnt(struct thread *thd)
+switch_thd_fault_detect(struct thread *next)
 {
 	struct spd *n_spd;
 	struct thd_invocation_frame *tif;
 
-	tif    = thd_invstk_top(thd);
+	tif    = thd_invstk_top(next);
 	n_spd  = tif->spd;
 	
-	if (tif->fault.cnt != n_spd->fault.cnt) 
+	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d fault cnt %d\n", thd_get_id(thd), tif->fault.cnt);
+		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
 		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
 		return 1;
 	}
@@ -147,15 +124,71 @@ check_frame_fltcnt(struct thread *thd)
 }
 
 static inline int
-switch_thd_fault_detect(struct thread *next)
+interrupt_fault_detect(struct thread *next) /* for now, this is the timer thread */
 {
-	return check_frame_fltcnt(next);
+	struct spd *n_spd;
+	struct thd_invocation_frame *tif;
+
+	tif    = thd_invstk_top(next);
+	n_spd  = tif->spd;
+	
+	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
+	{
+		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
+		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
+		return 1;
+	}
+	else return 0;
+}
+/**************  update ************/
+static inline int
+inv_frame_fault_cnt_update(struct thread *thd, struct spd *spd)
+{
+	struct thd_invocation_frame *inv_frame;
+	inv_frame = thd_invstk_top(thd);
+	inv_frame->fault.cnt = spd->fault.cnt;
+	return 0;
 }
 
 static inline int
-interrupt_fault_detect(struct thread *next) /* for now, this is the timer thread */
+ipc_fault_update(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
-	return check_frame_fltcnt(next);
+	cap_entry->fault.cnt = dest_spd->fault.cnt;
+	return 0;
+}
+
+static inline int
+pop_fault_update(struct thd_invocation_frame *inv_frame, struct thd_invocation_frame *curr_frame)
+{
+	inv_frame->fault.cnt = curr_frame->spd->fault.cnt;
+	return 0;
+}
+
+static inline int
+switch_thd_fault_update(struct thread *thd)
+{
+	struct spd *n_spd;
+	struct thd_invocation_frame *tif;
+
+	tif    = thd_invstk_top(thd);
+	n_spd  = tif->spd;
+	
+	tif->curr_fault.cnt = n_spd->fault.cnt;
+	printk("switch_flt_update: n_spd %d\n", spd_get_index(n_spd));
+	return 0;
+}
+
+static inline int
+interrupt_fault_update(struct thread *next) /* for now, this is the timer thread */
+{
+	struct spd *n_spd;
+	struct thd_invocation_frame *tif;
+
+	tif    = thd_invstk_top(next);
+	n_spd  = tif->spd;
+	
+	tif->curr_fault.cnt = n_spd->fault.cnt;
+	return 0;
 }
 
 extern struct invocation_cap invocation_capabilities[MAX_STATIC_CAP];
@@ -236,14 +269,6 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 	return ret;
 }
 
-
-static inline int
-cap_fault_cnt_update(struct invocation_cap *c, struct spd* dspd)
-{
-	c->fault.cnt   = dspd->fault.cnt;
-	return 0;
-}
-
 #else
 //*************************************************
            /* disable recovery */
@@ -272,6 +297,7 @@ inv_frame_fault_cnt_update(struct thread *thd, struct spd *spd)
 	return 0;
 }
 
+/**************  detect ************/
 static inline int
 ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
@@ -291,29 +317,42 @@ switch_thd_fault_detect(struct thread *next)
 }
 
 static inline int
-interrupt_fault_update(struct thread *curr, struct spd *curr_spd)
+interrupt_fault_detect(struct thread *next)
+{
+	return 0;
+}
+
+/**************  update ************/
+static inline int
+ipc_fault_update(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
 	return 0;
 }
 
 static inline int
-interrupt_fault_detect(struct thread *next)
+pop_fault_update(struct thd_invocation_frame *inv_frame, struct thd_invocation_frame *curr_frame)
 {
 	return 0;
 }
+
+static inline int
+switch_thd_fault_update(struct thread *next)
+{
+	return 0;
+}
+
+static inline int
+interrupt_fault_update(struct thread *next)
+{
+	return 0;
+}
+
 
 static inline unsigned long
 fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int cap_no)
 {
 	return 0;
 }
-
-static inline int
-cap_fault_cnt_update(struct invocation_cap *c, struct spd* dspd)
-{
-	return 0;
-}
-
 #endif
 
 #endif  //RECOVERY_H

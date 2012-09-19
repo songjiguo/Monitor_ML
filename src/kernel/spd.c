@@ -620,8 +620,7 @@ int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd)
 	/* printk("cos: cap set --> spd %d  cap %d dspd %d\n", spd_get_index(spd), cap, spd_get_index(dspd)); */
 	if (!c) return -1;
 	c->destination = dspd;
-	/* c->fault.cnt   = dspd->fault.cnt; */
-	cap_fault_cnt_update(c, dspd);
+	ipc_fault_update(c, dspd);
 
 	return 0;
 }

@@ -37,11 +37,11 @@ void cos_init(void *arg)
 		num = 1;
 
 		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 10;
+		sp.c.value = 9;
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 11;
+		sp.c.value = 10;
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		/* pong(); */

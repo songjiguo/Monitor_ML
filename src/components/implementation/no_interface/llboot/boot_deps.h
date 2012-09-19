@@ -241,28 +241,22 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 int
 fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
+	printc("parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip);
 	unsigned long r_ip;
 
 	int tid = cos_get_thd_id();
-	printc("<< LL fault notification handler >> : thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
-	/* while(1); */
-	if (cos_get_thd_id() == 3) assert(0);
-
-	/* do something here? */
+	printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
-		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
-		if (cos_get_thd_id() == 7) assert(0);
-		recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 		return 0;
 	}
-	if (cos_get_thd_id() == 7) assert(0); /* test only. For timer thread, the stack should be given back */
-	cos_upcall(spdid); 	/* FIXME: give back stack... */
-	BUG();
 
-	return 0;
+	if (tid == 7) cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);
+	else cos_upcall(flags);	/* upcall to ths dest spd */
+
+	assert(0);
 }
 
 #endif

@@ -1634,8 +1634,6 @@ static void host_idle_wakeup(void)
 static void
 thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 {
-	printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n");
-
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
 
@@ -1786,10 +1784,11 @@ int host_attempt_brand(struct thread *brand)
 					///*assert*/BUG_ON(!(next->flags & THD_STATE_ACTIVE_UPCALL));
 				}
 				if (unlikely(interrupt_fault_detect(next))) {
-				/* if (thd_get_id(cos_current) == 8) {  // test 8 for spin, 11 for pong */
-					/* Peter: update the register to the fault_notif */
+				/* if (thd_get_id(cos_current) == 11) {  // test 8 for spin, 11 for pong */
+					/* Peter: detect fault on interrupt path */
 					thd_interrupt_fault_notif(next, regs);
 				} else {
+					interrupt_fault_update(cos_current);
 
 					thd_check_atomic_preempt(cos_current);
 					regs->bx = next->regs.bx;

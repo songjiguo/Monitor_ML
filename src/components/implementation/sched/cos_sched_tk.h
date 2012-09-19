@@ -22,8 +22,6 @@ int thread_resparams_set(struct sched_thd *t, res_spec_t rs);
 
 void runqueue_print(void);
 
-void thread_reset(struct sched_thd *t, unsigned short int prio);
-
 /* Args include a thread and the amount of time it spent
  * processing.  If t==NULL, then time has passed without being
  * attributed to a thread.  This is either idle time, or if a

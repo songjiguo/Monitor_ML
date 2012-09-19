@@ -36,7 +36,8 @@ struct thd_invocation_frame {
 	struct spd *spd;
 	vaddr_t sp, ip;
 	/* unsigned long fault_cnt; */
-	struct fault_counter fault;
+	struct fault_counter fault;	 /* when pop/invocation */
+	struct fault_counter curr_fault; /* when context switch */
 }; //HALF_CACHE_ALIGNED;
 
 /* 
@@ -227,6 +228,7 @@ static inline int thd_invstk_rem_nth(struct thread *thd, int nth)
 	struct spd_poly *cspd;
 	int first = 1;
 
+	printk("nth %d thd->stack_ptr %d\n",nth, thd->stack_ptr);
 	if (nth < 0 || nth >= thd->stack_ptr) return -1;
 	/* release the composite spd */
 	cspd = thd->stack_base[idx].current_composite_spd;

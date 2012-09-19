@@ -15,10 +15,6 @@ printc("\n<<<<thd %d in spd %ld call pong >>>>>\n", cos_get_thd_id(), cos_spd_id
 CSTUB_ASM_0(pong)
 
         if (unlikely(fault)){
-		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
-			printc("set cap_fault_cnt failed\n");
-			BUG();
-		}
 		if (fault_test++ > 3) {
 			printc("has failed 3 times\n");
 			goto done;

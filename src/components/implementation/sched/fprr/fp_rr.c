@@ -77,16 +77,10 @@ static inline void fp_add_thd(struct sched_thd *t, unsigned short int prio)
 	return;
 }
 
-void thread_reset(struct sched_thd *t, unsigned short int prio)
-{
-	printc("on recovery path!!!\n");
-	return fp_add_thd(t, prio);
-}
-
 static inline void fp_rem_thd(struct sched_thd *t)
 {
 	u16_t p = sched_get_metric(t)->priority;
-
+	printc("fp_REM.....prio %d\n",p);
 	/* if on a list _and_ no other thread at this priority? */
 	if (!EMPTY_LIST(t, prio_next, prio_prev) && 
 	    t->prio_next == t->prio_prev) {
@@ -356,7 +350,8 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 
 	assert(t);
 	while (ps->type != SCHEDP_NOOP) {
-		/* printc("type is %d\n", ps->type); */
+		printc("type is %d\n", ps->type);
+		printc("value is %d\n", ps->value);
 		switch (ps->type) {
 		case SCHEDP_RPRIO:
 		case SCHEDP_RLPRIO:
@@ -376,14 +371,16 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 		case SCHEDP_PRIO:
 			/* absolute priority */
 			prio = ps->value;
+			printc("fprr PRIO: prio is set to %d\n", prio);
 			break;
 		case SCHEDP_IDLE:
 			/* idle thread */
 			prio = PRIO_LOWEST;
 			break;
 		case SCHEDP_INIT:
-			/* idle thread */
+			/* init thread */
 			prio = PRIO_LOW;
+			printc("fprr INIT: prio is set to %d\n", prio);
 			break;
 		case SCHEDP_TIMER:
 			/* timer thread */
@@ -411,13 +408,15 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 			printc("unknown priority option\n");
 			prio = PRIO_LOW;
 		}
+		break; 		/* test purpose, so we can use sched_param1 to stop the fault from happenning */
 		ps++;
 	}
 	if (sched_thd_ready(t)) fp_rem_thd(t);
 	fp_add_thd(t, prio);
 
 	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
-		/* printc("start recording...\n"); */
+		printc("start recording...\n");
+		printc("prio is %d\n", prio);
 		if (cos_sched_cntl(COS_SCHED_RECORD_THD, t->id, 0)) BUG();
 		if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
 		if (cos_sched_cntl(COS_SCHED_RECORD_VALUE, t->id, (int)t_ps->type)) BUG();
