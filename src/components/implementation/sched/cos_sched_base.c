@@ -412,7 +412,7 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 		 * scheduled.
 		 */
 		if (cos_sched_pending_event()) {
-			printc("pending event...clear events\n");
+			/* printc("pending event...clear events\n"); */
 			cos_sched_clear_events();
 			cos_sched_process_events(evt_callback, 0);
 		}
@@ -432,7 +432,7 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 				 * upcall completing execution */
 				timer_start(&tfp);
 				next = schedule(current);
-				printc("next thread %d is picked\n", next->id);
+				/* printc("next thread %d is picked\n", next->id); */
 				timer_end(&tfp);
 				assert(sched_is_root() || timer != next);
 				assert(next != current);
@@ -491,7 +491,7 @@ done:
 
 static inline int sched_switch_thread(int flags, report_evt_t evt)
 {
-	printc("actually in calling sched_switch_thread\n");
+	/* printc("actually in calling sched_switch_thread\n"); */
 	return sched_switch_thread_target(flags, evt, NULL);
 }
 
@@ -547,9 +547,9 @@ static void sched_process_wakeups(void)
 
 static void sched_timer_tick(void)
 {
-	printc("user: sched_timer_ticker\n");
+	/* printc("user: sched_timer_ticker\n"); */
 	while (1) {
-		printc("thread %d in while(1)\n", cos_get_thd_id());
+		/* printc("thread %d in while(1)\n", cos_get_thd_id()); */
 		cos_sched_lock_take();
 
 		report_event(TIMER_TICK);
@@ -566,7 +566,7 @@ static void sched_timer_tick(void)
 			       cos_switch_thread_release(init->id, COS_SCHED_BRAND_WAIT)) {
 				cos_sched_lock_take();
 				if (cos_sched_pending_event()) {
-					printc("sched_timer_tick: clear_events()\n");
+					/* printc("sched_timer_tick: clear_events()\n"); */
 					cos_sched_clear_events();
 					cos_sched_process_events(evt_callback, 0);
 				}
@@ -577,7 +577,7 @@ static void sched_timer_tick(void)
 		sched_process_wakeups();
 		
 		timer_tick(1);
-		printc("sched_timer_tick calls sst\n");
+		/* printc("sched_timer_tick calls sst\n"); */
 		sched_switch_thread(COS_SCHED_BRAND_WAIT, TIMER_SWITCH_LOOP);
 		/* Tailcall out of the loop */
 	}
@@ -589,7 +589,7 @@ static void fp_event_completion(struct sched_thd *e)
 
 	while (1) {
 		cos_sched_lock_take();
-		printc("fp_event_completion calls sst\n");
+		/* printc("fp_event_completion calls sst\n"); */
 		sched_switch_thread(COS_SCHED_TAILCALL, EVT_CMPLETE_LOOP);
 	}
 	BUG();
@@ -602,7 +602,7 @@ typedef void (*crt_thd_fn_t)(void *data);
 
 static void fp_timer(void *d)
 {
-	printc("Starting timer\n");
+	/* printc("Starting timer\n"); */
 	sched_timer_tick();
 	BUG();
 }
@@ -626,7 +626,7 @@ static void fp_idle_loop(void *d)
 		if (cos_sched_pending_event()) {
 			report_event(IDLE_SCHED);
  			cos_sched_lock_take();
-			printc("fp_idle_loop calls sst\n");
+			/* printc("fp_idle_loop calls sst\n"); */
 			sched_switch_thread(0, IDLE_SCHED_SWITCH);
 		}
 		report_event(IDLE_SCHED_LOOP);
@@ -695,7 +695,7 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 		return;
 	}
 	fp_block(thd, cos_spd_id());
-	printc("sched_timeout calls sst\n");
+	/* printc("sched_timeout calls sst\n"); */
 	sched_switch_thread(0, TIMEOUT_LOOP);	
 
 	return;
@@ -810,7 +810,7 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 	}
 
 	assert(!sched_thd_dependent(thd));
-	printc("sched_wakeup calls sst\n");
+	/* printc("sched_wakeup calls sst\n"); */
 	sched_switch_thread(0, WAKE_LOOP);
 done:
 	return 0;
@@ -979,7 +979,7 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 				goto unblock;
 			}
 		} else {
-			printc("sched_block calls sst\n");
+			/* printc("sched_block calls sst\n"); */
 			sched_switch_thread(0, BLOCK_LOOP);
 			cos_sched_lock_take();
 			if (!first) { report_event(RETRY_BLOCK); }
@@ -1019,13 +1019,13 @@ int sched_component_take(spdid_t spdid)
 	struct sched_thd *holder, *curr;
 	int first = 1;
 
-	printc("\component take\n");
-	if (ccc++>=1) {
-		printc("\n<<<comp_take Before ASSERT!!!>>>\n");
-		assert(0);
-		printc("\n<<<comp_take After ASSERT!!!>>>\n");
-	}
-	assert(0);
+	/* printc("\component take\n"); */
+	/* if (ccc++>=1) { */
+	/* 	printc("\n<<<comp_take Before ASSERT!!!>>>\n"); */
+	/* 	assert(0); */
+	/* 	printc("\n<<<comp_take After ASSERT!!!>>>\n"); */
+	/* } */
+	/* assert(0); */
 
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
@@ -1075,7 +1075,7 @@ int sched_component_release(spdid_t spdid)
 		printc("fprr: error releasing spd %d's critical section (contended %d)\n", 
 		       spdid, curr->contended_component);
 	}
-	printc("sched_component_release calls sst\n");
+	/* printc("sched_component_release calls sst\n"); */
 	sched_switch_thread(0, NULL_EVT);
 	assert(!sched_thd_dependent(curr));
 
@@ -1102,7 +1102,7 @@ static int fp_kill_thd(struct sched_thd *t)
 	REM_LIST(t, next, prev);
 	ADD_LIST(&graveyard, t, prio_next, prio_prev);
 
-	printc("fp_kill_thd calls sst\n");
+	/* printc("fp_kill_thd calls sst\n"); */
 	sched_switch_thread(0, NULL_EVT);
 
 	/* reincarnated!!! */
@@ -1226,11 +1226,11 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
 
-	/* if (ttt++>=1 && sched_param1 == 0) { */
-	/* 	printc("\n<<<create Before ASSERT!!!>>>\n"); */
-	/* 	assert(0); */
-	/* 	printc("\n<<<create After ASSERT!!!>>>\n"); */
-	/* } */
+	if (ttt++>=1 && sched_param1 == 0) {
+		printc("\n<<<create Before ASSERT!!!>>>\n");
+		assert(0);
+		printc("\n<<<create After ASSERT!!!>>>\n");
+	}
 
 	sp[0] = ((union sched_param)sched_param0).c;
 	sp[1] = ((union sched_param)sched_param1).c;
