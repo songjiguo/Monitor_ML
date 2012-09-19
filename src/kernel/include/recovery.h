@@ -46,12 +46,12 @@ sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums)
 			thd = thd->sched_prev;
 			cnt--;
 		}
-		printk("Can not find an existing thread id %d!!\n", thd_id);
+		/* printk("Can not find an existing thread id %d!!\n", thd_id); */
 		return NULL;
 	} else {
 		while(i--) thd = thd->sched_prev;
 		/* thd = find_thd(spd, thd); */
-		printk("<<< thd %d >>>\n", thd->thread_id);
+		/* printk("<<< thd %d >>>\n", thd->thread_id); */
 		return thd;
 	}
 }
@@ -116,8 +116,8 @@ switch_thd_fault_detect(struct thread *next)
 	
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
-		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
+		/* printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt); */
+		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
 		return 1;
 	}
 	else return 0;
@@ -134,8 +134,8 @@ interrupt_fault_detect(struct thread *next) /* for now, this is the timer thread
 	
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
-		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
+		/* printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt); */
+		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
 		return 1;
 	}
 	else return 0;
@@ -174,7 +174,7 @@ switch_thd_fault_update(struct thread *thd)
 	n_spd  = tif->spd;
 	
 	tif->curr_fault.cnt = n_spd->fault.cnt;
-	printk("switch_flt_update: n_spd %d\n", spd_get_index(n_spd));
+	/* printk("switch_flt_update: n_spd %d\n", spd_get_index(n_spd)); */
 	return 0;
 }
 
@@ -232,7 +232,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 	switch(option) {
 	case COS_SPD_FAULT_TRIGGER:
 		d_spd->fault.cnt++;
-		printk("cos: SPD %d Fault.Cnt is incremented by 1\n", spd_get_index(d_spd));
+		/* printk("cos: SPD %d Fault.Cnt is incremented by 1\n", spd_get_index(d_spd)); */
 		break;
 	case COS_CAP_FAULT_UPDATE: /* does not need destination spd, got by cap_no on interface */
 		assert(cap_entry->owner == d_spd);
@@ -259,7 +259,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 			cap_entry->fault.cnt = dest_spd->fault.cnt;			
 		}
 
-		printk("cos: CAP (owner %d dest %d) Fault is updated\n", spd_get_index(d_spd), spd_get_index(dest_spd));
+		/* printk("cos: CAP (owner %d dest %d) Fault is updated\n", spd_get_index(d_spd), spd_get_index(dest_spd) );*/
 		break;
 	default:
 		ret = -1;
