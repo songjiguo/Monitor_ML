@@ -197,10 +197,10 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
 	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %d)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
-	printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
+	/* printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid); */
 
 	failure_notif_fail(cos_spd_id(), spdid);
-	printc("LL: <<1>>\n");
+	/* printc("LL: <<1>>\n"); */
 	/* no reason to save register contents... */
 	/* unsigned long long start, end; */
 	/* rdtscll(start); */
@@ -215,7 +215,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
 
-		printc("Try to recover the spd\n");
+		/* printc("Try to recover the spd\n"); */
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
 		else recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 		/* after the recovery thread is done, it should switch back to us. */
@@ -241,11 +241,11 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 int
 fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
-	printc("parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip);
+	/* printc("parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip); */
 	unsigned long r_ip;
 
 	int tid = cos_get_thd_id();
-	printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
+	/* printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid); */
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
