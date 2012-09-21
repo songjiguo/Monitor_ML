@@ -397,7 +397,7 @@ boot_create_system(void)
 
 		if (h->flags & COBJ_INIT_THD) boot_spd_thd(h->id);
 	}
-	printc("return accc\n");
+	/* printc("return accc\n"); */
 }
 
 void 

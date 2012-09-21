@@ -1089,7 +1089,7 @@ static int fp_kill_thd(struct sched_thd *t)
 
 	cos_sched_lock_take();
 	c = sched_get_current();
-	printc("I am thread %d and I am going to graveyard now!!!!!\n", cos_get_thd_id());
+	/* printc("I am thread %d and I am going to graveyard now!!!!!\n", cos_get_thd_id()); */
 	if (!t) printc("kill thread in %d\n", cos_get_thd_id());
 	assert(t);
 	assert(!sched_thd_grp(t));

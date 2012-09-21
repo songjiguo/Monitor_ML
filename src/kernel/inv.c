@@ -374,7 +374,7 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_t ip, struct inv_ret_struct *ret)
 {
-	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n"); */
 
 	struct inv_ret_struct r;
 
@@ -418,7 +418,7 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
-	printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
 
 	/* print_regs(&thd->regs);	 */
 	/* printk("current thread is %d\n", thd_get_id(thd)); */
@@ -480,7 +480,7 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n"); */
 
 	/* printk("current thread is %d\n", thd_get_id(thd_get_current())); */
 	/* print_regs(&thd->regs); */
@@ -539,7 +539,7 @@ thd_switch_fault_notif(struct thread *thd)
 void
 fault_int_notif(struct thread *thd, struct spd *notif_spd, unsigned int cap_num, struct pt_regs *regs, int fault_num)
 {
-	printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n");
+	/* printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n"); */
 
 	struct inv_ret_struct r;
 	vaddr_t addr;

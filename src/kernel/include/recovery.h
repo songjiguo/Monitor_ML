@@ -124,8 +124,8 @@ switch_thd_fault_detect(struct thread *next)
 	
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
-		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
+		/* printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt); */
+		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
 		return 1;
 	}
 	else return 0;

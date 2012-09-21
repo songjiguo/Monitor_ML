@@ -27,7 +27,7 @@ static int num = 0;
 
 void cos_init(void *arg)
 {
-	printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id());
+	/* printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id()); */
 
 	static int first = 0;
 	union sched_param sp;
@@ -57,7 +57,7 @@ void cos_init(void *arg)
 				sched_wakeup(cos_spd_id(), high);
 			}
 		}
-		printc("THE ending......thd %d\n", cos_get_thd_id());
+		/* printc("THE ending......thd %d\n", cos_get_thd_id()); */
 	}
 	
 	return;
