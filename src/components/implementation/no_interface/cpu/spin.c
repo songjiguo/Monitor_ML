@@ -48,16 +48,16 @@ void cos_init(void *arg)
 	} else {
 		while (num < 5) {
 			if (cos_get_thd_id() == high){
-				num++;
 				printc("high %d running and to block\n", cos_get_thd_id());
 				sched_block(cos_spd_id(), 0);
 			}
 			if (cos_get_thd_id() == low){
+				num++;
 				printc("low %d running and to wake up high %d\n", cos_get_thd_id(), high);
 				sched_wakeup(cos_spd_id(), high);
 			}
 		}
-		printc("THE ending......\n");
+		printc("THE ending......thd %d\n", cos_get_thd_id());
 	}
 	
 	return;

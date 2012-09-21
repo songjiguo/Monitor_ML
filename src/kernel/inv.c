@@ -130,6 +130,7 @@ COS_SYSCALL vaddr_t
 ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp, 
 		    vaddr_t ip, struct inv_ret_struct *ret)
 {
+	vaddr_t addr;
 	struct thd_invocation_frame *curr_frame;
 	struct spd *curr_spd, *dest_spd;
 	struct invocation_cap *cap_entry;
@@ -205,14 +206,25 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 	thd_invocation_push(thd, cap_entry->destination, sp, ip);
 	cap_entry->invocation_cnt++;
 
+#ifdef MEAS_INV_FAULT_DETECT	
+	unsigned long long start, end;
+	rdtscll(start);
+#endif
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
 		/* QQ detects the fault on invocation */
 		ipc_fault_update(cap_entry, dest_spd);
-		return thd_ipc_fault_notif(thd, dest_spd, sp, ip, ret);
+		addr = thd_ipc_fault_notif(thd, dest_spd, sp, ip, ret);
+
+#ifdef MEAS_INV_FAULT_DETECT
+		rdtscll(end);
+		printk("cos:ipc notification cost %llu\n", (end-start));
+#endif
+		goto done;
 	}
 	inv_frame_fault_cnt_update(thd, curr_spd);
-//	printk("%d: %d->%d\n", thd_get_id(thd), spd_get_index(curr_spd), spd_get_index(dest_spd));
-	return cap_entry->dest_entry_instruction;
+	addr = cap_entry->dest_entry_instruction;
+done:
+	return addr;
 }
 
 static struct pt_regs *brand_execution_completion(struct thread *curr, int *preempt);
@@ -240,6 +252,8 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 	/* At the top of the invocation stack? */
 	if (unlikely(inv_frame == NULL)) {
 		assert(!(curr->flags & THD_STATE_READY_UPCALL));
+		/* need take this thread off also from the kernel tracking list */
+		
 		/* normal thread terminates: upcall into root
 		 * scheduler */
 		*regs_restore = thd_ret_term_upcall(curr);
@@ -269,12 +283,20 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 		*regs_restore = &curr->fault_regs;
 		return NULL;
 	}
-
 	/* printk("%d: ->%d\n", thd_get_id(curr), spd_get_index(curr_frame->spd)); */
+
+#ifdef MEAS_RET_FAULT_DETECT
+	unsigned long long start, end;
+	rdtscll(start);
+#endif
 	if (unlikely(fault_ret = pop_fault_detect(inv_frame, curr_frame))){
 		/* KEVIN fill *regs_restore */
 		pop_fault_update(inv_frame, curr_frame);
 		*regs_restore = thd_ret_fault_notif(curr);
+#ifdef MEAS_RET_FAULT_DETECT
+		rdtscll(end);
+		printk("cos: ret notification cost %llu\n", (end-start));
+#endif
 		return NULL;
 	}
 	return inv_frame;	
@@ -282,7 +304,7 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 
 /* return 1 if the fault is handled by a component */
 int 
-fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_regs *regs, int fault_num)
+__fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_regs *regs, int fault_num, int cpy_regs)
 {
 	struct spd *s = virtual_namespace_query(regs->ip);
 	struct thd_invocation_frame *curr_frame;
@@ -334,6 +356,12 @@ fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_re
 	return 1;
 }
 
+int 
+fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_regs *regs, int fault_num)
+{
+	return __fault_ipc_invoke(thd, fault_addr, flags, regs, fault_num, 1);
+}
+
 
 /* fault notification related functions */
 
@@ -346,7 +374,7 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_t ip, struct inv_ret_struct *ret)
 {
-	/* printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
 
 	struct inv_ret_struct r;
 
@@ -390,7 +418,7 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
-	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n");
 
 	/* print_regs(&thd->regs);	 */
 	/* printk("current thread is %d\n", thd_get_id(thd)); */
@@ -452,7 +480,7 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n");
 
 	/* printk("current thread is %d\n", thd_get_id(thd_get_current())); */
 	/* print_regs(&thd->regs); */
@@ -479,7 +507,7 @@ thd_switch_fault_notif(struct thread *thd)
 
 	/* struct thd_invocation_frame *test_frame; */
 	/* test_frame = thd_invstk_top(thd); */
-	/* printk("A:test frame info:\n"); */
+	/* printk("A:test frame info:, thd %d\n", thd_get_id(thd)); */
 	/* printk("spd %d\n", spd_get_index(test_frame->spd)); */
 	/* printk("fault cnt %d\n", test_frame->fault.cnt); */
 	/* printk("curr fault cnt %d\n", test_frame->curr_fault.cnt); */
@@ -505,16 +533,6 @@ thd_switch_fault_notif(struct thread *thd)
 
 	/* fault notif handler address */
 	thd->regs.dx = thd->regs.ip = addr;
-
-	/* /\* setup the registers for the fault handler invocation *\/ */
-	/* regs->ax = r.thd_id; */
-	/* regs->bx = regs->cx = r.spd_id; */
-	/* regs->sp = 0; */
-	/* /\* arguments (including bx above) *\/ */
-	/* regs->si = fault_addr; */
-	/* regs->di = flags; */
-	/* regs->bp = regs->ip; */
-
 	return;
 }
 
@@ -1281,11 +1299,20 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	/* printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
 	event_record("switch_thread", thd_get_id(curr), thd_get_id(thd));
 
+#ifdef MEAS_TCS_FAULT_DETECT
+	unsigned long long start, end;
+	rdtscll(start);
+#endif
+
 	int fault_ret;
         /* ANDY detect fault when switch thread */
 	if(unlikely(fault_ret = switch_thd_fault_detect(thd))){
-		/* switch_thd_fault_update(thd); */  // only update on invocation!!!
+		switch_thd_fault_update(thd);
 		thd_switch_fault_notif(thd);
+#ifdef MEAS_TCS_FAULT_DETECT
+		rdtscll(end);
+		printk("cos : switch notification cost 1: %llu\n", (end-start));
+#endif
 	}
 	switch_thd_fault_update(curr);
 

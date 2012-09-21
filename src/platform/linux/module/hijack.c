@@ -1783,10 +1783,18 @@ int host_attempt_brand(struct thread *brand)
 					       thd_get_id(next));
 					///*assert*/BUG_ON(!(next->flags & THD_STATE_ACTIVE_UPCALL));
 				}
+#ifdef MEAS_INV_FAULT_DETECT
+				unsigned long long start, end;
+				rdtscll(start);
+#endif
 				if (unlikely(interrupt_fault_detect(next))) {
 				/* if (thd_get_id(cos_current) == 11) {  // test 8 for spin, 11 for pong */
 					/* Peter: detect fault on interrupt path */
 					thd_interrupt_fault_notif(next, regs);
+#ifdef MEAS_INV_FAULT_DETECT
+					rdtscll(end);
+					printk("interrupt notification cost 1: %llu\n", (end-start));
+#endif
 				} else {
 					interrupt_fault_update(cos_current);
 

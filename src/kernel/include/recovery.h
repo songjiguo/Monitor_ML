@@ -10,6 +10,14 @@
 #include "spd.h"
 #include "thread.h"
 
+//#define MEASURE_COST
+
+#ifdef MEASURE_COST
+#define MEAS_INV_FAULT_DETECT   /* measure the fault detection cost for invocation */
+#define MEAS_RET_FAULT_DETECT   /* measure the fault detection cost for return */
+#define MEAS_TCS_FAULT_DETECT	/* measure the fault detection cost for thread context switch */
+#define MEAS_INT_FAULT_DETECT   /* measure the fault detection cost for interrupt */
+#endif
 
 /*---------Threads that created by scheduler--------*/
 static struct thread*
@@ -116,8 +124,8 @@ switch_thd_fault_detect(struct thread *next)
 	
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		/* printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt); */
-		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
+		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
+		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
 		return 1;
 	}
 	else return 0;

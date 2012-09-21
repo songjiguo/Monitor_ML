@@ -66,23 +66,24 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 
 
 static  int test = 0;
-#ifdef NOTIF_TEST
 int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 {
+	unsigned long long start, end;
+	rdtscll(start);
 	/* unsigned long r_ip; */
 	int tid = cos_get_thd_id();
-	printc("para: spdid %d\n", spdid);
-	printc("<< thd %d in Fault FLT Notif >> \n", cos_get_thd_id());
-	printc("....kevin.....andy.....\n");
+	/* printc("<< thd %d in Fault FLT Notif >> \n", cos_get_thd_id()); */
+	/* printc("....kevin.....andy.....\n"); */
 
 	unsigned long r_ip; 	/* the ip to return to */
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
-		printc("return 0\n");
+		/* printc("return 0\n"); */
+		rdtscll(end);
+		printc("notification cost 2: %llu\n", (end-start));
 		return 0;
 	}
 
 	assert(0);
 }
-#endif

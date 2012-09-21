@@ -278,6 +278,7 @@ struct cos_component_information {
 
 typedef enum {
 	COS_UPCALL_BRAND_EXEC,
+	COS_UPCALL_IDLE,
 	COS_UPCALL_BRAND_COMPLETE,
 	COS_UPCALL_BOOTSTRAP,
 	COS_UPCALL_CREATE,

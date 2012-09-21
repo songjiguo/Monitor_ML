@@ -383,7 +383,7 @@ boot_create_system(void)
 
 		if (boot_spd_caps(h, h->id)) BUG();
 	}
-	
+	/* printc("booter: thd %d and spd %d\n", cos_get_thd_id(), cos_spd_id()); */
 	if (!boot_sched) return;
 	for (i = 0 ; boot_sched[i] != 0 ; i++) {
 		struct cobj_header *h;
@@ -397,6 +397,7 @@ boot_create_system(void)
 
 		if (h->flags & COBJ_INIT_THD) boot_spd_thd(h->id);
 	}
+	printc("return accc\n");
 }
 
 void 

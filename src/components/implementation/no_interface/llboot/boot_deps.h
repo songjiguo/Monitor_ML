@@ -25,6 +25,16 @@ printc(char *fmt, ...)
 
 	return ret;
 }
+
+//#define MEASURE_RECOVERY_COST
+
+#ifdef MEASURE_RECOVERY_COST
+unsigned long long start, end;
+#define MEAS_RECOVERY
+#define MEAS_REBOOT
+#define MEAS_FRM_OP
+#endif
+
 /* On assert, immediately switch to the "exit" thread */
 #define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); cos_switch_thread(alpha, 0);} } while(0)
 
@@ -135,7 +145,10 @@ llboot_thd_done(void)
 		while (1) cos_switch_thread(alpha, 0);
 		BUG();
 	}
-	
+
+/* #ifdef MEAS_RECOVERY */
+/* 	volatile unsigned long long start, end; */
+/* #endif	 */
 	while (1) {
 		int     pthd  = prev_thd;
 		spdid_t rspd  = recover_spd;
@@ -144,11 +157,18 @@ llboot_thd_done(void)
 				
 		assert(tid == recovery_thd);
 		if (rspd) {             /* need to recover a component */
+#ifdef MEAS_RECOVERY
+			rdtscll(start);	
+#endif
 			assert(pthd);
 			recover_spd = 0;
 			cos_upcall_args(op, rspd, arg); /* This will escape from the loop */
 			assert(0);
 		} else {		/* ...done reinitializing...resume */
+#ifdef MEAS_RECOVERY
+			rdtscll(end);
+			printc("recovery cost: %llu\n", (end-start));
+#endif
 			assert(pthd && pthd != tid);
 			prev_thd = 0;   /* FIXME: atomic action required... */
 			cos_switch_thread(pthd, 0);
@@ -199,12 +219,21 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	/* printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid); */
 
+#ifdef MEAS_REBOOT
+	rdtscll(start);
+#endif
 	failure_notif_fail(cos_spd_id(), spdid);
 	/* printc("LL: <<1>>\n"); */
 	/* no reason to save register contents... */
-	/* unsigned long long start, end; */
-	/* rdtscll(start); */
 
+#ifdef MEAS_REBOOT
+	rdtscll(end);
+	printc("rebooting cost: %llu\n", (end-start));
+#endif
+
+#ifdef MEAS_FRM_OP
+	rdtscll(start);
+#endif
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		/* Manipulate the return address of the component that called
 		 * the faulting component... */
@@ -214,6 +243,11 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
+
+#ifdef MEAS_FRM_OP
+		rdtscll(end);
+		printc("INV Frame operation cost: %llu\n", (end-start));
+#endif
 
 		/* printc("Try to recover the spd\n"); */
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
@@ -237,7 +271,6 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	return 0;
 }
 
-#ifdef NOTIF_TEST
 int
 fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
@@ -252,14 +285,17 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 		return 0;
 	}
+	/* printc("<< LL fault notification 2>>\n"); */
 
-	if (tid == 7) cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);	/* timer thread */
-	else cos_upcall(flags);	/* upcall to ths dest spd, for other threads */
+	if (tid == 7) 
+		cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);	/* timer thread */
+	else if (tid == 4)
+		cos_upcall_args(COS_UPCALL_IDLE, spdid, 0);	/* idle thread */
+	else 
+		cos_upcall(flags);	/* upcall to ths dest spd (home spd), for other threads */
 
 	assert(0);
 }
-
-#endif
 
 /* memory operations... */
 

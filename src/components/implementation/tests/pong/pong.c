@@ -42,7 +42,9 @@ int pong(void)
 	}
 	if (cos_get_thd_id() == 11) {
 		printc("I am thread 11 in pong\n");
-		if (number++ == 3) assert(0);
+		if (number++ == 3) {
+			assert(0);
+		}
 	}
 
 	return 0;

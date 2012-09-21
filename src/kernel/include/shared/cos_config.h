@@ -16,7 +16,7 @@
  * Should Composite run as highest priority?  Should NOT be set if
  * using networking (cnet). 
  */
-/* #define LINUX_HIGHEST_PRIORITY 1 */
+#define LINUX_HIGHEST_PRIORITY 1
 
 // cos kernel settings
 #define COS_PRINT_MEASUREMENTS 1
@@ -54,6 +54,5 @@
  * use it, run python set_symbolic_link.py under composite/tools */
 
 #define RECOVERY_ENABLE 1               // 1 will enable the fault notification in Composite kernel
-#define NOTIF_TEST  		        /* test purpose only */
 
 #endif /* COS_CONFIG_H */

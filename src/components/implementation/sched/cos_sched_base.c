@@ -558,7 +558,7 @@ static void sched_timer_tick(void)
 			report_thd_accouting();
 			//cos_stats();
 		}
-		
+
 		/* are we done running? */
 		if (unlikely(ticks >= RUNTIME_SEC*TIMER_FREQ+1)) {
 			sched_exit();
@@ -1064,7 +1064,7 @@ int sched_component_release(spdid_t spdid)
 {
 	struct sched_thd *curr;
 
-	//printc("sched release %d\n", spdid);
+	printc("thread %d sched release %d\n",cos_get_thd_id(),  spdid);
 
 	report_event(COMP_RELEASE);
 	cos_sched_lock_take();
@@ -1089,7 +1089,7 @@ static int fp_kill_thd(struct sched_thd *t)
 
 	cos_sched_lock_take();
 	c = sched_get_current();
-
+	printc("I am thread %d and I am going to graveyard now!!!!!\n", cos_get_thd_id());
 	if (!t) printc("kill thread in %d\n", cos_get_thd_id());
 	assert(t);
 	assert(!sched_thd_grp(t));
@@ -1151,7 +1151,7 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 			ret_id = cos_create_thread(fn, d, 0);
 			assert(0 != ret_id);
 		}
-		/* printc("(spd %d desired_thd %d) already existed\n", d, ret_id); */
+		printc("(spd %d desired_thd %d) already existed\n", d, ret_id);
 	}
 	return ret_id;
 }
@@ -1777,7 +1777,7 @@ int sched_root_init(int reboot)
 	union sched_param sp[2] = {{.c = {.type = SCHEDP_NOOP}},
 				   {.c = {.type = SCHEDP_NOOP}}};
 
-	print_config_info();
+	/* print_config_info(); */
 
 	cos_argreg_init();
 	__sched_init();
@@ -1898,6 +1898,10 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	case COS_UPCALL_BRAND_EXEC:
 		sched_timer_tick();
 		break;
+	case COS_UPCALL_IDLE:   /* only for fault case */
+		fp_idle_loop(0);
+		/* sched_exit(); */
+		break;
 	case COS_UPCALL_BOOTSTRAP:
 		printc("UPCALL into Scheduler: BOOTSTRAP\n");
 		sched_init(0);
@@ -1911,6 +1915,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		sched_on_failure_notif();
 		break;
 	case COS_UPCALL_CREATE:
+		printc("UPCALL to create: arg1 %p arg2 %p \n", arg1, arg2);
 		cos_argreg_init();
 		((crt_thd_fn_t)arg1)(arg2);
 		break;
