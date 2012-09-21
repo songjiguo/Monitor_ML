@@ -1227,7 +1227,7 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	void *d = (void*)(int)spdid;
 
 	if (ttt++>=1 && sched_param1 == 0) {
-		printc("\n<<<create Before ASSERT!!!>>>\n");
+		printc("\n<<<sched_create_thd Before ASSERT!!!>>>\n");
 		assert(0);
 		printc("\n<<<create After ASSERT!!!>>>\n");
 	}
