@@ -10,7 +10,7 @@
 #include "spd.h"
 #include "thread.h"
 
-//#define MEASURE_COST
+#define MEASURE_COST
 
 #ifdef MEASURE_COST
 #define MEAS_INV_FAULT_DETECT   /* measure the fault detection cost for invocation */

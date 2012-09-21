@@ -1151,7 +1151,7 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 			ret_id = cos_create_thread(fn, d, 0);
 			assert(0 != ret_id);
 		}
-		printc("(spd %d desired_thd %d) already existed\n", d, ret_id);
+		/* printc("(spd %d desired_thd %d) already existed\n", d, ret_id); */
 	}
 	return ret_id;
 }
@@ -1907,7 +1907,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		sched_init(0);
 		break;
 	case COS_UPCALL_REBOOT:
-		printc("UPCALL into Scheduler: REBOOTING \n");
+		/* printc("UPCALL into Scheduler: REBOOTING \n"); */
 		sched_init(1);
 		break;
 	case COS_UPCALL_FAILURE_NOTIF:

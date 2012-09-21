@@ -26,13 +26,14 @@ printc(char *fmt, ...)
 	return ret;
 }
 
-//#define MEASURE_RECOVERY_COST
+#define MEASURE_RECOVERY_COST
 
 #ifdef MEASURE_RECOVERY_COST
 unsigned long long start, end;
 #define MEAS_RECOVERY
 #define MEAS_REBOOT
 #define MEAS_FRM_OP
+#define MEAS_NOTIF_COST_2
 #endif
 
 /* On assert, immediately switch to the "exit" thread */
@@ -277,12 +278,19 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	/* printc("parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip); */
 	unsigned long r_ip;
 
+#ifdef MEAS_NOTIF_COST_2
+	rdtscll(start);
+#endif MEAS_NOTIF_COST_2
 	int tid = cos_get_thd_id();
 	/* printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid); */
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
+#ifdef MEAS_NOTIF_COST_2
+		rdtscll(end);
+		printc("LL: notification cost 2: %llu\n", (end-start));
+#endif
 		return 0;
 	}
 	/* printc("<< LL fault notification 2>>\n"); */

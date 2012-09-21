@@ -1637,12 +1637,6 @@ thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
 
-	/* printk("thread is %d\n", thd_get_id(thd)); */
-	/* printk("fault count is %d\n", thd_frame->fault.cnt); */
-	/* printk("spd %d fault count is %d\n", */
-	/*        spd_get_index(thd_frame->spd), thd_frame->spd->fault.cnt); */
-	/* printk("attached spd is %d\n", spd_get_index(thd_frame->spd)); */
-
 	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
 	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
 	struct spd *notif_spd = flt_notif_cap_entry->destination;

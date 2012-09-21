@@ -416,11 +416,9 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 	if (sched_thd_ready(t)) fp_rem_thd(t);
 	fp_add_thd(t, prio);
 
-	if (t->id == 5) goto done; /* temporary FIXME: */
-	
 	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
-			printc("thd %d start recording...\n", cos_get_thd_id());
-			printc("thread %d prio is %d\n", t->id, prio);
+			/* printc("thd %d start recording...\n", cos_get_thd_id()); */
+			/* printc("thread %d prio is %d\n", t->id, prio); */
 			if (cos_sched_cntl(COS_SCHED_RECORD_THD, t->id, 0)) BUG();
 			if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
 			if (cos_sched_cntl(COS_SCHED_RECORD_VALUE, t->id, (int)t_ps->type)) BUG();
