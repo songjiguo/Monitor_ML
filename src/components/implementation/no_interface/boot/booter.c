@@ -7,6 +7,7 @@
 
 #include <cos_component.h>
 
+
 extern struct cos_component_information cos_comp_info;
 struct cobj_header *hs[MAX_NUM_SPDS+1];
 
@@ -18,6 +19,8 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 /* interfaces */
 //#include <failure_notif.h>
 #include <cgraph.h>
+
+//#define MEAS_COST
 
 /* local meta-data to track the components */
 struct spd_local_md {
@@ -190,6 +193,8 @@ static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t c
 	unsigned int i;
 	char *start_page;
 
+	unsigned long long start, end;
+
 	start_page = local_md[spdid].page_start;
 	for (i = 0 ; i < h->nsect ; i++) {
 		struct cobj_sect *sect;
@@ -207,13 +212,19 @@ static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t c
 			page_left   = (left > PAGE_SIZE) ? PAGE_SIZE : left;
 			dsrc        = start_page;
 			start_page += PAGE_SIZE;
-
+#ifdef MEAS_COST
+			rdtscll(start);
+#endif
 			if (sect->flags & COBJ_SECT_ZEROS) {
 				memset(dsrc, 0, PAGE_SIZE);
 			} else {
 				memcpy(dsrc, lsrc, page_left);
 				if (page_left < PAGE_SIZE) memset(dsrc+page_left, 0, PAGE_SIZE - page_left);
 			}
+#ifdef MEAS_COST
+			rdtscll(end);
+			printc("mem cost: %llu\n", end - start);
+#endif
 
 			/* Check if special symbols that need
 			 * modification are in this page */
@@ -414,26 +425,40 @@ void
 failure_notif_fail(spdid_t caller, spdid_t failed)
 {
 
-	/* unsigned long long start, end; */
+	unsigned long long start, end;
 	/* printc("failure notif fail\n"); */
 	struct spd_local_md *md;
 
+	LOCK();
+
 	/* rdtscll(start); */
 
-	LOCK();
 //	boot_spd_caps_chg_activation(failed, 0);
 	md = &local_md[failed];
 	assert(md);
 	/* printc("caller %d failed spd %d md->h %x\n", caller, failed, md->h); */
 	if (boot_spd_map_populate(md->h, failed, md->comp_info)) BUG();
+
+	/* rdtscll(end); */
+	/* printc("COST 1: %llu\n", end - start); */
+	/* rdtscll(start); */
+
 	/* can fail if component had no boot threads: */
 	if (boot_spd_caps(md->h, failed)) BUG();  /* do this first ??? */
+
+	/* rdtscll(end); */
+	/* printc("COST 2: %llu\n", end - start); */
+	/* rdtscll(start); */
+
 	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
 //	boot_spd_caps_chg_activation(failed, 1);
 
-	UNLOCK();
+	/* rdtscll(end); */
+	/* printc("COST 3: %llu\n", end - start); */
+
 	/* rdtscll(end); */
 	/* printc("COST (caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start); */
+	UNLOCK();
 
 }
 

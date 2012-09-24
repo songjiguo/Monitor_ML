@@ -10,7 +10,7 @@
 #include "spd.h"
 #include "thread.h"
 
-#define MEASURE_COST
+//#define MEASURE_COST
 
 #ifdef MEASURE_COST
 #define MEAS_INV_FAULT_DETECT   /* measure the fault detection cost for invocation */
@@ -102,7 +102,10 @@ init_invframe_fault_cnt(struct thd_invocation_frame *inv_frame)
 static inline int
 ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
-	if (cap_entry->fault.cnt != dest_spd->fault.cnt) return 1;
+	if (cap_entry->fault.cnt != dest_spd->fault.cnt) {
+		printk("dest spd %d fault cnt %d\n", spd_get_index(dest_spd), dest_spd->fault.cnt);
+		return 1;
+	}
 	else return 0;
 }
 
@@ -124,8 +127,8 @@ switch_thd_fault_detect(struct thread *next)
 	
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		/* printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt); */
-		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
+		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
+		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
 		return 1;
 	}
 	else return 0;

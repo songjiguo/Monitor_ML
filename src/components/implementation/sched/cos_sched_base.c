@@ -617,6 +617,7 @@ static void fp_create_spd_thd(void *d)
 
 static void fp_idle_loop(void *d)
 {
+	/* printc("thread %d upcall into idle loop\n",cos_get_thd_id()); */
 	assert(sched_is_root());
 	while(1) {
 		/* Unfortunately, we can't make this strong an
@@ -753,17 +754,17 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 	report_event(THD_WAKE);
 }
 
+static aaa = 0;
 /* 
  * FIXME: should verify that the blocks and wakes come from the same
  * component.  This is the external interface.
  */
 
-static aaa = 0;
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
 
-	/* if (aaa++>=2) { */
+	/* if (aaa++>=6) { */
 	/* 	printc("\n<<<wakeup Before ASSERT!!!>>>\n"); */
 	/* 	assert(0); */
 	/* 	printc("\n<<<wakeup After ASSERT!!!>>>\n"); */
@@ -875,7 +876,7 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	int ret;
 	int first = 1;
 
-	/* if (bbb++>=2) { */
+	/* if (bbb++>=5) { */
 	/* 	printc("\n<<<block Before ASSERT!!!>>>\n"); */
 	/* 	assert(0); */
 	/* 	printc("\n<<<block After ASSERT!!!>>>\n"); */
@@ -1020,12 +1021,11 @@ int sched_component_take(spdid_t spdid)
 	int first = 1;
 
 	/* printc("\component take\n"); */
-	/* if (ccc++>=1) { */
+	/* if (ccc++>=2) { */
 	/* 	printc("\n<<<comp_take Before ASSERT!!!>>>\n"); */
 	/* 	assert(0); */
 	/* 	printc("\n<<<comp_take After ASSERT!!!>>>\n"); */
 	/* } */
-	/* assert(0); */
 
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
@@ -1059,12 +1059,18 @@ int sched_component_take(spdid_t spdid)
 	return 0;
 }
 
+static fff = 0;
 /* Release the component's lock */
 int sched_component_release(spdid_t spdid)
 {
 	struct sched_thd *curr;
 
-	printc("thread %d sched release %d\n",cos_get_thd_id(),  spdid);
+	/* printc("\component release\n"); */
+	/* if (fff++>=2) { */
+	/* 	printc("\n<<<comp_take Before ASSERT!!!>>>\n"); */
+	/* 	assert(0); */
+	/* 	printc("\n<<<comp_take After ASSERT!!!>>>\n"); */
+	/* } */
 
 	report_event(COMP_RELEASE);
 	cos_sched_lock_take();
@@ -1218,7 +1224,7 @@ sched_create_thread(spdid_t spdid, struct cos_array *data)
 	return new->id;
 }
 
-static int ttt = 0;
+static int ddd = 0;
 int
 sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned int desired_thd)
 {
@@ -1226,11 +1232,11 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
 
-	if (ttt++>=1 && sched_param1 == 0) {
-		printc("\n<<<sched_create_thd Before ASSERT!!!>>>\n");
-		assert(0);
-		printc("\n<<<create After ASSERT!!!>>>\n");
-	}
+	/* if (ddd++>=1 && sched_param1 == 0) { */
+	/* 	printc("\n<<<sched_create_thd Before ASSERT!!!>>>\n"); */
+	/* 	assert(0); */
+	/* 	printc("\n<<<create After ASSERT!!!>>>\n"); */
+	/* } */
 
 	sp[0] = ((union sched_param)sched_param0).c;
 	sp[1] = ((union sched_param)sched_param1).c;
@@ -1267,6 +1273,7 @@ done:
 }
 
 
+static int eee = 0;
 /*
  * Create a thread in target, requested by booter, The default
  * parameters setting will be called later in client
@@ -1280,6 +1287,16 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	struct sched_thd *new;
 	vaddr_t t = spdid;
 
+	/* Now this could happen when boot thread boots up the rest of system */
+	/* If this happens, can we ignore every thing, and just
+	 * recreate the rest of system? */
+
+	/* if (eee++>=2) { */
+	/* 	printc("\n<<<create_default Before ASSERT!!!>>>\n"); */
+	/* 	assert(0); */
+	/* 	printc("\n<<<create_default After ASSERT!!!>>>\n"); */
+	/* } */
+
 	sp[0] = ((union sched_param)sched_param_0).c;
 	sp[1] = ((union sched_param)sched_param_1).c;
 	sp[2] = (union sched_param){.c = {.type = SCHEDP_NOOP}}.c;
@@ -1287,6 +1304,8 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	
 	cos_sched_lock_take();
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, desired_thd, 1);
+	/* printc("just created new thread %d\n", new->id); */
+	/* printc("desired thread is %d\n", desired_thd); */
 	/* printc("sched_create_thread_default calls sst\n"); */
 	sched_switch_thread(0, NULL_EVT);
 	if (!new) return -1;
@@ -1654,7 +1673,7 @@ int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short
 extern void parent_sched_exit(void);
 void sched_exit(void)
 {
-	/* printc("Switching to %d\n", init->id); */
+	/* printc("thread %d Switching to %d\n", cos_get_thd_id(), init->id); */
 	cos_sched_clear_events();
 //	cos_switch_thread_release(init->id, 0);
 	while (1) {
@@ -1783,11 +1802,16 @@ int sched_root_init(int reboot)
 	__sched_init();
 
 	/* switch back to this thread to terminate the system. */
+	/* however, after failed and reboot, recovery thread will change init id */
 	init = sched_alloc_thd(cos_get_thd_id());
 	assert(init);
 
-
 	if (unlikely(reboot)) {
+
+		/* FIXME: init_id should be passed from llbooter. For now, just use 3 */
+		init = sched_alloc_thd(3);
+		assert(init);
+
 		thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0);
 		/* printc("rebuild scheduler... %d threads have been recorded\n", thd_nums); */
 		while(thd_nums) {
@@ -1800,46 +1824,26 @@ int sched_root_init(int reboot)
 			fn    = (void *)cos_sched_introspect(COS_SCHED_THD_FN, cos_spd_id(), thd_id);
 			dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
 			type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id);
-			/* printc("thread %d with prio %d\n", thd_id, prio); */
-			/* printc("fn %x dest %d\n", (unsigned int)fn, (int)dest); */
-			/* printc("type is %d\n", type); */
-			/* printc("prio is %d\n", prio); */
+			printc("thread %d with prio %d\n", thd_id, prio);
+			printc("fn %x dest %d\n", (unsigned int)fn, (int)dest);
+			printc("type is %d\n", type);
+			printc("prio is %d\n", prio);
 
-			switch (type) {
-			case SCHEDP_IDLE: /* idle */
-				idle = rec_thd;
-				break;
-			case SCHEDP_TIMER: /* timer */
-				timer = rec_thd;
-				break;
-			case SCHEDP_INIT: /* boot thread */
-				break;
-			case SCHEDP_PRIO: /* thread that has relative priority */
-				sp[0].c.value = prio;
-				break;
-			case SCHEDP_RPRIO: /* thread that has relative priority, now change to prio */
-				type = SCHEDP_PRIO;
-				sp[0].c.value = prio;
-				break;
-			case SCHEDP_RLPRIO: /* thread that has relative priority */
-				type = SCHEDP_PRIO;
-				sp[0].c.value = prio;
-				break;
-			default:
-				break;
-			}
+			sp[0].c.type = SCHEDP_PRIO;;
+			sp[0].c.value = prio;
 
-			sp[0].c.type = type;
-			/* printc("again test val is %d\n", sp[0].c.value); */
 			rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
+			printc("rec_thd flags 2 %d\n", rec_thd->flags);
 
+			if (type == SCHEDP_IDLE) idle = rec_thd;
+			else if (type == SCHEDP_TIMER) timer = rec_thd;
 			thd_nums--;
 		}
 
-		if (cos_sched_pending_event()) {
-			/* printc("sched_init: clear_events(), for recovery thread\n"); */
-			cos_sched_clear_events();
-		}
+		/* if (cos_sched_pending_event()) { */
+		/* 	/\* printc("sched_init: clear_events(), for recovery thread\n"); *\/ */
+		/* 	cos_sched_clear_events(); */
+		/* } */
 		/* printc("recover thread now returns back to ll\n"); */
 		return 0;
 
@@ -1900,7 +1904,6 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		break;
 	case COS_UPCALL_IDLE:   /* only for fault case */
 		fp_idle_loop(0);
-		/* sched_exit(); */
 		break;
 	case COS_UPCALL_BOOTSTRAP:
 		printc("UPCALL into Scheduler: BOOTSTRAP\n");
@@ -1915,7 +1918,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		sched_on_failure_notif();
 		break;
 	case COS_UPCALL_CREATE:
-		printc("UPCALL to create: arg1 %p arg2 %p \n", arg1, arg2);
+		/* printc("thd %d UPCALL to create: arg1 %p arg2 %p \n", cos_get_thd_id(), arg1, arg2); */
 		cos_argreg_init();
 		((crt_thd_fn_t)arg1)(arg2);
 		break;

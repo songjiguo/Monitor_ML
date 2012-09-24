@@ -26,15 +26,13 @@ printc(char *fmt, ...)
 	return ret;
 }
 
-#define MEASURE_RECOVERY_COST
-
-#ifdef MEASURE_RECOVERY_COST
-unsigned long long start, end;
-#define MEAS_RECOVERY
+//#define MEAS_RECOVERY
 #define MEAS_REBOOT
-#define MEAS_FRM_OP
-#define MEAS_NOTIF_COST_2
-#endif
+//#define MEAS_FRM_OP
+//#define MEAS_NOTIF_COST_2
+
+#define cos_idle_thd  4	        /* idle thread*/
+#define cos_timer_thd 7  	/* timer thread */
 
 /* On assert, immediately switch to the "exit" thread */
 #define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); cos_switch_thread(alpha, 0);} } while(0)
@@ -147,9 +145,10 @@ llboot_thd_done(void)
 		BUG();
 	}
 
-/* #ifdef MEAS_RECOVERY */
-/* 	volatile unsigned long long start, end; */
-/* #endif	 */
+#ifdef MEAS_RECOVERY
+	unsigned long long start, end;
+#endif
+
 	while (1) {
 		int     pthd  = prev_thd;
 		spdid_t rspd  = recover_spd;
@@ -172,6 +171,7 @@ llboot_thd_done(void)
 #endif
 			assert(pthd && pthd != tid);
 			prev_thd = 0;   /* FIXME: atomic action required... */
+			/* cos_switch_thread(cos_timer_thd, 0); */
 			cos_switch_thread(pthd, 0);
 		}
 	}
@@ -210,17 +210,18 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	int reboot;
 	reboot = (spdid == 2) ? 1:0;
 
-	first++;
-	if(first == 5) {
-		printc("has failed %d times\n",first);
-		sched_exit();
-	}
+	/* first++; */
+	/* if(first == 5) { */
+	/* 	printc("has failed %d times\n",first); */
+	/* 	sched_exit(); */
+	/* } */
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
 	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %d)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
 	/* printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid); */
 
 #ifdef MEAS_REBOOT
+	unsigned long long start, end;
 	rdtscll(start);
 #endif
 	failure_notif_fail(cos_spd_id(), spdid);
@@ -279,6 +280,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	unsigned long r_ip;
 
 #ifdef MEAS_NOTIF_COST_2
+	unsigned long long start, end;
 	rdtscll(start);
 #endif MEAS_NOTIF_COST_2
 	int tid = cos_get_thd_id();
@@ -289,18 +291,16 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 #ifdef MEAS_NOTIF_COST_2
 		rdtscll(end);
-		printc("LL: notification cost 2: %llu\n", (end-start));
+		/* printc("LL: notification cost 2: %llu\n", (end-start)); */
 #endif
 		return 0;
 	}
 	/* printc("<< LL fault notification 2>>\n"); */
 
-	if (tid == 7) 
-		cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);	/* timer thread */
-	else if (tid == 4)
-		cos_upcall_args(COS_UPCALL_IDLE, spdid, 0);	/* idle thread */
-	else 
-		cos_upcall(flags);	/* upcall to ths dest spd (home spd), for other threads */
+	if (tid == cos_timer_thd) cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);
+	if (tid == cos_idle_thd)  cos_upcall_args(COS_UPCALL_IDLE, spdid, 0);
+	if (tid == init_thd)      llboot_thd_done();
+	cos_upcall(flags);	/* upcall to ths dest spd (home spd), for other threads */
 
 	assert(0);
 }

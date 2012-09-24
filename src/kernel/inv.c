@@ -374,14 +374,14 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_t ip, struct inv_ret_struct *ret)
 {
-	/* printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
 	return __fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, 1);
 }
 
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
-	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n");
 	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, 1);
 	return &thd->regs;
 }
@@ -389,7 +389,7 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH ]]]]]]\n");
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
 
@@ -401,7 +401,7 @@ thd_switch_fault_notif(struct thread *thd)
 void
 fault_int_notif(struct thread *thd, struct spd *notif_spd, unsigned int cap_num, struct pt_regs *regs, int fault_num)
 {
-	/* printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n"); */
+	printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n");
 
 	struct inv_ret_struct r;
 	vaddr_t addr;
@@ -596,7 +596,6 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 		return -1;
 	}
 
-	/* printk("thread is created %d\n", thd_get_id(thd)); */
         /* FIXME: switch to using upcall_setup here */
 	thd->stack_ptr = 0;
 	thd->stack_base[0].current_composite_spd = curr_spd->composite_spd;
@@ -627,8 +626,7 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 	thd->sched_info[curr_spd->sched_depth].thread_fn = (void *)a;
 	thd->sched_info[curr_spd->sched_depth].thread_dest = (void *)b;
 
-	
-	struct thread *test;
+	/* struct thread *test; */
 	/* record all threads that are created by curr, and in which spd the thread is created */
 	/* a->fn, b->dest_spd, c->0, for now */
 	/* printk("cos: In cos_create_thread now and b is %d\n", b); */
@@ -658,6 +656,7 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 		/* ****** */
 	}
 done:	
+	/* printk("thread is created %d\n", thd_get_id(thd)); */
 	return thd_get_id(thd);
 }
 

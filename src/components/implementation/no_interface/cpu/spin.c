@@ -46,16 +46,14 @@ void cos_init(void *arg)
 
 		/* pong(); */
 	} else {
-		while (num < 5) {
+		while (num < 10) {
 			if (cos_get_thd_id() == high){
 				printc("high %d running and to block\n", cos_get_thd_id());
-				printc("..\n");
 				sched_block(cos_spd_id(), 0);
 			}
 			if (cos_get_thd_id() == low){
 				num++;
 				printc("low %d running and to wake up high %d\n", cos_get_thd_id(), high);
-				printc("..\n");
 				sched_wakeup(cos_spd_id(), high);
 			}
 		}
