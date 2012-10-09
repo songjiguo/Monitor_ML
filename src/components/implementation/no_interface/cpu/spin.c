@@ -47,15 +47,15 @@ void cos_init(void *arg)
 		while (num < 10) {
 			if (cos_get_thd_id() == high){
 				sched_block(cos_spd_id(), 0);
-				sched_component_take(cos_spd_id());
-				sched_component_release(cos_spd_id());
+				/* sched_component_take(cos_spd_id()); */
+				/* sched_component_release(cos_spd_id()); */
 			}
 			
 			if (cos_get_thd_id() == low){
 				num++;
-				sched_component_take(cos_spd_id());
+				/* sched_component_take(cos_spd_id()); */
 				sched_wakeup(cos_spd_id(), high);
-				sched_component_release(cos_spd_id());
+				/* sched_component_release(cos_spd_id()); */
 			}
 		}
 		

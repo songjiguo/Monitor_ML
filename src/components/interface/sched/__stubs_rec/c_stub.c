@@ -71,7 +71,10 @@ CSTUB_ASM_4(sched_create_thd, spdid, sched_param0, sched_param1, desired_thd)
 	       rdtscll(end);
 	       printc("<<< entire cost (sched_create_thd): %llu >>>>\n", (end-start));
 #endif
-	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) sched_component_take(cos_spd_id());
+	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) {
+		       printc("take component crt_thd\n");
+		       sched_component_take(cos_spd_id());
+	       }
        	       goto redo;
        }
 
@@ -99,7 +102,11 @@ CSTUB_ASM_4(sched_create_thread_default, spdid, sched_param0, sched_param1, desi
 	       rdtscll(end);
 	       printc("<<< entire cost (sched_create_thd_default): %llu >>>>\n", (end-start));
 #endif
-	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) sched_component_take(cos_spd_id());
+	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) {
+		       printc("take component crt_thd_default\n");
+		       sched_component_take(cos_spd_id());
+	       }
+
        	       goto redo;
        }
 
@@ -125,7 +132,11 @@ CSTUB_ASM_2(sched_wakeup, spdid, dep_thd)
 	       rdtscll(end);
 	       printc("<<< entire cost (sched_wakeup): %llu >>>>\n", (end-start));
 #endif
-	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) sched_component_take(cos_spd_id());
+	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) {
+		       printc("take component wakeup\n");
+		       sched_component_take(cos_spd_id());
+	       }
+
        	       goto redo;
        }
 
@@ -151,7 +162,11 @@ CSTUB_ASM_2(sched_block, spdid, thd_id)
 	       rdtscll(end);
 	       printc("<<< entire cost (sched_block): %llu >>>>\n", (end-start));
 #endif
-	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) sched_component_take(cos_spd_id());
+	       if (crt_sec_taken && crt_sec_owner == cos_get_thd_id()) {
+		       printc("take component block\n");
+		       sched_component_take(cos_spd_id());
+	       }
+
        	       goto redo;
        }
 
@@ -221,10 +236,10 @@ CSTUB_ASM_1(sched_component_release, spdid)
 		* section at the very first place */
 	       /* thread that calls to release should have called the
 		* component_take and had the critical section */
-	       goto done;
+
+	       /* goto redo; */
        }
 
-done:
        crt_sec_owner = 0;
        crt_sec_taken = 0;
 
