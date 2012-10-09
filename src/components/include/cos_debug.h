@@ -20,7 +20,7 @@
 
 #ifdef DEBUG
 #ifndef assert
-#define assert(node) do { if (unlikely(!(node))) { /* debug_print("assert error in @ "); */ *((int *)0) = 0;} } while(0)
+#define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); *((int *)0) = 0;} } while(0)
 #endif
 #ifndef BUG_ON
 #define BUG_ON(c) assert(!(c))

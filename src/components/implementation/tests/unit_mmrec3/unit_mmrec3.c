@@ -10,11 +10,9 @@ vaddr_t mm_test3()
 	if (!addr) BUG();
 	return addr;
 }
-
 #ifdef CLI_UPCALL_ENABLE
 void alias_replay(vaddr_t s_addr);
 #endif
-
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {

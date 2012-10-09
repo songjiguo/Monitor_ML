@@ -117,9 +117,10 @@ cos_init(void)
 	return;
 }
 
-#ifdef CLI_UPCALL_ENABLE	/* in mem_mgr.h */
+#ifdef CLI_UPCALL_ENABLE
 void alias_replay(vaddr_t s_addr);
 #endif
+
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
