@@ -16,6 +16,7 @@
 /* #define MEA_ALIAS */
 /* #define MEA_REVOKE */
 /* #define MEA_ADD_ROOT */
+/*  */
 
 /* Map a physical frame into a component. */
 vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags);

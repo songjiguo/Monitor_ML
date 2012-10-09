@@ -364,18 +364,15 @@ static inline int sched_release_crit_sect(spdid_t spdid, struct sched_thd *curr)
 	assert(!sched_thd_free(curr));
 	assert(!sched_thd_blocked(curr));
 
-	/* FIXME: the spd takes a lock in scheduler, then scheduler
-	 * failed before the lock is released */
-
-	if (!cs->holding_thd) goto done; /* for example, the fault has happened in scheduler */
 	/* This ostensibly should be the case */
 	assert(cs->holding_thd == curr);
 	assert(curr->contended_component == 0);
-done:
+
 	cs->holding_thd = NULL;
-	if (curr->ncs_held > 0) curr->ncs_held--; /* again, in case the fault has happened */
+	curr->ncs_held--;
 	return 0;
 }
+
 
 /*************** Scheduler Synchronization Fns ***************/
 

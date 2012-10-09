@@ -41,6 +41,13 @@
 #define PRINTD(s, args...) 
 #endif
 
+//#define TEST_CREATE_THD
+//#define TEST_CREATE_THREAD_DEFAULT
+//#define TEST_WAKEUP
+//#define TEST_BLOCK
+//#define TEST_TAKE_COMPONENT
+#define TEST_RELEASE_COMPONENT
+
 #include <sched_timing.h>
 
 static volatile u64_t ticks = 0;
@@ -764,12 +771,13 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
 
-	/* if (aaa++>=6) { */
-	/* 	printc("\n<<<wakeup Before ASSERT!!!>>>\n"); */
-	/* 	assert(0); */
-	/* 	printc("\n<<<wakeup After ASSERT!!!>>>\n"); */
-	/* } */
-
+#ifdef TEST_WAKEUP
+	if (aaa++>=6) {
+		printc("\n<<<wakeup Before ASSERT!!!>>>\n");
+		assert(0);
+		printc("\n<<<wakeup After ASSERT!!!>>>\n");
+	}
+#endif
 	cos_sched_lock_take();
 		
 	/* printc("thread %d waking up thread %d. %d\n", cos_get_thd_id(), thd_id, 0); */
@@ -876,11 +884,13 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	int ret;
 	int first = 1;
 
-	/* if (bbb++>=5) { */
-	/* 	printc("\n<<<block Before ASSERT!!!>>>\n"); */
-	/* 	assert(0); */
-	/* 	printc("\n<<<block After ASSERT!!!>>>\n"); */
-	/* } */
+#ifdef TEST_BLOCK
+	if (bbb++>=5) {
+		/* printc("\n<<<block Before ASSERT!!!>>>\n"); */
+		assert(0);
+		printc("\n<<<block After ASSERT!!!>>>\n");
+	}
+#endif
 
 	// Added by Gabe 08/19
 	if (unlikely(dependency_thd == cos_get_thd_id())) return -EINVAL;
@@ -1020,13 +1030,13 @@ int sched_component_take(spdid_t spdid)
 	struct sched_thd *holder, *curr;
 	int first = 1;
 
-	/* printc("\component take\n"); */
-	/* if (ccc++>=2) { */
-	/* 	printc("\n<<<comp_take Before ASSERT!!!>>>\n"); */
-	/* 	assert(0); */
-	/* 	printc("\n<<<comp_take After ASSERT!!!>>>\n"); */
-	/* } */
-
+#ifdef TEST_TAKE_COMPONENT
+	if (ccc++>=18) {
+		printc("\n<<<comp_take Before ASSERT!!!>>>\n");
+		assert(0);
+		printc("\n<<<comp_take After ASSERT!!!>>>\n");
+	}
+#endif
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
 	curr = sched_get_current();
@@ -1065,13 +1075,13 @@ int sched_component_release(spdid_t spdid)
 {
 	struct sched_thd *curr;
 
-	/* printc("\component release\n"); */
-	/* if (fff++>=2) { */
-	/* 	printc("\n<<<comp_take Before ASSERT!!!>>>\n"); */
-	/* 	assert(0); */
-	/* 	printc("\n<<<comp_take After ASSERT!!!>>>\n"); */
-	/* } */
-
+#ifdef TEST_RELEASE_COMPONENT
+	if (fff++>=12) {
+		printc("\n<<<comp_release Before ASSERT!!!>>>\n");
+		assert(0);
+		printc("\n<<<comp_release After ASSERT!!!>>>\n");
+	}
+#endif
 	report_event(COMP_RELEASE);
 	cos_sched_lock_take();
 	curr = sched_get_current();
@@ -1232,11 +1242,13 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	struct sched_thd *curr, *new;
 	void *d = (void*)(int)spdid;
 
-	/* if (ddd++>=1 && sched_param1 == 0) { */
-	/* 	printc("\n<<<sched_create_thd Before ASSERT!!!>>>\n"); */
-	/* 	assert(0); */
-	/* 	printc("\n<<<create After ASSERT!!!>>>\n"); */
-	/* } */
+#ifdef TEST_CREATE_THD
+  	if (ddd++>=1 && sched_param1 == 0) {
+		/* printc("\n<<<sched_create_thd Before ASSERT!!!>>>\n"); */
+		assert(0);
+		printc("\n<<<create After ASSERT!!!>>>\n");
+	}
+#endif
 
 	sp[0] = ((union sched_param)sched_param0).c;
 	sp[1] = ((union sched_param)sched_param1).c;
@@ -1291,12 +1303,13 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	/* If this happens, can we ignore every thing, and just
 	 * recreate the rest of system? */
 
-	/* if (eee++>=2) { */
-	/* 	printc("\n<<<create_default Before ASSERT!!!>>>\n"); */
-	/* 	assert(0); */
-	/* 	printc("\n<<<create_default After ASSERT!!!>>>\n"); */
-	/* } */
-
+#ifdef TEST_CREATE_THREAD_DEFAULT
+	if (eee++>=2) {
+		/* printc("\n<<<create_default Before ASSERT!!!>>>\n"); */
+		assert(0);
+		printc("\n<<<create_default After ASSERT!!!>>>\n");
+	}
+#endif
 	sp[0] = ((union sched_param)sched_param_0).c;
 	sp[1] = ((union sched_param)sched_param_1).c;
 	sp[2] = (union sched_param){.c = {.type = SCHEDP_NOOP}}.c;
@@ -1823,17 +1836,17 @@ int sched_root_init(int reboot)
 
 			fn    = (void *)cos_sched_introspect(COS_SCHED_THD_FN, cos_spd_id(), thd_id);
 			dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
-			type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id);
-			printc("thread %d with prio %d\n", thd_id, prio);
-			printc("fn %x dest %d\n", (unsigned int)fn, (int)dest);
-			printc("type is %d\n", type);
-			printc("prio is %d\n", prio);
+			/* type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id); */
+			/* printc("thread %d with prio %d\n", thd_id, prio); */
+			/* printc("fn %x dest %d\n", (unsigned int)fn, (int)dest); */
+			/* printc("type is %d\n", type); */
+			/* printc("prio is %d\n", prio); */
 
 			sp[0].c.type = SCHEDP_PRIO;;
 			sp[0].c.value = prio;
 
 			rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
-			printc("rec_thd flags 2 %d\n", rec_thd->flags);
+			/* printc("rec_thd flags 2 %d\n", rec_thd->flags); */
 
 			if (type == SCHEDP_IDLE) idle = rec_thd;
 			else if (type == SCHEDP_TIMER) timer = rec_thd;

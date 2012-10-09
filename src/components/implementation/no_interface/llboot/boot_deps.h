@@ -27,7 +27,7 @@ printc(char *fmt, ...)
 }
 
 //#define MEAS_RECOVERY
-#define MEAS_REBOOT
+//#define MEAS_REBOOT
 //#define MEAS_FRM_OP
 //#define MEAS_NOTIF_COST_2
 
@@ -210,18 +210,19 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	int reboot;
 	reboot = (spdid == 2) ? 1:0;
 
-	/* first++; */
-	/* if(first == 5) { */
-	/* 	printc("has failed %d times\n",first); */
-	/* 	sched_exit(); */
-	/* } */
+	first++;
+	if(first == 5) {
+		printc("has failed %d times\n",first);
+		sched_exit();
+	}
+
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
 	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %d)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
 	/* printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid); */
 
 #ifdef MEAS_REBOOT
-	unsigned long long start, end;
+	volatile unsigned long long start, end;
 	rdtscll(start);
 #endif
 	failure_notif_fail(cos_spd_id(), spdid);
@@ -284,7 +285,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	rdtscll(start);
 #endif MEAS_NOTIF_COST_2
 	int tid = cos_get_thd_id();
-	/* printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid); */
+	printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
@@ -295,7 +296,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 #endif
 		return 0;
 	}
-	/* printc("<< LL fault notification 2>>\n"); */
+	printc("<< LL fault notification 2>>\n");
 
 	if (tid == cos_timer_thd) cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);
 	if (tid == cos_idle_thd)  cos_upcall_args(COS_UPCALL_IDLE, spdid, 0);

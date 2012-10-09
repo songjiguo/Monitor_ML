@@ -19,16 +19,16 @@
 
 #ifdef SCHEDULER_TEST
 #include <res_spec.h>
-#include <pgfault.h>
-#include <pong.h>
 
 int high, low;
 static int num = 0;
 
+volatile unsigned long long start, end;
+
 void cos_init(void *arg)
 {
 	/* printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id()); */
-
+	int i = 4;
 	static int first = 0;
 	union sched_param sp;
 
@@ -43,21 +43,23 @@ void cos_init(void *arg)
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 10;
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
-
-		/* pong(); */
 	} else {
 		while (num < 10) {
 			if (cos_get_thd_id() == high){
-				printc("high %d running and to block\n", cos_get_thd_id());
 				sched_block(cos_spd_id(), 0);
+				sched_component_take(cos_spd_id());
+				sched_component_release(cos_spd_id());
 			}
+			
 			if (cos_get_thd_id() == low){
 				num++;
-				printc("low %d running and to wake up high %d\n", cos_get_thd_id(), high);
+				sched_component_take(cos_spd_id());
 				sched_wakeup(cos_spd_id(), high);
+				sched_component_release(cos_spd_id());
 			}
 		}
-		/* printc("THE ending......thd %d\n", cos_get_thd_id()); */
+		
+		printc("THE ending......thd %d\n", cos_get_thd_id());
 	}
 	
 	return;
