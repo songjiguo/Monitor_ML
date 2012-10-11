@@ -24,7 +24,7 @@ typedef enum {
 	TOR_ALL   = TOR_RW    | TOR_SPLIT /* 0 is a synonym */
 } tor_flags_t;
 
-td_t tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
+td_t tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, td_t desired_ctid);
 void trelease(spdid_t spdid, td_t tid);
 int tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len);
 int tread(spdid_t spdid, td_t td, int cbid, int sz);

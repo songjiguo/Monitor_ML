@@ -20,7 +20,7 @@ td_t __sg_tsplit(spdid_t spdid, cbuf_t cbid, int len)
 	if (unlikely(((int)(d->len[1] + sizeof(struct __sg_tsplit_data))) != len)) return -4;
 
 	return tsplit(spdid, d->tid, &d->data[0], 
-		      d->len[1] - d->len[0], d->tflags, d->evtid);
+		      d->len[1] - d->len[0], d->tflags, d->evtid, 0);
 
 }
 

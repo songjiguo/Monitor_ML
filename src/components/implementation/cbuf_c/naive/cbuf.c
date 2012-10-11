@@ -413,7 +413,7 @@ cbuf_c_create(spdid_t spdid, int size, long cbid)
 	mc->c.obj_sz  = (u16_t) 0x3F & 
 		(((u16_t)PAGE_SIZE) >> (u16_t)CBUF_OBJ_SZ_SHIFT);
 	mc->c_0.th_id = cos_get_thd_id();
-	mc->c.flags  |= CBUFM_IN_USE | CBUFM_TOUCHED;
+	mc->c.flags  |= CBUFM_IN_USE | CBUFM_TOUCHED | CBUFM_OWNER;
 done:
 	RELEASE();
 	return ret;
@@ -603,15 +603,15 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	d = cos_map_lookup(&cb_ids, cbid);
 	if (!d) goto err;
 	old_owner = &d->owner;
-	/* printc("((1))\n"); */
+	printc("((1))\n");
 	old_sti = get_spd_info(old_owner->spd);
 	assert(SPD_IS_MANAGED(old_sti));
 
 	old_mc = __spd_cbvect_lookup_range(old_sti, cbid);
 	if(!old_mc) goto err;
-	/* printc("((2))\n"); */
+	printc("((2))\n");
 	if (!CBUF_OWNER(old_mc->c.flags)) goto err;
-	/* printc("((3))\n"); */
+	printc("((3))\n");
 	for (new_owner = FIRST_LIST(old_owner, next, prev) ; 
 	     new_owner != old_owner; 
 	     new_owner = FIRST_LIST(new_owner, next, prev)) {
@@ -619,7 +619,7 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	}
 
 	if (new_owner == old_owner) goto err;
-	/* printc("((4))\n"); */
+	printc("((4))\n");
 	new_sti = get_spd_info(new_owner->spd);
 	assert(SPD_IS_MANAGED(new_sti));
 
@@ -627,12 +627,6 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	mgr_addr = __spd_cbvect_retrieve_page(old_sti, cbid); 
 	assert(mgr_addr);
 	__spd_cbvect_add_range(new_sti, cbid, mgr_addr);
-
-	new_mc = __spd_cbvect_lookup_range(new_sti, cbid);
-	if(!new_mc) goto err;
-	new_mc->c.flags |= CBUFM_OWNER;
-	old_mc->c.flags &= ~CBUFM_OWNER;	
-	/* printc("((5))\n"); */
 
 	// exchange the spd and addr in cbuf_mapping
 	tmp.spd = old_owner->spd;
@@ -642,7 +636,7 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	tmp.addr = old_owner->addr;
 	old_owner->addr = new_owner->addr;
 	new_owner->addr = tmp.addr;
-	/* printc("((6))\n"); */
+	printc("((6))\n");
 done:
 	return ret;
 err:
@@ -656,7 +650,7 @@ err:
    wants to hold a cbuf, if it is not the creater, the ownership
    should be re-granted to it from the original owner. For example,
    when the ramfs server is called and the server wants to keep the 
-   cbuf longer before restore.(need remember which cbufs for that tid??)
+   cbuf longer before restore.(should also make page read-only? )
 */
 /* r_spdid is the requested spd */
 
@@ -674,10 +668,12 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 	d = cos_map_lookup(&cb_ids, cbid);
 	if (!d) { 
 		ret = -1; 
+		printc("can not find cbid %d\n", cbid);
 		goto done;
 	}
 
 	o_spdid =  d->owner.spd;
+	printc("o_spd %d r_spd %d\n", o_spdid, r_spdid);
 	if (o_spdid == r_spdid) goto done;
 
 	ret = mgr_update_owner(r_spdid, cbid); // -1 fail, 0 success

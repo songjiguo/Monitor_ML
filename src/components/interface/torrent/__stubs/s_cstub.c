@@ -20,7 +20,7 @@ td_t __sg_tsplit(spdid_t spdid, cbuf_t cbid, int len)
 	if (unlikely(d->tid == 0)) return -EINVAL;
 
 	return tsplit(spdid, d->tid, &d->data[0], 
-		      d->len[1] - d->len[0], d->tflags, d->evtid);
+		      d->len[1] - d->len[0], d->tflags, d->evtid, 0);
 }
 
 struct __sg_tmerge_data {

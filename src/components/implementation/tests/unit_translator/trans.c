@@ -25,7 +25,7 @@ void cos_init(void)
 
 	evt = evt_split(cos_spd_id(), 0, 0);
 	assert(evt > 0);
-	td = tsplit(cos_spd_id(), td_root, params, strlen(params), TOR_READ, evt);
+	td = tsplit(cos_spd_id(), td_root, params, strlen(params), TOR_READ, evt, 0);
 	do {
 		evt_wait(cos_spd_id(), evt);
 		amnt = tread_pack(cos_spd_id(), td, buffer, left);

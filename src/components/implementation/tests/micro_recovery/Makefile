@@ -1,6 +1,6 @@
-C_OBJS=micro_recovery.o
+C_OBJS=ramfs_ft_test.o
 ASM_OBJS=
-COMPONENT=micro_rec.o
+COMPONENT=ramfs_rec_test.o
 INTERFACES=
 DEPENDENCIES=printc torrent sched cbuf_c evt mem_mgr_large valloc lock
 IF_LIB=

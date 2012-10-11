@@ -212,7 +212,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 #endif
 	/* printk("----cap %d cap flt %d dest_flt %d---\n",capability, cap_entry->fault.cnt, dest_spd->fault.cnt); */
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
-		/* QQ detects the fault on invocation */
+		/* Yusheng detects the fault on invocation */
 		ipc_fault_update(cap_entry, dest_spd);
 		addr = thd_ipc_fault_notif(thd, dest_spd, sp, ip, ret);
 

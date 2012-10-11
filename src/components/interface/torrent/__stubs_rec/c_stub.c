@@ -1,3 +1,15 @@
+/* Jiguo Song: ramfs FT */
+/* Note: 
+  1. Need deal 3 cases with cbufs
+     1) fault while writing, after cbuf2buf -- need save the contents on clients (make it read only?)
+     2) fault while writing, before cbuf2buf -- no need save the contents on clients (for now)
+     3) writing successfully, fault later (for now)
+  2. 
+  3.
+  4.
+  5.
+*/
+
 #include <cos_component.h>
 #include <cos_debug.h>
 #include <print.h>
@@ -27,7 +39,7 @@ static unsigned long fcounter = 0;
 /* /\* used for multiple cbufs tracking  *\/ */
 /* struct wrt_cbufs { */
 /* 	struct wrt_cbufs *next, *prev; */
-/* 	cbuf_t cbid; */
+/* 	cbuf_t cb; */
 /* 	int sz; */
 /* }; */
 
@@ -45,7 +57,7 @@ struct rec_data_tor {
 	unsigned long fcnt;
 
 	u32_t offset;	
-	cbuf_t cbid;
+	cbuf_t cb;
 	int cbsz;
 
 	/* struct wrt_cbufs rd_wrt_cbufs; */
@@ -83,21 +95,6 @@ rd_dealloc(struct rec_data_tor *rd)
 	cslab_free_rd(rd);
 }
 
-static char*
-param_save(char *param, int param_len)
-{
-	char *l_param;
-	l_param = malloc(param_len);
-	if (!l_param) {
-		printc("cannot malloc \n");
-		BUG();
-	}
-	strncpy(l_param, param, param_len);
-
-	return l_param;
-}
-
-
 void 
 print_rd_info(struct rec_data_tor *rd)
 {
@@ -121,7 +118,7 @@ print_rd_info(struct rec_data_tor *rd)
 }
 
 /* static void */
-/* add_cbufs_record(struct rec_data_tor *rd, int cbid, int sz) */
+/* add_cbufs_record(struct rec_data_tor *rd, int cb, int sz) */
 /* { */
 /* 	struct wrt_cbufs *wc; */
 /* 	wc = malloc(sizeof(struct wrt_cbufs)); */
@@ -129,7 +126,7 @@ print_rd_info(struct rec_data_tor *rd)
 
 /* 	INIT_LIST(wc, next, prev); */
 
-/* 	wc->cbid = cbid; */
+/* 	wc->cb = cb; */
 /* 	wc->sz = sz; */
 
 /* 	ADD_LIST(&rd->rd_wrt_cbufs, wc, next, prev); */
@@ -171,21 +168,19 @@ err:
 void 
 rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *param, int len, tor_flags_t tflags, long evtid)
 {
-
+	printc("rd_cons: ser_tid %d  cli_tid %d\n", ser_tid, cli_tid);
 	assert(rd);
 
 	rd->parent_tid = tid;
 	rd->s_tid = ser_tid;
 	rd->c_tid = cli_tid;
-	
 	rd->param = param;
 	rd->param_len = len;
 	rd->tflags = tflags;
 	rd->evtid = evtid;
-	
+
 	rd->fcnt = fcounter;
 	
-	/* what if the server failed by other thread before this point? */
 	cvect_add(&rec_vect, rd, cli_tid);
 
 	/* INIT_LIST(&rd->rd_wrt_cbufs, next, prev); */
@@ -204,7 +199,7 @@ rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *par
 /* 	for (wc = FIRST_LIST(list, next, prev) ;  */
 /* 	     wc != list;  */
 /* 	     wc = FIRST_LIST(wc, next, prev)) { */
-/* 		ret = twrite(cos_spd_id(), rd->s_tid, wc->cbid, wc->sz); */
+/* 		ret = twrite(cos_spd_id(), rd->s_tid, wc->cb, wc->sz); */
 /* 		if (ret == -1) goto err; */
 /* 	} */
 /* done: */
@@ -215,40 +210,25 @@ rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *par
 
 
 /* restore the server state */
-static void
+static td_t
 reinstate(struct rec_data_tor *rd)
 {
-	printc("trying to reinstate....\n");
+	printc("thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid);
 	assert(rd);
-	td_t s_tid;
+	td_t ret;
 
-	s_tid = tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid);
+	ret = tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid);
 
-	if (s_tid < 1) {
-		printc(" re-split failed %d\n", s_tid);
+	if (ret < 1) {
+		printc(" re-split failed %d\n", ret);
 		return;
 	}
 
-	rd->s_tid = s_tid;
-	rd->fcnt = fcounter;
-
-        printc("check offset to write %d\n",rd->offset);
+        /* printc("check offset to write %d\n",rd->offset); */
         /* printc("check written offset %d\n",trmeta(rd->s_tid)); */
-	printc("<<already re-split...reinstate>>\n");
+	printc("<<already re-split...reinstate and tid is %d now>>\n", ret);
 
-	/* switch(rd->state)  */
-	/* { */
-	/* case WRITING: */
-	/* 	break; */
-	/* case READING: */
-	/* 	twrite(cos_spd_id(), rd->s_tid, rd->cbid, rd->wrtcb_sz); */
-	/* 	twmeta(rd->s_tid, rd->offset); */
-	/* 	break; */
-	/* case RELEASING: */
-	/* 	break; */
-	/* } */
-
-	return;
+	return ret;
 }
 
 static struct rec_data_tor *
@@ -257,14 +237,14 @@ update_rd(td_t tid)
         struct rec_data_tor *rd;
 
         rd = rd_lookup(tid);
-        assert(rd);
+	if (!rd) return NULL;
 
 	/* fast path */
 	if (likely(rd->fcnt == fcounter)) 
 		return rd;
-	
-	reinstate(rd);
 
+	printc("rd->fcnt %lu  fcounter %lu\n",rd->fcnt,fcounter);
+	reinstate(rd);
 	return rd;
 }
 
@@ -286,6 +266,21 @@ get_unique(void)
 }
 
 
+static char*
+param_save(char *param, int param_len)
+{
+	char *l_param;
+	l_param = malloc(param_len);
+	if (!l_param) {
+		printc("cannot malloc \n");
+		BUG();
+	}
+	strncpy(l_param, param, param_len);
+
+	return l_param;
+}
+
+
 /************************************/
 /******  client stub functions ******/
 /************************************/
@@ -301,29 +296,34 @@ struct __sg_tsplit_data {
 /* Always splits the new torrent and get new ser object */
 /* Client only needs update and know how to find server side object */
 
-CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid)
+/* added desired_ctid, want to reuse record for the same ctid if it is
+ * already there, so only update the s_tid info */
 
+CSTUB_FN_ARGS_7(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid, td_t, desired_ctid)
+
+        printc("<<< In: call tsplit >>>\n");
         struct __sg_tsplit_data *d;
-        struct rec_data_tor *rd;
+        struct rec_data_tor *rd, *rd_par;
 
 	char *l_param;
 	cbuf_t cb;
         int sz = 0;
         td_t cli_tid = 0;
         td_t ser_tid = 0;
+        tor_flags_t flags = tflags;
         td_t parent_tid = tid;
         
         assert(param && len > 0);
         assert(param[len] == '\0'); 
 
         sz = len + sizeof(struct __sg_tsplit_data);
-
-redo:		
-        d = cbuf_alloc(sz, &cb);
+redo:
+        d = cbuf_alloc(sz, &cb); /* by doing this, reduce the risk of fault in cbuf */
 	if (!d) return -1;
 
-	d->tid = parent_tid;
-        d->tflags = tflags;
+        /* printc("d->tid %d\n", parent_tid); */
+        d->tid = parent_tid;
+        d->tflags = flags;
 	d->evtid = evtid;
 	d->len[0] = 0;
 	d->len[1] = len;
@@ -333,17 +333,35 @@ CSTUB_ASM_3(tsplit, spdid, cb, sz)
 
         if (unlikely(fault)) {
 		fcounter++;
+		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+			printc("set cap_fault_cnt failed\n");
+			BUG();
+		}
 		cbuf_free(d);
+		rd_par = rd_lookup(parent_tid);
+		if (rd_par) {
+			/* printc("before reinstate tid %d\n", parent_tid); */
+			assert(parent_tid == rd_par->c_tid);
+			parent_tid = reinstate(rd_par);			
+		}
+		/* otherwise, it is root torrent (id 1) */
+		/* printc("redo..........\n"); */
 		goto redo;
 	}
+printc("ret is %d\n",ret);
         cbuf_free(d);
- 
+        if (desired_ctid && (rd = rd_lookup(desired_ctid))){
+		rd->s_tid = ret;
+		rd->fcnt = fcounter;
+		printc("only update s_tid of %d\n", rd->c_tid);
+		goto done;
+	}
+
         ser_tid = ret;
         l_param = param_save(param, len);
 
         rd = rd_alloc();
         assert(rd);
-
         /* An existing tid indicates                                        */
         /* 1. the server must have failed before                            */
         /* 2. the occupied torrent not released yet                         */
@@ -352,20 +370,20 @@ CSTUB_ASM_3(tsplit, spdid, cb, sz)
         /* 1. normal path with a new server object or                       */
         /* 2. the server has failed before and just get a new server object */
 
-        if (unlikely(rd_lookup(ser_tid))) {
+        if (unlikely(rd_lookup(ser_tid))) { /* if some cli_tid has used the same number */
 		cli_tid = get_unique();
 		assert(cli_tid > 0 && cli_tid != ser_tid);
-		/* printc("found existing ser_tid %d >> get new cli_tid %d\n", ser_tid, cli_tid); */
+		printc("found existing tid %d >> get new cli_tid %d\n", ser_tid, cli_tid);
 	} else {
 		cli_tid = ser_tid;
 	}
-
+        /* client side tid should be guaranteed to be unique now */
         rd_cons(rd, parent_tid, ser_tid, cli_tid, l_param, len, tflags, evtid);
 
-        rd = rd_lookup(ser_tid);
-        assert(rd);
-        /* rd->state = SPLITTING; */
+        assert(rd_lookup(cli_tid));
 
+        ret = cli_tid;
+done:
 CSTUB_POST
 
 
@@ -377,6 +395,7 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_2(int, trelease, spdid_t, spdid, td_t, tid)
 
+        printc("<<< In: call trelease >>>\n");
         struct rec_data_tor *rd;
 
 redo:
@@ -386,6 +405,10 @@ CSTUB_ASM_2(trelease, spdid, rd->s_tid)
 
         if (unlikely(fault)) {
 		fcounter++;
+		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+			printc("set cap_fault_cnt failed\n");
+			BUG();
+		}
                 goto redo;
 	}
 
@@ -396,11 +419,12 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
+        printc("<<< In: call tread tid %d>>>\n", tid);
         struct rec_data_tor *rd;
 
 redo:
         rd = update_rd(tid);
-        rd->cbid = cb;
+        rd->cb = cb;
         rd->cbsz = sz;
 
         print_rd_info(rd);
@@ -409,6 +433,10 @@ CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 
         if (unlikely(fault)) {
 		fcounter++;
+		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+			printc("set cap_fault_cnt failed\n");
+			BUG();
+		}
                 goto redo;
 	}
 
@@ -421,11 +449,12 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
+        printc("<<< In: call twrite >>>\n");
         struct rec_data_tor *rd;
 
 redo:
         rd = update_rd(tid);
-        rd->cbid = cb;
+        rd->cb = cb;
         rd->cbsz = sz;
 
         print_rd_info(rd);
@@ -434,6 +463,10 @@ CSTUB_ASM_4(twrite, spdid, rd->s_tid, cb, sz)
 
         if (unlikely(fault)) {
 		fcounter++;
+		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+			printc("set cap_fault_cnt failed\n");
+			BUG();
+		}
                 goto redo;
 	}
 

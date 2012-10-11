@@ -17,6 +17,8 @@
 #include <cos_map.h>
 #include <fs.h>
 
+#include <pgfault.h>
+
 static cos_lock_t fs_lock;
 struct fsobj root;
 #define LOCK() if (lock_take(&fs_lock)) BUG();
@@ -24,14 +26,22 @@ struct fsobj root;
 
 #define MIN_DATA_SZ 256
 
+static int aaa = 0;
+
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
-       int len, tor_flags_t tflags, long evtid) 
+       int len, tor_flags_t tflags, long evtid, td_t desired_ctid) 
 {
 	td_t ret = -1;
 	struct torrent *t, *nt;
 	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
 	char *subpath;
+
+	aaa++;
+	if (aaa%4 == 0){
+		printc("<< Before Assert >> \n");
+		assert(0);
+	}
 
 	LOCK();
 	t = tor_lookup(td);
@@ -142,6 +152,10 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	struct fsobj *fso;
 	char *buf;
 
+	int buf_sz;
+	u32_t id;
+	cbuf_unpack(cbid, &id, (u32_t*)&buf_sz);
+
 	if (tor_isnull(td)) return -EINVAL;
 
 	LOCK();
@@ -181,6 +195,10 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	}
 	memcpy(fso->data + t->offset, buf, ret);
 	t->offset += ret;
+
+	/* update the cbuf owner to ramfs */
+	/* should only the owner can free/revoke the cbuf */
+	if (cbuf_c_claim(cos_spd_id(), id)) BUG();
 done:	
 	UNLOCK();
 	return ret;

@@ -22,7 +22,7 @@ struct channel_info {
 
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
-       int len, tor_flags_t tflags, long evtid) 
+       int len, tor_flags_t tflags, long evtid, td_t desired_ctid) 
 {
 	td_t ret = -1;
 	struct torrent *t, *nt;
