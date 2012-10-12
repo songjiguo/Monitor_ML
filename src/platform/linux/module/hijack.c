@@ -1345,6 +1345,23 @@ paddr_t pgtbl_rem_ret(paddr_t pgtbl, vaddr_t va)
 	return val;
 }
 
+
+int pgtbl_rw_set(paddr_t pgtbl, vaddr_t va, int flag)
+{
+	pte_t *pte = pgtbl_lookup_address(pgtbl, va);
+	paddr_t paddr = (unsigned long)va_to_pa(va);
+
+	if (!pte || !(pte_val(*pte) & _PAGE_PRESENT)) {
+		return -1;
+	}
+
+	if (flag == COS_MMAP_PFN_RW) pte->pte_low = paddr | _PAGE_RW;
+	if (flag == COS_MMAP_PFN_READONLY) pte->pte_low = paddr & ~_PAGE_RW;
+
+	return 0;
+}
+
+
 /* 
  * This won't work to find the translation for the argument region as
  * __va doesn't work on module-mapped memory. 

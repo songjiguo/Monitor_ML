@@ -117,7 +117,7 @@ struct inv_ret_struct {
 };
 
 static vaddr_t 
-thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_t ip, struct inv_ret_struct *ret);
+thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd);
 static struct pt_regs *thd_ret_fault_notif(struct thread *thd);
 static void thd_switch_fault_notif(struct thread *thd);
 
@@ -184,7 +184,6 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 		       capability, spd_get_index(curr_spd), thd->stack_ptr, spd_get_index(curr_frame->spd));
 		print_stack(thd);
 		/* 
-
 		 * FIXME: do something here like throw a fault to be
 		 * handled by a user-level handler
 		 */
@@ -210,11 +209,19 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 	unsigned long long start, end;
 	rdtscll(start);
 #endif
+
+	struct spd *s;
+
 	/* printk("----cap %d cap flt %d dest_flt %d---\n",capability, cap_entry->fault.cnt, dest_spd->fault.cnt); */
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
-		/* Yusheng detects the fault on invocation */
+
+		/* s = virtual_namespace_query(cap_entry->dest_entry_instruction); */
+		/* printk("cos: s spd %d\n", spd_get_index(s)); */
+
+		/* yusheng detects the fault on invocation */
+		printk("current spd is %d\n", spd_get_index(curr_spd));
 		ipc_fault_update(cap_entry, dest_spd);
-		addr = thd_ipc_fault_notif(thd, dest_spd, sp, ip, ret);
+		addr = thd_ipc_fault_notif(thd, dest_spd);
 
 #ifdef MEAS_INV_FAULT_DETECT
 		rdtscll(end);
@@ -224,6 +231,8 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 	}
 	inv_frame_fault_cnt_update(thd, curr_spd);
 	addr = cap_entry->dest_entry_instruction;
+
+
 done:
 	return addr;
 }
@@ -305,20 +314,25 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 
 /* return 1 if the fault is handled by a component */
 vaddr_t
-__fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_regs *regs, int fault_num, int cpy_regs)
+__fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_regs *regs, int fault_num, struct spd *dest_spd)
 {
-	struct spd *s = virtual_namespace_query(regs->ip);
+	struct spd *s;
 	struct thd_invocation_frame *curr_frame;
 	struct inv_ret_struct r;
 	vaddr_t a;
 	unsigned int fault_cap;
 	struct pt_regs *nregs;
 
-	/* corrupted ip? */
-	if (unlikely(!s)) {
-		curr_frame = thd_invstk_top(thd);
-		s = curr_frame->spd;
+	if (unlikely(dest_spd)) s = dest_spd;
+	else {
+		s = virtual_namespace_query(regs->ip);
+		/* corrupted ip? */
+		if (unlikely(!s)) {
+			curr_frame = thd_invstk_top(thd);
+			s = curr_frame->spd;
+		}
 	}
+
 	assert(fault_num < COS_FLT_MAX);
 	fault_cap = s->fault_handler[fault_num];
 	/* If no component catches this fault, upcall into the
@@ -360,7 +374,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 int 
 fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_regs *regs, int fault_num)
 {
-	return __fault_ipc_invoke(thd, fault_addr, flags, regs, fault_num, 1);
+	return __fault_ipc_invoke(thd, fault_addr, flags, regs, fault_num, NULL);
 }
 
 
@@ -373,17 +387,18 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 }
 
 static vaddr_t
-thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd, vaddr_t sp, vaddr_t ip, struct inv_ret_struct *ret)
+thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd)
 {
 	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
-	return __fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, 1);
+
+	return __fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, dest_spd);
 }
 
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
 	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
-	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, 1);
+	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
 	return &thd->regs;
 }
 
@@ -394,7 +409,7 @@ thd_switch_fault_notif(struct thread *thd)
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
 
-	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, 1);
+	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
 	thd->regs.di = (int)thd->sched_info[thd_frame->spd->sched_depth].thread_dest;
 	return;
 }
@@ -2021,6 +2036,8 @@ int cos_net_notify_drop(struct thread *brand)
 
 extern int pgtbl_add_entry(paddr_t pgtbl, vaddr_t vaddr, paddr_t paddr); 
 extern void *va_to_pa(void *va);
+extern int pgtbl_rw_set(paddr_t pgtbl, vaddr_t va, int flag);
+
 static const struct cos_trans_fns *trans_fns = NULL;
 void cos_trans_reg(const struct cos_trans_fns *fns) { trans_fns = fns; }
 void cos_trans_dereg(void) { trans_fns = NULL; }
@@ -3645,6 +3662,12 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 
 		cos_meas_event(COS_MAP_REVOKE);
 
+		break;
+	}
+	case COS_MMAP_RW:
+	{
+		ret = pgtbl_rw_set(spd->spd_info.pg_tbl, daddr, flags);
+		if (ret == -1) printk("cos: page is not set\n");
 		break;
 	}
 	case COS_MMAP_TLBFLUSH:

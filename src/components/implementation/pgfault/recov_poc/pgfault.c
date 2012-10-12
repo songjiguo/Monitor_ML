@@ -65,7 +65,6 @@ static  int test = 0;
 int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 {
 	unsigned long long start, end;
-	/* unsigned long r_ip; */
 	int tid = cos_get_thd_id();
 	printc("<< thd %d in Fault FLT Notif >> \n", cos_get_thd_id());
 	printc("....kevin.....andy.....\n");

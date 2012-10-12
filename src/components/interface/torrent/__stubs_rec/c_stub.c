@@ -220,7 +220,7 @@ reinstate(struct rec_data_tor *rd)
 	ret = tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid);
 
 	if (ret < 1) {
-		printc(" re-split failed %d\n", ret);
+		printc("re-split failed %d\n", ret);
 		return;
 	}
 
@@ -238,12 +238,11 @@ update_rd(td_t tid)
 
         rd = rd_lookup(tid);
 	if (!rd) return NULL;
-
 	/* fast path */
 	if (likely(rd->fcnt == fcounter)) 
 		return rd;
 
-	printc("rd->fcnt %lu  fcounter %lu\n",rd->fcnt,fcounter);
+	/* printc("rd->fcnt %lu  fcounter %lu\n",rd->fcnt,fcounter); */
 	reinstate(rd);
 	return rd;
 }
@@ -280,6 +279,21 @@ param_save(char *param, int param_len)
 	return l_param;
 }
 
+static struct rec_data_tor *
+rebuild_fs(td_t td)
+{
+	int ret;
+
+        struct rec_data_tor *rd;
+        rd = update_rd(td);
+	assert(rd);
+
+	/* introspect the RO cbuf held by ramfs */
+                	/* RO is made in inv.c mmap_cntl...page table _PAGE_RW */
+	/* get the offset position,  meta read */
+	/* copy the cbuf to the position, meta write */
+	
+}
 
 /************************************/
 /******  client stub functions ******/
@@ -318,7 +332,19 @@ CSTUB_FN_ARGS_7(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len
 
         sz = len + sizeof(struct __sg_tsplit_data);
 redo:
-        d = cbuf_alloc(sz, &cb); /* by doing this, reduce the risk of fault in cbuf */
+        /* replay slow path */
+        if (unlikely(desired_ctid && (rd = rd_lookup(desired_ctid)))){
+		rd_par = rd_lookup(parent_tid);
+		if (rd_par) {
+			assert(parent_tid == rd_par->c_tid);
+			ret = reinstate(rd_par);
+			if (ret == -1 || ret == -22) goto done; /* either existed or the root */
+			else parent_tid = ret;
+			goto redo;
+		}
+	}
+
+        d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
 
         /* printc("d->tid %d\n", parent_tid); */
@@ -339,7 +365,7 @@ CSTUB_ASM_3(tsplit, spdid, cb, sz)
 		}
 		cbuf_free(d);
 		rd_par = rd_lookup(parent_tid);
-		if (rd_par) {
+		if (rd_par) { 	/* need replay parent first, since its s_tid might have changed */
 			/* printc("before reinstate tid %d\n", parent_tid); */
 			assert(parent_tid == rd_par->c_tid);
 			parent_tid = reinstate(rd_par);			
@@ -348,11 +374,14 @@ CSTUB_ASM_3(tsplit, spdid, cb, sz)
 		/* printc("redo..........\n"); */
 		goto redo;
 	}
-printc("ret is %d\n",ret);
         cbuf_free(d);
-        if (desired_ctid && (rd = rd_lookup(desired_ctid))){
+
+        printc("ret is %d\n",ret);
+        if (ret == -1) goto done; /* this indicates that torrent has existed in rmfs */
+
+        if (unlikely(desired_ctid && (rd = rd_lookup(desired_ctid)))){
 		rd->s_tid = ret;
-		rd->fcnt = fcounter;
+		rd->fcnt  = fcounter;
 		printc("only update s_tid of %d\n", rd->c_tid);
 		goto done;
 	}
@@ -432,11 +461,16 @@ redo:
 CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 
         if (unlikely(fault)) {
-		fcounter++;
+		printc("read failed!!!!\n");
+                //no need this anymore? now we have invocation fault notification...
+		/* fcounter++;   */
 		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 			printc("set cap_fault_cnt failed\n");
 			BUG();
 		}
+		
+		rebuild_fs(tid);
+
                 goto redo;
 	}
 

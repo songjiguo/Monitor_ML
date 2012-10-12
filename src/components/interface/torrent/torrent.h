@@ -40,6 +40,12 @@ tread_pack(spdid_t spdid, td_t td, char *data, int len)
 	d = cbuf_alloc(len, &cb);
 	if (!d) return -1;
 
+	int sz;
+	u32_t id;
+	cbuf_unpack(cb, &id, (u32_t*)&sz);
+	printc("read: cbid is %d\n", id);
+
+
 	ret = tread(spdid, td, cb, len);
 	memcpy(data, d, len);
 	cbuf_free(d);
@@ -56,6 +62,11 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 
 	d = cbuf_alloc(len, &cb);
 	if (!d) return -1;
+
+	int sz;
+	u32_t id;
+	cbuf_unpack(cb, &id, (u32_t*)&sz);
+	printc("write:cbid is %d\n", id);
 
 	memcpy(d, data, len);
 	ret = twrite(spdid, td, cb, len);

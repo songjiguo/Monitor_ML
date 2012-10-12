@@ -413,7 +413,8 @@ cbuf_c_create(spdid_t spdid, int size, long cbid)
 	mc->c.obj_sz  = (u16_t) 0x3F & 
 		(((u16_t)PAGE_SIZE) >> (u16_t)CBUF_OBJ_SZ_SHIFT);
 	mc->c_0.th_id = cos_get_thd_id();
-	mc->c.flags  |= CBUFM_IN_USE | CBUFM_TOUCHED | CBUFM_OWNER;
+	mc->c.flags  |= CBUFM_IN_USE | CBUFM_TOUCHED;
+	mc->c.flags  &= ~CBUFM_OWNER;
 done:
 	RELEASE();
 	return ret;
@@ -595,7 +596,7 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	struct spd_tmem_info *old_sti, *new_sti;
 	struct cb_desc *d;
 	struct cb_mapping *old_owner, *new_owner, tmp;
-	union cbuf_meta *old_mc, *new_mc;
+	union cbuf_meta *mc;
 	vaddr_t mgr_addr;
 
 	int ret = 0;
@@ -603,15 +604,15 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	d = cos_map_lookup(&cb_ids, cbid);
 	if (!d) goto err;
 	old_owner = &d->owner;
-	printc("((1))\n");
+	/* printc("((1))\n"); */
 	old_sti = get_spd_info(old_owner->spd);
 	assert(SPD_IS_MANAGED(old_sti));
 
-	old_mc = __spd_cbvect_lookup_range(old_sti, cbid);
-	if(!old_mc) goto err;
-	printc("((2))\n");
-	if (!CBUF_OWNER(old_mc->c.flags)) goto err;
-	printc("((3))\n");
+	mc = __spd_cbvect_lookup_range(old_sti, cbid);
+	if(!mc) goto err;
+	/* printc("((2))\n"); */
+	/* if (!CBUF_OWNER(mc->c.flags)) goto err; */
+	/* printc("((3))\n"); */
 	for (new_owner = FIRST_LIST(old_owner, next, prev) ; 
 	     new_owner != old_owner; 
 	     new_owner = FIRST_LIST(new_owner, next, prev)) {
@@ -619,7 +620,7 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	}
 
 	if (new_owner == old_owner) goto err;
-	printc("((4))\n");
+	/* printc("((4))\n"); */
 	new_sti = get_spd_info(new_owner->spd);
 	assert(SPD_IS_MANAGED(new_sti));
 
@@ -636,7 +637,8 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	tmp.addr = old_owner->addr;
 	old_owner->addr = new_owner->addr;
 	new_owner->addr = tmp.addr;
-	printc("((6))\n");
+	/* printc("((6))\n"); */
+	mc->c.flags |= CBUFM_OWNER;
 done:
 	return ret;
 err:

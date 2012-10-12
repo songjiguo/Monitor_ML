@@ -26,6 +26,11 @@ struct fsobj root;
 
 #define MIN_DATA_SZ 256
 
+#define TSPLIT_FAULT
+/* #define TRELEASE_FAULT */
+/* #define TREAD_FAULT */
+/* #define TWRITE_FAULT */
+
 static int aaa = 0;
 
 td_t 
@@ -37,12 +42,13 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
 	char *subpath;
 
+#ifdef TSPLIT_FAULT
 	aaa++;
-	if (aaa%4 == 0){
-		printc("<< Before Assert >> \n");
+	if (aaa%6 == 0){
+		printc("<< tsplit: Before Assert >> \n");
 		assert(0);
 	}
-
+#endif
 	LOCK();
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
@@ -58,6 +64,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	} else {
 		/* File has less permissions than asked for? */
 		if ((~fsc->flags) & tflags) ERR_THROW(-EACCES, done);
+		/* else goto done;	/\* FT: fsc has existed,  *\/ */
 	}
 
 	fsobj_take(fsc);
@@ -199,6 +206,11 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	/* update the cbuf owner to ramfs */
 	/* should only the owner can free/revoke the cbuf */
 	if (cbuf_c_claim(cos_spd_id(), id)) BUG();
+	if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_READONLY, cos_spd_id(), (vaddr_t)buf, 0)) {
+		printc("set page to be read only failed\n");
+		BUG();
+	}
+
 done:	
 	UNLOCK();
 	return ret;

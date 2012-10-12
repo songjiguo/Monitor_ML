@@ -350,6 +350,12 @@ cbuf_free(void *buf)
 	assert(!__cbuf_alloc_meta_inconsistent(d, cm));
 	assert(cm->c.flags & CBUFM_IN_USE);
 
+	 /* for ramfs FT test now, using different cbuf */
+	if (cm->c.flags & CBUFM_OWNER) {
+		CBUF_RELEASE();
+		return;
+	}
+
 	fl = d->flhead;
 	assert(fl);
 	ADD_LIST(fl, d, next, prev);
