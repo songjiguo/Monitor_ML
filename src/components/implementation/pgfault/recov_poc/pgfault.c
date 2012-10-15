@@ -62,11 +62,12 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 
 
 static  int test = 0;
-int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
+int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
 	unsigned long long start, end;
 	int tid = cos_get_thd_id();
-	printc("<< thd %d in Fault FLT Notif >> \n", cos_get_thd_id());
+	printc("pgf notif parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip);
+	printc("<< thd %d in Fault FLT Notif>> \n", cos_get_thd_id());
 	printc("....kevin.....andy.....\n");
 
 	unsigned long r_ip; 	/* the ip to return to */
@@ -74,6 +75,7 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int type, void *ip)
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 		printc("return 0\n");
+		/* cos_upcall(spdid); */
 		return 0;
 	}
 

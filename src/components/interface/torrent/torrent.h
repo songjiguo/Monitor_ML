@@ -24,7 +24,9 @@ typedef enum {
 	TOR_ALL   = TOR_RW    | TOR_SPLIT /* 0 is a synonym */
 } tor_flags_t;
 
-td_t tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, td_t desired_ctid);
+td_t tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, td_t desired_tid);
+
 void trelease(spdid_t spdid, td_t tid);
 int tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len);
 int tread(spdid_t spdid, td_t td, int cbid, int sz);
@@ -75,6 +77,7 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 	return ret;
 }
 
+
 /* //int trmeta(td_t td, char *key, int flen, char *value, int vlen); */
 /* struct trmeta_data { */
 /* 	short int value, end; /\* offsets into data *\/ */
@@ -82,11 +85,11 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 /* }; */
 /* int trmeta(td_t td, int cbid, int sz); */
 
-/* //int twmeta(td_t td, char *key, int flen, char *value, int vlen); */
-/* struct twmeta_data { */
-/* 	short int value, end; /\* offsets into data *\/ */
-/* 	char data[0]; */
-/* }; */
-/* int twmeta(td_t td, int cbid, int sz); */
+//int twmeta(td_t td, char *key, int flen, char *value, int vlen);
+struct twmeta_data {
+	short int value, end; /* offsets into data */
+	char data[0];
+};
+int twmeta(td_t td, int cbid, int sz, int offset);
 
 #endif /* TORRENT_H */ 

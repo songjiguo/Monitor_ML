@@ -701,9 +701,15 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 /* 	return connection_process_requests(c, reqs, req_sz, resp, resp_sz); */
 /* } */
 
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
+	      tor_flags_t tflags, long evtid, td_t desired_tid)
+{
+	return 0;
+}
+
 td_t 
 tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-       tor_flags_t tflags, long evtid, td_t desired_ctid)
+       tor_flags_t tflags, long evtid)
 {
 	td_t ret = -1;
 	struct torrent *t;

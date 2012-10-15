@@ -168,7 +168,7 @@ accept_new(int accept_fd)
 		}
 		teid = evt_get();
 		assert(teid > 0);
-		to = tsplit(cos_spd_id(), td_root, "", 0, TOR_RW, teid, 0);
+		to = tsplit(cos_spd_id(), td_root, "", 0, TOR_RW, teid);
 		if (to < 0) {
 			printc("torrent split returned %d", to);
 			BUG();

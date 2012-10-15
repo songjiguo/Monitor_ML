@@ -2,6 +2,7 @@
 
 struct __sg_tsplit_data {
 	td_t tid;
+	td_t desired_tid;
 	tor_flags_t tflags;
 	long evtid;
 	int len[2];
@@ -19,9 +20,10 @@ td_t __sg_tsplit(spdid_t spdid, cbuf_t cbid, int len)
 	if (unlikely(d->len[0] >= d->len[1])) return -3;
 	if (unlikely(((int)(d->len[1] + sizeof(struct __sg_tsplit_data))) != len)) return -4;
 
-	return tsplit(spdid, d->tid, &d->data[0], 
-		      d->len[1] - d->len[0], d->tflags, d->evtid, 0);
-
+	td_t desired_tid;
+	
+	return __tsplit(spdid, d->tid, &d->data[0], 
+			d->len[1] - d->len[0], d->tflags, d->evtid, d->desired_tid);
 }
 
 struct __sg_tmerge_data {

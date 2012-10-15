@@ -35,7 +35,7 @@ int validate_data(struct file *f, long evt)
 	int ret;
 	td_t t;
 
-	t = tsplit(cos_spd_id(), td_root, f->name, strlen(f->name), TOR_READ, evt, 0);
+	t = tsplit(cos_spd_id(), td_root, f->name, strlen(f->name), TOR_READ, evt);
 	assert(t > 0);
 	ret = tread_pack(cos_spd_id(), t, buffer, 1023);
 	if (ret > 0) buffer[ret] = '\0';

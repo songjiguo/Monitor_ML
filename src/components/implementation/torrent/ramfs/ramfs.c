@@ -33,9 +33,24 @@ struct fsobj root;
 
 static int aaa = 0;
 
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
+	      tor_flags_t tflags, long evtid, td_t desired_tid)
+{
+	td_t ret = 0;
+	struct torrent *tor;
+	if (desired_tid) {
+		tor = tor_lookup(desired_tid);
+		if (tor) return -1;
+	}
+	printc("call tsplit td %d\n", tid);
+	ret = tsplit(spdid, tid, param, len, tflags, evtid);
+done:
+	return ret;
+}
+
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
-       int len, tor_flags_t tflags, long evtid, td_t desired_ctid) 
+       int len, tor_flags_t tflags, long evtid) 
 {
 	td_t ret = -1;
 	struct torrent *t, *nt;
@@ -56,6 +71,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 
 	fsc = fsobj_path2obj(param, len, fso, &parent, &subpath);
 	if (!fsc) {
+		printc("it is not there!!!!!\n");
 		assert(parent);
 		if (!(parent->flags & TOR_SPLIT)) ERR_THROW(-EACCES, done);
 		fsc = fsobj_alloc(subpath, parent);
@@ -64,7 +80,8 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	} else {
 		/* File has less permissions than asked for? */
 		if ((~fsc->flags) & tflags) ERR_THROW(-EACCES, done);
-		/* else goto done;	/\* FT: fsc has existed,  *\/ */
+		printc("it is already there!!!!!\n");
+		/* fsc exists */
 	}
 
 	fsobj_take(fsc);

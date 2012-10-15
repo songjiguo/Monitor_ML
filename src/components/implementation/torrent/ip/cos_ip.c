@@ -48,9 +48,15 @@ const char *name = "cos_ip";
 /* 	return netif_event_create(cos_spd_id()); */
 /* } */
 
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
+	      tor_flags_t tflags, long evtid, td_t desired_tid)
+{
+	return 0;
+}
+
 td_t 
 tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-       tor_flags_t tflags, long evtid, td_t desired_ctid)
+       tor_flags_t tflags, long evtid)
 {
 	td_t ret = -ENOMEM, ntd;
 	struct torrent *t;

@@ -23,9 +23,15 @@ struct fsobj root;
 #define LOCK() if (lock_take(&fs_lock)) BUG();
 #define UNLOCK() if (lock_release(&fs_lock)) BUG();
 
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
+	      tor_flags_t tflags, long evtid, td_t desired_tid)
+{
+	return 0;
+}
+
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
-       int len, tor_flags_t tflags, long evtid, td_t desired_ctid) 
+       int len, tor_flags_t tflags, long evtid) 
 {
 	td_t ret = -1;
 	struct torrent *t, *nt;

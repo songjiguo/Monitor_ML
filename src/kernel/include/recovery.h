@@ -224,7 +224,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 	}
 
 	cap_no >>= 20;
-	/* printk("cos: cap_no is %d base is %d\n", cap_no, d_spd->cap_base); */
+	printk("cos: cap_no is %d base is %d\n", cap_no, d_spd->cap_base);
 
 	if (unlikely(cap_no >= MAX_STATIC_CAP)) {
 		printk("cos: capability %d greater than max\n",
@@ -239,38 +239,60 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 		return -1;
 	}
 
-	cap_no_origin = cap_no;
 	switch(option) {
 	case COS_SPD_FAULT_TRIGGER:
 		d_spd->fault.cnt++;
 		/* printk("cos: SPD %d Fault.Cnt is incremented by 1\n", spd_get_index(d_spd)); */
 		break;
 	case COS_CAP_FAULT_UPDATE: /* does not need destination spd, got by cap_no on interface */
+		cap_no_origin = cap_no;
 		assert(cap_entry->owner == d_spd);
+
 		dest_spd = cap_entry->destination;
+		printk("dest_spd is %d\n", spd_get_index(dest_spd));
 		cap_entry->fault.cnt = dest_spd->fault.cnt;
-		/* printk("cap_entry->fault.cnt %d\n",cap_entry->fault.cnt); */
-		/* assume capabilities are continuse in invocation_capabilities[] */
+
+		printk("cap_no_origin %d): owner %d dest is %d\n", cap_no_origin,
+		       spd_get_index(cap_entry->owner),spd_get_index(cap_entry->destination));
+		printk("cap_entry->fault.cnt %d\n",cap_entry->fault.cnt);
+
+		/* It seems more reasonable to only update the corresponding cap fault ..... */
+		/* not for multiple clients, so still need */
+
+		/* assume capabilities are continuse in invocation_capabilities[], not true... */
 		/* + direction */
 		while(1) {
+			/* printk("++ direction\n"); */
 			cap_no_origin++;
 			cap_entry = &invocation_capabilities[cap_no_origin];
-			if (cap_entry->destination != dest_spd) break;
-			cap_entry->fault.cnt = dest_spd->fault.cnt;
-			/* printk("ker set cnt+(cap_no_origin %d): owner %d dest is %d\n", cap_no_origin, */
+			if (cap_entry->owner != d_spd) break;
+			
+			/* printk("ker ++ set cnt+(cap_no_origin %d): owner %d dest is %d\n", cap_no_origin, */
 			/*        spd_get_index(cap_entry->owner),spd_get_index(cap_entry->destination)); */
+
+			if (cap_entry->destination != dest_spd) continue;
+			cap_entry->fault.cnt = dest_spd->fault.cnt;
 			/* printk("cap_entry->fault.cnt %d\n",cap_entry->fault.cnt); */
 		}
+
 		cap_no_origin = cap_no;
+
 		/* - direction */
 		while(1) {
+			/* printk("-- direction\n"); */
 			cap_no_origin--;
 			cap_entry = &invocation_capabilities[cap_no_origin];
-			if (cap_entry->destination != dest_spd) break;
-			cap_entry->fault.cnt = dest_spd->fault.cnt;			
+			if (cap_entry->owner != d_spd) break;
+
+			/* printk("ker -- set cnt+(cap_no_origin %d): owner %d dest is %d\n", cap_no_origin, */
+			/*        spd_get_index(cap_entry->owner),spd_get_index(cap_entry->destination)); */
+
+			if (cap_entry->destination != dest_spd) continue;
+			cap_entry->fault.cnt = dest_spd->fault.cnt;
+			/* printk("cap_entry->fault.cnt %d\n",cap_entry->fault.cnt);	 */
 		}
 
-		/* printk("cos: CAP (owner %d dest %d) Fault is updated\n", spd_get_index(d_spd), spd_get_index(dest_spd) );*/
+		/* printk("cos: CAP (owner %d dest %d) Fault is updated\n", spd_get_index(d_spd), spd_get_index(dest_spd) ); */
 		break;
 	default:
 		ret = -1;

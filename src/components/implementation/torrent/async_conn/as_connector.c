@@ -207,9 +207,15 @@ mbox_get(struct torrent *t, char *buf, int amnt, int ep)
  * the descriptor, -EPIPE will be sent to the other
  */
 
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
+	      tor_flags_t tflags, long evtid, td_t desired_tid)
+{
+	return 0;
+}
+
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
-       int len, tor_flags_t tflags, long evtid, td_t desired_ctid) 
+       int len, tor_flags_t tflags, long evtid) 
 {
 	td_t ret = -1;
 	struct torrent *t, *nt;
