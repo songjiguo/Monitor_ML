@@ -39,10 +39,11 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	td_t ret = 0;
 	struct torrent *tor;
 	if (desired_tid) {
+		printc("desire tid %d\n", desired_tid);
 		tor = tor_lookup(desired_tid);
 		if (tor) return -1;
 	}
-	printc("call tsplit td %d\n", tid);
+	printc("call tsplit from td %d\n", tid);
 	ret = tsplit(spdid, tid, param, len, tflags, evtid);
 done:
 	return ret;
