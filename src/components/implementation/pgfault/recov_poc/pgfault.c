@@ -33,8 +33,10 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	}
 
 
-	printc("\nPGFAULT: thd %d faults in spd %d @ %p\n",
-	       tid, spdid, fault_addr);
+	/* printc("\nPGFAULT: thd %d faults in spd %d @ %p\n", */
+	/*        tid, spdid, fault_addr); */
+
+
          /*
 	 * Look at the booter: when recover is happening, the sstub is
 	 * set to 0x1, thus we should just wait till recovery is done.

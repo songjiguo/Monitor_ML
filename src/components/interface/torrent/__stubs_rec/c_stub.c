@@ -193,8 +193,8 @@ reinstate(td_t tid, int flag)
 	struct rec_data_tor *rd;
 	if (!(rd = rd_lookup(tid))) return; 	/* root_tid */
 
-	printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid);
-	printc("parent tid %d\n", rd->parent_tid);
+	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
+	/* printc("parent tid %d\n", rd->parent_tid); */
 	
 	if (flag == 1)
 		id = -1;
@@ -209,7 +209,7 @@ reinstate(td_t tid, int flag)
 	if (ret > 0) rd->s_tid = ret;  	/* update the ramfs side tid, only if return a new server id */
 
 	rd->fcnt = fcounter;
-	printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid);
+	/* printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid); */
 	
 	return;
 }
@@ -268,13 +268,18 @@ reindata()
 	return;
 }
 
+
 static void
 rebuild_fs(td_t tid)
 {
-	printc("\n <<<<<<<<<<<< recovery starts >>>>>>>>>>>>>>>>\n\n");
+	unsigned long long start, end;
+	/* printc("\n <<<<<<<<<<<< recovery starts >>>>>>>>>>>>>>>>\n\n"); */
+	/* rdtscll(start); */
 	reinstate(tid, 0);
 	reindata();
-	printc("\n<<<<<<<<<<<< recovery ends >>>>>>>>>>>>>>>>\n\n");
+	/* rdtscll(end); */
+	/* printc("rebuild fs cost %llu\n", end-start); */
+	/* printc("\n<<<<<<<<<<<< recovery ends >>>>>>>>>>>>>>>>\n\n"); */
 }
 
 
@@ -289,7 +294,7 @@ update_rd(td_t tid)
 	if (likely(rd->fcnt == fcounter)) 
 		return rd;
 
-	printc("rd->fcnt %lu  fcounter %lu\n",rd->fcnt,fcounter);
+	/* printc("rd->fcnt %lu  fcounter %lu\n",rd->fcnt,fcounter); */
 	rebuild_fs(tid);
 	return rd;
 }
@@ -346,7 +351,7 @@ static int aaa = 0;
 
 CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid)
 
-        printc("<<< In: call tsplit >>>\n");
+        /* printc("<<< In: call tsplit >>>\n"); */
         aaa++;   		/* test only */
         ret = __tsplit(spdid, tid, param, len, tflags, evtid, 0);
 
@@ -365,6 +370,7 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
         tor_flags_t	flags	   = tflags;
         td_t		parent_tid = tid;
 
+	unsigned long long start, end;
         assert(param && len > 0);
         assert(param[len] == '\0'); 
 
@@ -379,17 +385,17 @@ redo:
         /* printc("parent_tid: %d\n", parent_tid); */
         d->tid	       = parent_tid;
         d->desired_tid = desired_tid;
-
-        if (aaa == 6) {
-		d->desired_tid = -10; /* test purpose only */
-		aaa = 100;
-	}
-
         d->tflags      = flags;
 	d->evtid       = evtid;
 	d->len[0]      = 0;
 	d->len[1]      = len;
 	memcpy(&d->data[0], param, len);
+
+        if (aaa == 6) {
+		d->desired_tid = -10; /* test purpose only */
+		aaa = 100;
+		rdtscll(start);
+	}
 
 CSTUB_ASM_3(__tsplit, spdid, cb, sz)
 
@@ -401,6 +407,8 @@ CSTUB_ASM_3(__tsplit, spdid, cb, sz)
 		}
 		cbuf_free(d);
 		rebuild_fs(tid);
+		rdtscll(end);
+		printc("entire cost %llu\n", end-start);
 		goto redo;
 	}
 
@@ -444,7 +452,6 @@ CSTUB_FN_ARGS_6(int, twmeta, spdid_t, spdid, td_t, td, cbuf_t, cb, int, sz, int,
 	struct __sg_twmeta_data *d;
 	cbuf_t cb_m;
 	int sz_m = sizeof(struct __sg_twmeta_data);
-
 redo:
 	d = cbuf_alloc(sz_m, &cb_m);
 	if (!d) return -1;
@@ -505,7 +512,7 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_2(int, trelease, spdid_t, spdid, td_t, tid)
 
-        printc("<<< In: call trelease >>>\n");
+        /* printc("<<< In: call trelease >>>\n"); */
         struct rec_data_tor *rd;
 
 redo:
@@ -527,7 +534,7 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
-        printc("<<< In: call tread tid %d>>>\n", tid);
+        /* printc("<<< In: call tread tid %d>>>\n", tid); */
         struct rec_data_tor *rd;
 
 redo:
@@ -551,7 +558,7 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
-        printc("<<< In: call twrite >>>\n");
+        /* printc("<<< In: call twrite >>>\n"); */
         struct rec_data_tor *rd;
 
 redo:

@@ -63,7 +63,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 
 #ifdef TSPLIT_FAULT
 	if (aaa == 1){
-		printc("<< tsplit: Before Assert >> \n");
+		/* printc("<< tsplit: Before Assert >> \n"); */
 		assert(0);
 	}
 #endif
@@ -106,7 +106,7 @@ twmeta(spdid_t spdid, td_t td, cbuf_t cb, int sz, int offset, int flag)
 
 	int buf_sz;
 	u32_t id;
-	cbuf_unpack(cb, &id, (u32_t*)&buf_sz);
+	cbuf_unpack(cb, &id, (u32_t *)&buf_sz);
 
 	if (tor_isnull(td)) return -EINVAL;
 
@@ -186,7 +186,7 @@ trelease(spdid_t spdid, td_t td)
 
 #ifdef TRELEASE_FAULT
 	if (ddd++ == 2){
-		printc("<< trelease: Before Assert >> \n");
+		/* printc("<< trelease: Before Assert >> \n"); */
 		assert(0);
 	}
 #endif
@@ -215,7 +215,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 
 #ifdef TREAD_FAULT
 	if (bbb++ == 2){
-		printc("<< tread: Before Assert >> \n");
+		/* printc("<< tread: Before Assert >> \n"); */
 		assert(0);
 	}
 #endif
@@ -262,7 +262,7 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 
 #ifdef TWRITE_FAULT
 	if (ccc++ == 2){
-		printc("<< twrite: Before Assert >> \n");
+		/* printc("<< twrite: Before Assert >> \n"); */
 		assert(0);
 	}
 #endif
@@ -304,16 +304,8 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	memcpy(fso->data + t->offset, buf, ret);
 	t->offset += ret;
 
-	/* printc("found a buf @ %p\n", buf); */
-	/* printc("[[[[[ twrite : "); */
-	/* int i; */
-	/* for (i = 0; i < 10; i++){ */
-	/* 	printc("%c", *(buf++)); */
-	/* } */
-	/* printc("]]]]]\n\n"); */
-
 	/* update the cbuf owner to ramfs */
-	/* should only the owner can free/revoke the cbuf */
+	/* only the owner can free/revoke the cbuf */
 	if (cbuf_c_claim(cos_spd_id(), id)) BUG();
 done:	
 	UNLOCK();

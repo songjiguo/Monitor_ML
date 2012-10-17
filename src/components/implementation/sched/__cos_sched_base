@@ -1208,8 +1208,8 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, 1);
 	sched_switch_thread(0, NULL_EVT);
 	if (!new) return -1;
-	printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n",
-	       (unsigned int)cos_spd_id(), new->id, spdid, sched_get_current()->id, spdid);
+	/* printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n", */
+	/*        (unsigned int)cos_spd_id(), new->id, spdid, sched_get_current()->id, spdid); */
 
 	return 0;
 }

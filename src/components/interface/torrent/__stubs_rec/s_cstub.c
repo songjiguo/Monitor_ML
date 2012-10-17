@@ -52,6 +52,23 @@ int __sg_twmeta(spdid_t spdid, cbuf_t cb_m, int len_m)
 	/* printc("server: d->offset %d\n", d->offset); */
 	/* printc("server: d->flag %d\n", d->flag); */
 
+	/* **************************************** */
+	/* This is the work that tries to bring the meta recovery to the interface */
+
+	/* char *buf; */
+	/* u32_t id; */
+	/* int buf_sz; */
+	/* cbuf_unpack(d->cb, &id, (u32_t *)&buf_sz); */
+
+	/* if (d->flag == 1) { 		/\* strict in the order for now? recovery*\/ */
+	/* 	buf = cbuf_c_introspect(cos_spd_id(), id, CBUF_INTRO_PAGE); */
+	/* 	if (!buf) ERR_THROW(-EINVAL, done); */
+	/* } */
+
+	/* return twrite(spdid, d->td, cb_m, len_m); */
+
+	/* **************************************** */
+
 	return twmeta(spdid, d->td, d->cb, d->sz, d->offset, d->flag);
 }
 
