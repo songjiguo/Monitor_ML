@@ -28,7 +28,7 @@ int cbuf_c_create(spdid_t spdid, int size, long cbid); /* return cbid */
 int cbuf_c_delete(spdid_t spdid, int cbid);
 void *cbuf_c_retrieve(spdid_t spdid, int cbid, int len); /* return client address */
 
-int cbuf_c_introspect(spdid_t spdid, int iter);/* return cbid with the right order if it does exist*/
+void *cbuf_c_introspect(spdid_t spdid, int cbid, int flag);
 int cbuf_c_claim(spdid_t spdid, int cbid);     /* spd wants to own the cbuf, 0 means owner changes  */
 
 /* CbufMgr API that works with Cbuf_policy*/

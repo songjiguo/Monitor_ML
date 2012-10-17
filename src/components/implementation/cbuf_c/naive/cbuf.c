@@ -414,7 +414,7 @@ cbuf_c_create(spdid_t spdid, int size, long cbid)
 		(((u16_t)PAGE_SIZE) >> (u16_t)CBUF_OBJ_SZ_SHIFT);
 	mc->c_0.th_id = cos_get_thd_id();
 	mc->c.flags  |= CBUFM_IN_USE | CBUFM_TOUCHED;
-	mc->c.flags  &= ~CBUFM_OWNER;
+	mc->c.flags  |= CBUFM_OWNER;
 done:
 	RELEASE();
 	return ret;
@@ -541,14 +541,18 @@ err:
 	goto done;
 }
 
-int
-cbuf_c_introspect(spdid_t spdid, int iter)
+void *
+cbuf_c_introspect(spdid_t spdid, int cbid, int flag)
 {
+	void *ret = NULL;
 	struct spd_tmem_info *sti;
 	spdid_t s_spdid;
 	struct cos_cbuf_item *cci = NULL, *list;
+	struct cb_desc *d;
+	struct cb_mapping *m;
 	
 	int counter = 0;
+	void *addr = NULL;
 
 	TAKE();
 
@@ -556,35 +560,53 @@ cbuf_c_introspect(spdid_t spdid, int iter)
 	assert(sti);
 	s_spdid = sti->spdid;
 	list = &spd_tmem_info_list[s_spdid].tmem_list;
-	printc("try to find cbuf for this spd 1\n");
-	if (iter == -1){
+
+	switch (flag) {
+	case CBUF_INTRO_TOT:   /* find total numbers of cbufs that is being hold by this spd */
+	{
 		for (cci = FIRST_LIST(list, next, prev) ;
 		     cci != list;
 		     cci = FIRST_LIST(cci, next, prev)) {
-			printc("try to find cbuf for this spd 2\n");
 			union cbuf_meta cm;
 			cm.c_0.v = cci->entry->c_0.v;
 			if (CBUF_OWNER(cm.c.flags) && 
 			    CBUF_IN_USE(cm.c.flags)) counter++;
 		}
-		RELEASE();
-		return counter;
+		ret = (void *)counter;
+		goto done;
 	}
-	else{
-		for (cci = FIRST_LIST(list, next, prev) ;
-		     cci != list;
-		     cci = FIRST_LIST(cci, next, prev)) {
-			union cbuf_meta cm;
-			cm.c_0.v = cci->entry->c_0.v;
-			if (CBUF_OWNER(cm.c.flags) && 
-                            CBUF_IN_USE(cm.c.flags) &&
-                            !(--iter)) goto found;
-		}
+	case CBUF_INTRO_PAGE: /* find the page for cbid */
+	{
+		assert(cbid > 0);
+		/* printc("cbid ---- %d\n", cbid); */
+		d = cos_map_lookup(&cb_ids, cbid);
+		if (!d) goto done;
+		
+		m = &d->owner;  /* get the current cbuf owner descriptor */
+		/* printc("PAGE:cbid %d owner is %d, we are spd %d\n", cbid, m->spd, spdid); */
+		/* printc("PAGE: d->addr %p, m->addr %p\n", d->addr, m->addr); */
+
+		if (m->spd == spdid) ret = (void *)m->addr;
+		goto done;
 	}
-	
-found:
+	case CBUF_INTRO_OWNER: /* find the current owner for cbid */
+	{
+		assert(cbid > 0);
+		/* printc("cbid ---- %d\n", cbid); */
+		d = cos_map_lookup(&cb_ids, cbid);
+		if (!d) goto done;
+		
+		m = &d->owner;  /* get the current cbuf owner descriptor */
+		/* printc("OWNER:cbid %d owner is %d, we are spd %d\n", cbid, m->spd, spdid); */
+		if (m->spd == spdid) ret = (void *)m->spd;
+		goto done;
+	}
+	default:
+		return NULL;
+	}
+done:
 	RELEASE();
-	return cci->desc.cbid;
+	return ret;
 }
 
 /* Exchange the cbuf descriptor (flags of ownership)
@@ -600,18 +622,18 @@ mgr_update_owner(spdid_t new_spdid, long cbid)
 	vaddr_t mgr_addr;
 
 	int ret = 0;
-	printc("updating ownership \n");
+	/* printc("updating cbid %d ownership request spd%d\n", cbid, new_spdid); */
 	d = cos_map_lookup(&cb_ids, cbid);
 	if (!d) goto err;
 	old_owner = &d->owner;
-	/* printc("((1))\n"); */
+	/* printc("((1)) old_owner->spd %d\n",old_owner->spd); */
 	old_sti = get_spd_info(old_owner->spd);
 	assert(SPD_IS_MANAGED(old_sti));
 
 	mc = __spd_cbvect_lookup_range(old_sti, cbid);
 	if(!mc) goto err;
 	/* printc("((2))\n"); */
-	/* if (!CBUF_OWNER(mc->c.flags)) goto err; */
+	if (!CBUF_OWNER(mc->c.flags)) goto err;
 	/* printc("((3))\n"); */
 	for (new_owner = FIRST_LIST(old_owner, next, prev) ; 
 	     new_owner != old_owner; 
@@ -675,10 +697,17 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 	}
 
 	o_spdid =  d->owner.spd;
-	printc("o_spd %d r_spd %d\n", o_spdid, r_spdid);
+	/* printc("o_spd %d r_spd %d\n", o_spdid, r_spdid); */
 	if (o_spdid == r_spdid) goto done;
 
 	ret = mgr_update_owner(r_spdid, cbid); // -1 fail, 0 success
+
+	/* FIXME: when does this need to be changed to RW again? */
+	if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_READONLY, cos_spd_id(), (vaddr_t)d->addr, 0)) {
+		printc("set page to be read only failed\n");
+		BUG();
+	}
+
 
 done:
 	RELEASE();

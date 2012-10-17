@@ -27,9 +27,9 @@ struct fsobj root;
 #define MIN_DATA_SZ 256
 
 #define TSPLIT_FAULT
-/* #define TRELEASE_FAULT */
-/* #define TREAD_FAULT */
-/* #define TWRITE_FAULT */
+//#define TWRITE_FAULT
+//#define TREAD_FAULT
+//#define TRELEASE_FAULT
 
 static int aaa = 0;
 
@@ -38,12 +38,15 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 {
 	td_t ret = 0;
 	struct torrent *tor;
-	if (desired_tid) {
-		printc("desire tid %d\n", desired_tid);
-		tor = tor_lookup(desired_tid);
-		if (tor) return -1;
-	}
-	printc("call tsplit from td %d\n", tid);
+
+	if (desired_tid == -10) aaa = 1;	/* control the fault, test purpose only */
+
+	/* if (desired_tid) { */
+	/* 	printc("desire tid %d\n", desired_tid); */
+	/* 	tor = tor_lookup(desired_tid); */
+	/* 	if (tor) return -1; */
+	/* } */
+	/* printc("call tsplit from td %d\n", tid); */
 	ret = tsplit(spdid, tid, param, len, tflags, evtid);
 done:
 	return ret;
@@ -59,8 +62,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	char *subpath;
 
 #ifdef TSPLIT_FAULT
-	aaa++;
-	if (aaa%6 == 0){
+	if (aaa == 1){
 		printc("<< tsplit: Before Assert >> \n");
 		assert(0);
 	}
@@ -72,7 +74,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 
 	fsc = fsobj_path2obj(param, len, fso, &parent, &subpath);
 	if (!fsc) {
-		printc("it is not there!!!!!\n");
 		assert(parent);
 		if (!(parent->flags & TOR_SPLIT)) ERR_THROW(-EACCES, done);
 		fsc = fsobj_alloc(subpath, parent);
@@ -81,8 +82,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	} else {
 		/* File has less permissions than asked for? */
 		if ((~fsc->flags) & tflags) ERR_THROW(-EACCES, done);
-		printc("it is already there!!!!!\n");
-		/* fsc exists */
 	}
 
 	fsobj_take(fsc);
@@ -95,6 +94,64 @@ done:
 free:  
 	fsobj_release(fsc);
 	goto done;
+}
+
+int 
+twmeta(spdid_t spdid, td_t td, cbuf_t cb, int sz, int offset, int flag)
+{
+	int ret = -1, left;
+	struct torrent *t;
+	struct fsobj *fso;
+	char *buf, *test;
+
+	int buf_sz;
+	u32_t id;
+	cbuf_unpack(cb, &id, (u32_t*)&buf_sz);
+
+	if (tor_isnull(td)) return -EINVAL;
+
+	LOCK();
+	t = tor_lookup(td);
+	if (!t) ERR_THROW(-EINVAL, done);
+	assert(t->data);
+	fso = t->data;
+	assert(fso->size <= fso->allocated);
+	assert(t->offset <= fso->size);
+
+	if (flag == 1) { 		/* recovery in the order*/
+		/* printc("look up cbuf of id %d\n", id); */
+		buf = cbuf_c_introspect(cos_spd_id(), id, CBUF_INTRO_PAGE);
+		if (!buf) ERR_THROW(-EINVAL, done);
+
+		left = fso->allocated - t->offset;
+		if (left >= sz) {
+			ret = sz;
+			if (fso->size < (t->offset + sz)) fso->size = t->offset + sz;
+		} else {
+			char *new;
+			int new_sz;
+
+			new_sz = fso->allocated == 0 ? MIN_DATA_SZ : fso->allocated * 2;
+			new    = malloc(new_sz);
+			if (!new) ERR_THROW(-ENOMEM, done);
+			if (fso->data) {
+				memcpy(new, fso->data, fso->size);
+				free(fso->data);
+			}
+
+			fso->data      = new;
+			fso->allocated = new_sz;
+			left           = new_sz - t->offset;
+			ret            = left > sz ? sz : left;
+			fso->size      = t->offset + ret;
+		}
+		memcpy(fso->data + t->offset, buf, ret);
+		t->offset += ret;
+	}
+
+done:	
+	UNLOCK();
+	return ret;
 }
 
 int 
@@ -117,12 +174,22 @@ done:
 	return ret;
 }
 
+
+static int ddd = 0;
+
 void
 trelease(spdid_t spdid, td_t td)
 {
 	struct torrent *t;
 
 	if (!tor_is_usrdef(td)) return;
+
+#ifdef TRELEASE_FAULT
+	if (ddd++ == 2){
+		printc("<< trelease: Before Assert >> \n");
+		assert(0);
+	}
+#endif
 
 	LOCK();
 	t = tor_lookup(td);
@@ -134,6 +201,8 @@ done:
 	return;
 }
 
+static int bbb = 0;
+
 int 
 tread(spdid_t spdid, td_t td, int cbid, int sz)
 {
@@ -144,6 +213,12 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 
 	if (tor_isnull(td)) return -EINVAL;
 
+#ifdef TREAD_FAULT
+	if (bbb++ == 2){
+		printc("<< tread: Before Assert >> \n");
+		assert(0);
+	}
+#endif
 	LOCK();
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
@@ -169,6 +244,8 @@ done:
 	return ret;
 }
 
+static int ccc = 0;
+
 int 
 twrite(spdid_t spdid, td_t td, int cbid, int sz)
 {
@@ -183,6 +260,12 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 
 	if (tor_isnull(td)) return -EINVAL;
 
+#ifdef TWRITE_FAULT
+	if (ccc++ == 2){
+		printc("<< twrite: Before Assert >> \n");
+		assert(0);
+	}
+#endif
 	LOCK();
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
@@ -195,7 +278,7 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
-
+	
 	left = fso->allocated - t->offset;
 	if (left >= sz) {
 		ret = sz;
@@ -221,14 +304,17 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	memcpy(fso->data + t->offset, buf, ret);
 	t->offset += ret;
 
+	/* printc("found a buf @ %p\n", buf); */
+	/* printc("[[[[[ twrite : "); */
+	/* int i; */
+	/* for (i = 0; i < 10; i++){ */
+	/* 	printc("%c", *(buf++)); */
+	/* } */
+	/* printc("]]]]]\n\n"); */
+
 	/* update the cbuf owner to ramfs */
 	/* should only the owner can free/revoke the cbuf */
 	if (cbuf_c_claim(cos_spd_id(), id)) BUG();
-	if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_READONLY, cos_spd_id(), (vaddr_t)buf, 0)) {
-		printc("set page to be read only failed\n");
-		BUG();
-	}
-
 done:	
 	UNLOCK();
 	return ret;

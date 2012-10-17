@@ -257,6 +257,7 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to)
 	assert(cv->pages);
 
 	if (cvect_lookup(cv->pages, idx)) goto collision;
+
 	cvas_ref(cv);
 	m = cslab_alloc_mapping();
 	if (!m) goto collision;
@@ -320,6 +321,7 @@ __mapping_destroy(struct mapping *m)
 	cvas_deref(cv);
 
 	idx = cos_mmap_cntl(COS_MMAP_REVOKE, 0, m->spdid, m->addr, 0);
+	if (!idx) return; 	/* FIXME: fault makes the pte not presented in pgtbl, but mm still can see it */
 	assert(idx == frame_index(m->f));
 	frame_deref(m->f);
 	cslab_free_mapping(m);

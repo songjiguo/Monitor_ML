@@ -142,7 +142,7 @@ rd_init(struct rec_data_tor *rd)
 void 
 rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *param, int len, tor_flags_t tflags, long evtid)
 {
-	printc("rd_cons: ser_tid %d  cli_tid %d\n", ser_tid, cli_tid);
+	/* printc("rd_cons: ser_tid %d  cli_tid %d\n", ser_tid, cli_tid); */
 	assert(rd);
 
 	rd->parent_tid = tid;
@@ -164,12 +164,6 @@ rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *par
 static void
 add_cbufs_record(struct rec_data_tor *rd, cbuf_t cb, int sz, unsigned len)
 {
-
-	/* int szs; */
-	/* u32_t id; */
-	/* cbuf_unpack(cb, &id, (u32_t*)&szs); */
-	/* printc("cb %u of size %d is written, actual len %d\n", cb, sz, len); */
-
 	struct w_cbuf *wcb;
 
 	wcb = cslab_alloc_wcb();
@@ -187,110 +181,27 @@ add_cbufs_record(struct rec_data_tor *rd, cbuf_t cb, int sz, unsigned len)
 
 	ADD_LIST(rd->wcbufs_head, wcb, next, prev);
 
-	printc("rd->c_tid %d\n", rd->c_tid);
-	struct w_cbuf *test = NULL, *list;
-	list = rd->wcbufs_head;
-	for (test  = FIRST_LIST(list, next, prev);
-	     test != list;
-	     test  = FIRST_LIST(test, next, prev)) {
-		printc("write->cb %d\n", test->cb);
-		printc("write->sz %d\n", test->sz);
-		printc("write->actual_sz %d\n", test->actual_sz);
-		printc("write->owner_tid %d\n", test->owner_tid);
-	}
-
-	return;
-}
-
-
-int
-update_cbufs(spdid_t spdid)   
-{
-	int cbid, iter;
-
-	iter = cbuf_c_introspect(spdid, -1);
-	/* printc("restore all cbufs %d\n", iter); */
-	if(likely(!iter)) return 0;
-
-	while (iter > 0){
-		cbid = cbuf_c_introspect(spdid, iter--);
-		printc("restore cbuf %d\n", cbid);
-		if (cbuf_vect_expand(&meta_cbuf, cbid) < 0) goto err;
-		cbuf_c_claim(spdid, cbid);
-	}
-	return 0;
-err:
-	return -1;
-}
-
-/* repopulate all the cbufs in order to rebuild the fs object */
-
-/* introspect the RO cbuf held by ramfs, this is done on server side interface */
-/* get the offset position from the wcb->offset in order  */
-/* copy the cbuf to the position, meta write */
-
-static int
-rebuild_fs_obj(struct w_cbuf *wcb)
-{
-	int ret = 0;
-
-	/* ret = twmeta(wcb->owner_tid, wcb->cb, wcb->sz, wcb->actual_sz); */
-	
-
-	return ret;
-}
-
-
-static void
-reindata()
-{
-	int ret = 0;
-	cbuf_t cb;
-	int sz;
-	int offset;
-	struct w_cbuf *h_wcb = NULL, *h_list;	/* v for vertical list for all wcbufs in the same t_id */
-	struct w_cbuf *v_wcb = NULL, *v_list;	/* v for vertical list for all wcbufs in the same t_id */
-
-	h_list = all_wcbufs_list;
-	for (h_wcb  = FIRST_LIST(h_list, right, left);
-	     h_wcb != h_list;
-	     h_wcb  = FIRST_LIST(h_wcb, right, left)) {
-		printc("found h_wcb->owner_tid %d\n", h_wcb->owner_tid);
-		v_list = h_wcb;
-		for (v_wcb  = FIRST_LIST(v_list, next, prev);
-		     v_wcb != v_list;
-		     v_wcb  = FIRST_LIST(v_wcb, next, prev)) {
-			printc("found v_wcb->owner_tid %d\n", v_wcb->owner_tid);
-			ret = rebuild_fs_obj(v_wcb);
-		}
-	}
-	h_wcb = h_list;
-	printc("found h_wcb->owner_tid %d\n", h_wcb->owner_tid);
-	v_list = h_wcb;
-	for (v_wcb  = FIRST_LIST(v_list, next, prev);
-	     v_wcb != v_list;
-	     v_wcb  = FIRST_LIST(v_wcb, next, prev)) {
-		printc("found v_wcb->owner_tid %d\n", v_wcb->owner_tid);
-		ret = rebuild_fs_obj(v_wcb);
-	}
-	
 	return;
 }
 
 
 /* restore the server state */
 static void
-reinstate(td_t tid)
+reinstate(td_t tid, int flag)
 {
-	td_t ret;
-
+	td_t ret, id;
 	struct rec_data_tor *rd;
-
 	if (!(rd = rd_lookup(tid))) return; 	/* root_tid */
 
 	printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid);
 	printc("parent tid %d\n", rd->parent_tid);
-	ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid);
+	
+	if (flag == 1)
+		id = -1;
+	else
+		id = rd->c_tid;
+
+	ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, id);
 	if (ret < 1) {
 		printc("re-split failed %d\n", tid);
 		BUG();
@@ -302,6 +213,70 @@ reinstate(td_t tid)
 	
 	return;
 }
+
+/* re-populate all the cbufs to rebuild the fs object */
+static int
+pop_fs_obj(struct w_cbuf *wcb)
+{
+	int ret = 0;
+	struct rec_data_tor *rd;
+	
+	int flag = 1; 		/* 1 for recovery, 0 for normal */
+
+	if (!(rd = rd_lookup(wcb->owner_tid))) return -1;
+	ret = twmeta(cos_spd_id(), rd->s_tid, wcb->cb, wcb->sz, wcb->actual_sz, flag);
+
+	return ret;
+}
+
+static void
+reindata()
+{
+	int ret = 0, order = 1;;
+	/* should we always enforce it to reindata in the strict writing order?  */
+	struct w_cbuf *wcb = NULL, *list;
+
+        /* v for vertical list for all wcbufs in the same t_id, say
+	 * multiple writes */
+	struct w_cbuf *v_wcb = NULL, *v_list;	
+
+	list = all_wcbufs_list;
+
+	/* head node and its internal writes*/
+	for (wcb  = LAST_LIST(list, next, prev);
+	     wcb != list;
+	     wcb  = LAST_LIST(wcb, next, prev)) {
+		/* printc("found v_wcb->owner_tid %d\n", v_wcb->owner_tid); */
+		reinstate(wcb->owner_tid, order);
+		ret = pop_fs_obj(wcb);
+	}
+
+	for (wcb  = LAST_LIST(list, right, left);
+	     wcb != list;
+	     wcb  = LAST_LIST(wcb, right, left)) {
+		/* printc("found wcb->owner_tid %d\n", wcb->owner_tid); */
+		v_list = wcb;
+		for (v_wcb  = LAST_LIST(v_list, next, prev);
+		     v_wcb != v_list;
+		     v_wcb  = LAST_LIST(v_wcb, next, prev)) {
+			/* printc("found v_wcb->owner_tid %d\n", v_wcb->owner_tid); */
+			reinstate(v_wcb->owner_tid, order);
+			ret = pop_fs_obj(v_wcb);
+		}
+	}
+	
+	return;
+}
+
+static void
+rebuild_fs(td_t tid)
+{
+	printc("\n <<<<<<<<<<<< recovery starts >>>>>>>>>>>>>>>>\n\n");
+	reinstate(tid, 0);
+	reindata();
+	printc("\n<<<<<<<<<<<< recovery ends >>>>>>>>>>>>>>>>\n\n");
+}
+
 
 static struct rec_data_tor *
 update_rd(td_t tid)
@@ -315,7 +290,7 @@ update_rd(td_t tid)
 		return rd;
 
 	printc("rd->fcnt %lu  fcounter %lu\n",rd->fcnt,fcounter);
-	reinstate(tid);
+	rebuild_fs(tid);
 	return rd;
 }
 
@@ -336,7 +311,6 @@ get_unique(void)
 
 	return -1;
 }
-
 
 static char*
 param_save(char *param, int param_len)
@@ -368,16 +342,18 @@ struct __sg_tsplit_data {
 /* Split the new torrent and get new ser object */
 /* Client only needs know how to find server side object */
 
+static int aaa = 0;
+
 CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid)
 
         printc("<<< In: call tsplit >>>\n");
+        aaa++;   		/* test only */
         ret = __tsplit(spdid, tid, param, len, tflags, evtid, 0);
 
 CSTUB_POST
 
 CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid, td_t, desired_tid)
 
-        printc("<<< In: call __tsplit >>>\n");
         struct __sg_tsplit_data *d;
         struct rec_data_tor *rd, *rd_p;
 
@@ -394,16 +370,21 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
 
         sz = len + sizeof(struct __sg_tsplit_data);
         /* replay on slow path */
-        if (unlikely(desired_tid)) reinstate(tid);
+        if (unlikely(desired_tid > 0)) reinstate(tid, 0);
         if ((rd_p = rd_lookup(parent_tid))) parent_tid = rd_p->s_tid;
 
 redo:
         d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
-
-        printc("parent_tid: %d\n", parent_tid);
+        /* printc("parent_tid: %d\n", parent_tid); */
         d->tid	       = parent_tid;
         d->desired_tid = desired_tid;
+
+        if (aaa == 6) {
+		d->desired_tid = -10; /* test purpose only */
+		aaa = 100;
+	}
+
         d->tflags      = flags;
 	d->evtid       = evtid;
 	d->len[0]      = 0;
@@ -419,20 +400,14 @@ CSTUB_ASM_3(__tsplit, spdid, cb, sz)
 			BUG();
 		}
 		cbuf_free(d);
-		printc("\n\n ------- reinstate start\n");
-		reinstate(tid);
-		printc("reinstate done ------ \n\n");
-
-		printc("\n\n ------- reindata start\n");
-		reindata();
-		printc("reindata done ------ \n\n");
+		rebuild_fs(tid);
 		goto redo;
 	}
 
-        printc("ret from ramfs: %d\n",ret);
+        /* printc("ret from ramfs: %d\n",ret); */
         cbuf_free(d);
 
-        if (unlikely(desired_tid)) return ret;
+        if (unlikely(desired_tid > 0 || desired_tid == -1)) return ret;
 
         ser_tid = ret;
         l_param = param_save(param, len);
@@ -444,7 +419,7 @@ CSTUB_ASM_3(__tsplit, spdid, cb, sz)
         if (unlikely(rd_lookup(ser_tid))) {
 		cli_tid = get_unique();
 		assert(cli_tid > 0 && cli_tid != ser_tid);
-		printc("found existing tid %d >> get new cli_tid %d\n", ser_tid, cli_tid);
+		/* printc("found existing tid %d >> get new cli_tid %d\n", ser_tid, cli_tid); */
 	} else {
 		cli_tid = ser_tid;
 	}
@@ -455,6 +430,78 @@ CSTUB_ASM_3(__tsplit, spdid, cb, sz)
         ret = cli_tid;
 
 CSTUB_POST
+
+struct __sg_twmeta_data {
+	td_t td;
+	cbuf_t cb;
+	int sz;
+	int offset;
+	int flag;
+};
+
+CSTUB_FN_ARGS_6(int, twmeta, spdid_t, spdid, td_t, td, cbuf_t, cb, int, sz, int, offset, int, flag)
+        struct rec_data_tor *rd;
+	struct __sg_twmeta_data *d;
+	cbuf_t cb_m;
+	int sz_m = sizeof(struct __sg_twmeta_data);
+
+redo:
+	d = cbuf_alloc(sz_m, &cb_m);
+	if (!d) return -1;
+
+	/* int buf_sz; */
+	/* u32_t id; */
+	/* cbuf_unpack(cb, &id, (u32_t*)&buf_sz); */
+        /* printc("cbid is %d\n", id); */
+
+	d->td	  = td;
+	d->cb	  = cb;
+        d->sz	  = sz;
+        d->offset = offset;
+        d->flag   = flag;
+
+CSTUB_ASM_3(twmeta, spdid, cb_m, sz_m)
+        if (unlikely(fault)) {
+		fcounter++;
+		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+			printc("set cap_fault_cnt failed\n");
+			BUG();
+		}
+		cbuf_free(d);
+                goto redo;
+	}
+
+	cbuf_free(d);
+CSTUB_POST
+
+struct __sg_tmerge_data {
+	td_t td;
+	td_t td_into;
+	int len[2];
+	char data[0];
+};
+CSTUB_FN_ARGS_5(int, tmerge, spdid_t, spdid, td_t, td, td_t, td_into, char *, param, int, len)
+	struct __sg_tmerge_data *d;
+	cbuf_t cb;
+	int sz = len + sizeof(struct __sg_tmerge_data);
+
+        assert(param && len > 0);
+	assert(param[len-1] == '\0');
+
+	d = cbuf_alloc(sz, &cb);
+	if (!d) return -1;
+
+	d->td = td;
+	d->td_into = td_into;
+        d->len[0] = 0;
+        d->len[1] = len;
+	memcpy(&d->data[0], param, len);
+
+CSTUB_ASM_3(tmerge, spdid, cb, sz)
+
+	cbuf_free(d);
+CSTUB_POST
+
 
 CSTUB_FN_ARGS_2(int, trelease, spdid_t, spdid, td_t, tid)
 
@@ -486,24 +533,9 @@ CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 redo:
         rd = update_rd(tid);
 
-	/* printc("rd->c_tid %d\n", rd->c_tid); */
-	/* struct w_cbuf *test = NULL, *list; */
-	/* list = rd->cbufs_head; */
-	/* for (test  = FIRST_LIST(list, next, prev); */
-	/*      test != list; */
-	/*      test  = FIRST_LIST(test, next, prev)) { */
-	/* 	printc("read->cb %d\n", test->cb); */
-	/* 	printc("read->sz %d\n", test->sz); */
-	/* 	printc("read->actual_sz %d\n", test->actual_sz); */
-	/* } */
-
-        print_rd_info(rd);
-
 CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 
         if (unlikely(fault)) {
-		printc("read failed!!!!\n");
-                //no need this anymore? we still need this
 		fcounter++;
 		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 			printc("set cap_fault_cnt failed\n");
@@ -512,7 +544,6 @@ CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
                 goto redo;
 	}
 
-        assert(rd);
         print_rd_info(rd);
 
 CSTUB_POST
@@ -525,7 +556,6 @@ CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
 redo:
         rd = update_rd(tid);
-        print_rd_info(rd);
 
 CSTUB_ASM_4(twrite, spdid, rd->s_tid, cb, sz)
 
@@ -540,8 +570,6 @@ CSTUB_ASM_4(twrite, spdid, rd->s_tid, cb, sz)
 
         assert(rd);
         /* ret is the actual incremented offset on server side */
-        /* data of size sz is not guaranteed completely written to ramfs  */
-        assert(ret > 0);      	
         add_cbufs_record(rd, cb, sz, ret);
 
         print_rd_info(rd);

@@ -328,6 +328,9 @@ again:
 
 	cm->c.thdid_owner = cos_get_thd_id();
 	cos_comp_info.cos_tmem_available[COMP_INFO_TMEM_CBUF]--;
+
+	cm->c.flags  |= CBUFM_OWNER; /* set to indicate that this cbuf is owned by requested spd */
+
 	ret = (void*)(cm->c.ptr << PAGE_ORDER);
 done:
 	*cb = cbuf_cons(cbid, len);
@@ -350,17 +353,20 @@ cbuf_free(void *buf)
 	assert(!__cbuf_alloc_meta_inconsistent(d, cm));
 	assert(cm->c.flags & CBUFM_IN_USE);
 
-	 /* for ramfs FT test now, using different cbuf */
+	/* check if this spd is the owner, 0 for not the owner */
 	if (cm->c.flags & CBUFM_OWNER) {
-		CBUF_RELEASE();
-		return;
+		if (!cbuf_c_introspect(cos_spd_id(), d->cbid, CBUF_INTRO_OWNER)) {
+			CBUF_RELEASE();
+			return;
+		}
 	}
-
+	
 	fl = d->flhead;
 	assert(fl);
 	ADD_LIST(fl, d, next, prev);
 	/* do this last, so that we can guarantee the manager will not steal the cbuf before now... */
 	cm->c.flags &= ~CBUFM_IN_USE;
+	cm->c.flags &= ~CBUFM_OWNER;
 	cm->c.thdid_owner = 0;
 	cos_comp_info.cos_tmem_available[COMP_INFO_TMEM_CBUF]++;
 	CBUF_RELEASE();

@@ -32,6 +32,9 @@ int tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len);
 int tread(spdid_t spdid, td_t td, int cbid, int sz);
 int twrite(spdid_t spdid, td_t td, int cbid, int sz);
 
+/* FIXME: this should be more general */
+int twmeta(spdid_t spdid, td_t td, cbuf_t cbid, int sz, int offset, int flag);
+
 static inline int
 tread_pack(spdid_t spdid, td_t td, char *data, int len)
 {
@@ -45,8 +48,7 @@ tread_pack(spdid_t spdid, td_t td, char *data, int len)
 	int sz;
 	u32_t id;
 	cbuf_unpack(cb, &id, (u32_t*)&sz);
-	printc("read: cbid is %d\n", id);
-
+	/* printc("\n read: cbid is %d\n", id); */
 
 	ret = tread(spdid, td, cb, len);
 	memcpy(data, d, len);
@@ -68,7 +70,7 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 	int sz;
 	u32_t id;
 	cbuf_unpack(cb, &id, (u32_t*)&sz);
-	printc("write:cbid is %d\n", id);
+	/* printc("\n write:cbid is %d\n", id); */
 
 	memcpy(d, data, len);
 	ret = twrite(spdid, td, cb, len);
@@ -84,12 +86,5 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 /* 	char data[0]; */
 /* }; */
 /* int trmeta(td_t td, int cbid, int sz); */
-
-//int twmeta(td_t td, char *key, int flen, char *value, int vlen);
-struct twmeta_data {
-	short int value, end; /* offsets into data */
-	char data[0];
-};
-int twmeta(td_t td, int cbid, int sz, int offset);
 
 #endif /* TORRENT_H */ 

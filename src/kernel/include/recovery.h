@@ -224,7 +224,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 	}
 
 	cap_no >>= 20;
-	printk("cos: cap_no is %d base is %d\n", cap_no, d_spd->cap_base);
+	/* printk("cos: cap_no is %d base is %d\n", cap_no, d_spd->cap_base); */
 
 	if (unlikely(cap_no >= MAX_STATIC_CAP)) {
 		printk("cos: capability %d greater than max\n",
@@ -249,12 +249,12 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 		assert(cap_entry->owner == d_spd);
 
 		dest_spd = cap_entry->destination;
-		printk("dest_spd is %d\n", spd_get_index(dest_spd));
+		/* printk("dest_spd is %d\n", spd_get_index(dest_spd)); */
 		cap_entry->fault.cnt = dest_spd->fault.cnt;
 
-		printk("cap_no_origin %d): owner %d dest is %d\n", cap_no_origin,
-		       spd_get_index(cap_entry->owner),spd_get_index(cap_entry->destination));
-		printk("cap_entry->fault.cnt %d\n",cap_entry->fault.cnt);
+		/* printk("cap_no_origin %d): owner %d dest is %d\n", cap_no_origin, */
+		/*        spd_get_index(cap_entry->owner),spd_get_index(cap_entry->destination)); */
+		/* printk("cap_entry->fault.cnt %d\n",cap_entry->fault.cnt); */
 
 		/* It seems more reasonable to only update the corresponding cap fault ..... */
 		/* not for multiple clients, so still need */

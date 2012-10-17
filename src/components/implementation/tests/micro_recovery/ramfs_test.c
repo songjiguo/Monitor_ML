@@ -29,14 +29,14 @@ void cos_init(void)
 	char *data0 = "kevinandy";
 	unsigned int ret1, ret2, ret0;
 
+	printc("<<< TEST START >>>\n");
+
 	evt1 = evt_create(cos_spd_id());
 	evt2 = evt_create(cos_spd_id());
 	evt0 = evt_create(cos_spd_id());
 	assert(evt1 > 0 && evt2 > 0 && evt0 > 0);
 
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
-	printc("tid %d\n", t1);
-
 	if (t1 < 1) {
 		printc("  split2 failed %d\n", t1); return;
 	}
@@ -79,7 +79,7 @@ void cos_init(void)
 	assert(!strcmp(buffer, data1));
 	assert(ret1 == strlen(data1));
 	buffer[0] = '\0';
-
+	
 	ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023);
 	if (ret2 > 0) buffer[ret2] = '\0';
 	assert(!strcmp(buffer, data2));
@@ -98,29 +98,7 @@ void cos_init(void)
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t0);
 
-	printc("2 split -> 2 read -> 2 release\n");
-
-	/* t1 = tsplit(cos_spd_id(), td_root, params3, strlen(params3), TOR_ALL, evt1); */
-	/* ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023); */
-	/* if (ret1 > 0) buffer[ret1] = '\0'; */
-	/* printv("read %d: %s\n", ret1, buffer); */
-	/* assert(!strcmp(buffer, data2)); */
-	/* assert(ret1 == strlen(data2)); */
-	/* printc("  split with absolute addressing -> read\n"); */
-	/* buffer[0] = '\0'; */
-
-	/* ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1)); */
-	/* printv("write %d, ret %d\n", strlen(data1), ret1); */
-
-	/* trelease(cos_spd_id(), t1); */
-	/* t1 = tsplit(cos_spd_id(), td_root, params3, strlen(params3), TOR_ALL, evt1); */
-	/* ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023); */
-	/* if (ret1 > 0 && ret1 < 1024) buffer[ret1] = '\0'; */
-	/* printv("read %d: %s (%s)\n", ret1, buffer, data3); */
-	/* assert(ret1 == strlen(data2)+strlen(data1)); */
-	/* assert(!strcmp(buffer, data3)); */
-	/* buffer[0] = '\0'; */
-	/* printc("  writing to an existing file\n"); */
+	printc("<<< TEST PASSED >>>\n");
 
 	return;
 }

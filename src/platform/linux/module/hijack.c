@@ -1361,7 +1361,6 @@ int pgtbl_rw_set(paddr_t pgtbl, vaddr_t va, int flag)
 	return 0;
 }
 
-
 /* 
  * This won't work to find the translation for the argument region as
  * __va doesn't work on module-mapped memory. 

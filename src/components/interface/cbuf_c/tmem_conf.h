@@ -33,6 +33,13 @@ typedef enum {
 	CBUFM_MAPPED_IN = 1<<5,
 } cbufm_flags_t;
 
+/* flags passed to introspect function */
+enum {
+	CBUF_INTRO_OWNER,
+	CBUF_INTRO_PAGE,
+	CBUF_INTRO_TOT
+};
+
 /* 
  * This data-structure is shared between this component and the cbuf_c
  * (the cbuf manager) and the refcnt is used to gauge if the cbuf is

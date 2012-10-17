@@ -69,6 +69,13 @@ free:
 }
 
 int 
+twmeta(spdid_t spdid, td_t td, cbuf_t cb, int sz, int offset, int flag)
+{
+	return -ENOTSUP;
+}
+
+
+int 
 tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
 {
 	struct torrent *t;

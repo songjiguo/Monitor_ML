@@ -219,16 +219,16 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 		/* printk("cos: s spd %d\n", spd_get_index(s)); */
 
 		/* yusheng detects the fault on invocation */
-		printk("current spd is %d\n", spd_get_index(curr_spd));
+		/* printk("current spd is %d\n", spd_get_index(curr_spd)); */
 		ipc_fault_update(cap_entry, dest_spd);
-		printk("&thd->regs spd %d\n", ((struct pt_regs *)&thd->regs)->bx);
+		/* printk("&thd->regs spd %d\n", ((struct pt_regs *)&thd->regs)->bx); */
 		addr = thd_ipc_fault_notif(thd, dest_spd);
 
 #ifdef MEAS_INV_FAULT_DETECT
 		rdtscll(end);
 		printk("cos:ipc notification cost %llu\n", (end-start));
 #endif
-		printk("after &thd->regs spd %d\n", ((struct pt_regs *)&thd->regs)->bx);
+		/* printk("after &thd->regs spd %d\n", ((struct pt_regs *)&thd->regs)->bx); */
 		return addr;
 	}
 	inv_frame_fault_cnt_update(thd, curr_spd);
@@ -322,7 +322,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	unsigned int fault_cap;
 	struct pt_regs *nregs;
 
-	printk("deskt spd %d \n", spd_get_index(dest_spd));
+	/* printk("deskt spd %d \n", spd_get_index(dest_spd)); */
 	if (unlikely(dest_spd)) s = dest_spd;
 	else {
 		s = virtual_namespace_query(regs->ip);
@@ -356,7 +356,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	memcpy(&thd->fault_regs, regs, sizeof(struct pt_regs));
 	a = ipc_walk_static_cap(thd, fault_cap<<20, regs->sp, regs->ip, &r);
 	
-	printk("r.spd_id %d\n", r.spd_id);
+	/* printk("r.spd_id %d\n", r.spd_id); */
 
 	/* setup the registers for the fault handler invocation */
 	regs->ax = r.thd_id;
@@ -3669,7 +3669,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 	case COS_MMAP_RW:
 	{
 		ret = pgtbl_rw_set(spd->spd_info.pg_tbl, daddr, flags);
-		if (ret == -1) printk("cos: page is not set\n");
+		if (ret == -1) printk("cos: page wr is not set\n");
 		break;
 	}
 	case COS_MMAP_TLBFLUSH:
