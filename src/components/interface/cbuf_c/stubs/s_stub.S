@@ -15,6 +15,8 @@ cos_asm_server_stub_spdid(cbuf_c_register)
 cos_asm_server_stub_spdid(cbuf_c_introspect)
 cos_asm_server_stub_spdid(cbuf_c_claim)	
 
+cos_asm_server_stub(cbuf_c_record)
+	
 cos_asm_server_stub(cbufmgr_buf_report)
 cos_asm_server_stub(cbufmgr_set_concurrency)
 cos_asm_server_stub(cbufmgr_spd_concurrency_estimate)

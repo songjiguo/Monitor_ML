@@ -385,6 +385,11 @@ cbuf_c_create(spdid_t spdid, int size, long cbid)
 	d->owner.spd  = sti->spdid;
 	d->owner.cbd  = d;
 
+	/* initialize cfi for torrent FT now*/
+	d->cfi.len    = 0;
+	d->cfi.offset = 0;
+	d->cfi.fid    = -1;  	/* unique map id starts from 0 */
+
 	/* Jiguo:
 	  This can be two different cases:
 	  1. A local cached one is returned with a cbid
@@ -541,15 +546,100 @@ err:
 	goto done;
 }
 
-void *
-cbuf_c_introspect(spdid_t spdid, int cbid, int flag)
+
+struct cb_file_info cfi_list;
+
+/* FIXME: the writing mode is not defined yet. Now if close a file
+ * ,and reopen it, the old contents is overwritten. In the future, for
+ * ramFS, other mode should be supported, like append writing.... */
+/* 
+   len   :  actual written size
+   offset:  offset before writing  
+   fid   :  unique file id obtained from unique map
+   cbid  :  the one that carries the data
+ */
+int 
+cbuf_c_record(int cbid, int len, int offset, int fid)
 {
-	void *ret = NULL;
+	int ret = 0;
+	struct cb_desc *d, *f_d;
+	struct cb_file_info *cfi;
+	int id;
+
+	printc("cbuf_c_record:: cbid %d len %d offset %d fid %d\n", cbid, len, offset, fid);
+
+	assert(cbid >= 0 && len > 0);
+
+	TAKE();
+	d = cos_map_lookup(&cb_ids, cbid); /* ramFS should have claimed the ownership  */
+	if (!d) goto err;
+	
+	assert(d->owner.spd == 15); /* test purpose only, should pass spdid into here */
+	/* assert(d->cfi.fid == -1);   /\* initialized to -1 *\/ */
+	id  = d->cfi.fid;
+
+	d->cfi.fid    = fid;
+	d->cfi.len    = len;
+	d->cfi.offset = offset;
+	d->cfi.cbd    = d;
+
+	INIT_LIST(&d->cfi, next, prev);
+	INIT_LIST(&d->cfi, down, up); 	/* the writes on the same torrent */
+	
+	for (cfi = FIRST_LIST(&cfi_list, next, prev);
+	     cfi != &cfi_list;
+	     cfi = FIRST_LIST(cfi, next, prev)) {
+		if (cfi->fid == fid) {
+			if (offset == 0) { /* tsplit is called here, so discard any previous data */
+				cfi->fid    = fid;
+				cfi->len    = len;
+				cfi->offset = offset;
+				cfi->cbd    = d;
+				/* should free all previous nodes?? */
+				INIT_LIST(cfi, down, up);
+			} else {
+				ADD_LIST(cfi, &d->cfi, down, up);
+			}
+			goto done;
+		}
+	}
+
+	
+	ADD_LIST(&cfi_list, &d->cfi, next, prev);
+
+done:
+	/* for (cfi = FIRST_LIST(&cfi_list, next, prev); */
+	/*      cfi != &cfi_list; */
+	/*      cfi = FIRST_LIST(cfi, next, prev)) { */
+	/* 	printc("fid %d\n",cfi->fid); */
+	/* 	printc("len %d\n",cfi->len); */
+	/* 	printc("offset %d\n",cfi->offset); */
+	/* 	printc("cbid %d\n",cfi->cbd->cbid); */
+	/* 	printc("owner spd  %d\n",cfi->cbd->owner.spd); */
+	/* } */
+	
+
+	RELEASE();
+	return ret;
+err:
+	ret = -1;
+	goto done;
+
+}
+
+
+/* id can be either cbid, or unique file id, or something else...., depends on flag */
+int
+cbuf_c_introspect(spdid_t spdid, int id, int flag)
+{
+	int ret = 0;
 	struct spd_tmem_info *sti;
 	spdid_t s_spdid;
 	struct cos_cbuf_item *cci = NULL, *list;
 	struct cb_desc *d;
 	struct cb_mapping *m;
+
+	struct cb_file_info *cfi, *cfi_d;
 	
 	int counter = 0;
 	void *addr = NULL;
@@ -562,52 +652,90 @@ cbuf_c_introspect(spdid_t spdid, int cbid, int flag)
 	list = &spd_tmem_info_list[s_spdid].tmem_list;
 
 	switch (flag) {
-	case CBUF_INTRO_TOT:   /* find total numbers of cbufs that is being hold by this spd */
+	case CBUF_INTRO_CBID:   /* introspect from the unique file id here*/
 	{
-		for (cci = FIRST_LIST(list, next, prev) ;
-		     cci != list;
-		     cci = FIRST_LIST(cci, next, prev)) {
-			union cbuf_meta cm;
-			cm.c_0.v = cci->entry->c_0.v;
-			if (CBUF_OWNER(cm.c.flags) && 
-			    CBUF_IN_USE(cm.c.flags)) counter++;
+		for (cfi = FIRST_LIST(&cfi_list, next, prev);
+		     cfi != &cfi_list;
+		     cfi = FIRST_LIST(cfi, next, prev)) {
+			if (cfi->fid == id) {
+				ret = cfi->cbd->cbid;
+				goto done;
+			}
 		}
-		ret = (void *)counter;
-		goto done;
 	}
-	case CBUF_INTRO_PAGE: /* find the page for cbid */
+	case CBUF_INTRO_SIZE:
 	{
-		assert(cbid > 0);
-		/* printc("cbid ---- %d\n", cbid); */
-		d = cos_map_lookup(&cb_ids, cbid);
-		if (!d) goto done;
+		for (cfi = FIRST_LIST(&cfi_list, next, prev);
+		     cfi != &cfi_list;
+		     cfi = FIRST_LIST(cfi, next, prev)) {
+			if (cfi->fid == id) {
+				ret = cfi->len;
+				goto done;
+			}
+		}
+	}
+	case CBUF_INTRO_OFFSET:
+	{
+		for (cfi = FIRST_LIST(&cfi_list, next, prev);
+		     cfi != &cfi_list;
+		     cfi = FIRST_LIST(cfi, next, prev)) {
+			if (cfi->fid == id) {
+				ret = cfi->offset;
+				goto done;
+			}
+		}
+	}
+	case CBUF_INTRO_TOT:   /* find total numbers of cbufs that is being hold by fid */
+	{
+		for (cfi = FIRST_LIST(&cfi_list, next, prev) ;
+		     cfi != &cfi_list;
+		     cfi = FIRST_LIST(cfi, next, prev)) {
+			if (cfi->fid == id) {
+				counter++;
+				for (cfi_d = FIRST_LIST(cfi, down, up) ;
+				     cfi_d != cfi;
+				     cfi_d = FIRST_LIST(cfi, down, up)) {
+					counter++;
+				}
+				ret = counter;
+				goto done;
+			}
+		}
+	}
+	/* case CBUF_INTRO_PAGE: /\* find the page for id *\/ */
+	/* { */
+	/* 	assert(id > 0); */
+	/* 	/\* printc("id ---- %d\n", id); *\/ */
+	/* 	d = cos_map_lookup(&cb_ids, id); */
+	/* 	if (!d) goto done; */
 		
-		m = &d->owner;  /* get the current cbuf owner descriptor */
-		/* printc("PAGE:cbid %d owner is %d, we are spd %d\n", cbid, m->spd, spdid); */
-		/* printc("PAGE: d->addr %p, m->addr %p\n", d->addr, m->addr); */
+	/* 	m = &d->owner;  /\* get the current cbuf owner descriptor *\/ */
+	/* 	/\* printc("PAGE:id %d owner is %d, we are spd %d\n", id, m->spd, spdid); *\/ */
+	/* 	/\* printc("PAGE: d->addr %p, m->addr %p\n", d->addr, m->addr); *\/ */
 
-		if (m->spd == spdid) ret = (void *)m->addr;
-		goto done;
-	}
-	case CBUF_INTRO_OWNER: /* find the current owner for cbid */
+	/* 	if (m->spd == spdid) ret = (void *)m->addr; */
+	/* 	goto done; */
+	/* } */
+	case CBUF_INTRO_OWNER: /* find the current owner for id */
 	{
-		assert(cbid > 0);
-		/* printc("cbid ---- %d\n", cbid); */
-		d = cos_map_lookup(&cb_ids, cbid);
+		assert(id > 0);
+		/* printc("id ---- %d\n", id); */
+		d = cos_map_lookup(&cb_ids, id);
 		if (!d) goto done;
 		
 		m = &d->owner;  /* get the current cbuf owner descriptor */
-		/* printc("OWNER:cbid %d owner is %d, we are spd %d\n", cbid, m->spd, spdid); */
-		if (m->spd == spdid) ret = (void *)m->spd;
+		/* printc("OWNER:id %d owner is %d, we are spd %d\n", id, m->spd, spdid); */
+		if (m->spd == spdid) ret = m->spd;
 		goto done;
 	}
 	default:
-		return NULL;
+		return 0;
 	}
 done:
 	RELEASE();
 	return ret;
 }
+
 
 /* Exchange the cbuf descriptor (flags of ownership)
    of old spd and requested spd */
@@ -708,7 +836,6 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 		BUG();
 	}
 
-
 done:
 	RELEASE();
 	return ret;   
@@ -722,6 +849,8 @@ cos_init(void *d)
 	cos_map_init_static(&cb_ids);
 	BUG_ON(cos_map_add(&cb_ids, NULL)); /* reserve id 0 */
 	int i;
+
+	INIT_LIST(&cfi_list, next, prev); /* for torrent */
 
 	memset(spd_tmem_info_list, 0, sizeof(struct spd_tmem_info) * MAX_NUM_SPDS);
     

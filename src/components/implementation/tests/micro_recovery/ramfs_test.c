@@ -5,7 +5,6 @@
 #include <evt.h>
 #include <torrent.h>
 
-
 /* based on the code from unit test for ramfs */
 
 #define VERBOSE 1

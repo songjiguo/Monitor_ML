@@ -36,7 +36,10 @@ typedef enum {
 /* flags passed to introspect function */
 enum {
 	CBUF_INTRO_OWNER,
-	CBUF_INTRO_PAGE,
+	CBUF_INTRO_CBID,
+	CBUF_INTRO_SIZE,
+	CBUF_INTRO_OFFSET,
+	/* CBUF_INTRO_PAGE, */
 	CBUF_INTRO_TOT
 };
 
@@ -76,6 +79,15 @@ union cbuf_meta {
 };
 
 
+struct cb_file_info {
+	int fid;
+	int len;
+	int offset;
+	struct cb_file_info *next, *prev;
+	struct cb_file_info *down, *up;
+	struct cb_desc *cbd;
+};
+
 struct cb_desc;
 struct cb_mapping {
 	spdid_t spd;
@@ -91,6 +103,7 @@ struct cb_desc {
 	int obj_sz;
 	void *addr; 	/* local map address, done at init*/
 	struct cb_mapping owner;
+	struct cb_file_info cfi;
 };
 
 

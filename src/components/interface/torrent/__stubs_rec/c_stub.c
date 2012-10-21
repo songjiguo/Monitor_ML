@@ -37,7 +37,6 @@
 #define CVECT_FREE(x) free_page(x)
 #include <cvect.h>
 
-
 #define RD_PRINT 0
 
 #if RD_PRINT == 1
@@ -193,8 +192,8 @@ reinstate(td_t tid, int flag)
 	struct rec_data_tor *rd;
 	if (!(rd = rd_lookup(tid))) return; 	/* root_tid */
 
-	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
-	/* printc("parent tid %d\n", rd->parent_tid); */
+	printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid);
+	printc("parent tid %d\n", rd->parent_tid);
 	
 	if (flag == 1)
 		id = -1;
@@ -209,7 +208,7 @@ reinstate(td_t tid, int flag)
 	if (ret > 0) rd->s_tid = ret;  	/* update the ramfs side tid, only if return a new server id */
 
 	rd->fcnt = fcounter;
-	/* printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid); */
+	printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid);
 	
 	return;
 }
@@ -275,8 +274,10 @@ rebuild_fs(td_t tid)
 	unsigned long long start, end;
 	/* printc("\n <<<<<<<<<<<< recovery starts >>>>>>>>>>>>>>>>\n\n"); */
 	/* rdtscll(start); */
+
 	reinstate(tid, 0);
-	reindata();
+	/* reindata(); */
+
 	/* rdtscll(end); */
 	/* printc("rebuild fs cost %llu\n", end-start); */
 	/* printc("\n<<<<<<<<<<<< recovery ends >>>>>>>>>>>>>>>>\n\n"); */
@@ -389,15 +390,16 @@ redo:
 	d->evtid       = evtid;
 	d->len[0]      = 0;
 	d->len[1]      = len;
+        /* printc("c: subpath name %s len %d\n", param, len); */
 	memcpy(&d->data[0], param, len);
 
         if (aaa == 6) {
 		d->desired_tid = -10; /* test purpose only */
 		aaa = 100;
-		rdtscll(start);
+		/* rdtscll(start); */
 	}
 
-CSTUB_ASM_3(__tsplit, spdid, cb, sz)
+CSTUB_ASM_4(__tsplit, spdid, cb, sz, desired_tid)
 
         if (unlikely(fault)) {
 		fcounter++;
@@ -407,8 +409,10 @@ CSTUB_ASM_3(__tsplit, spdid, cb, sz)
 		}
 		cbuf_free(d);
 		rebuild_fs(tid);
-		rdtscll(end);
-		printc("entire cost %llu\n", end-start);
+		
+		printc("rebuild is done\n\n");
+		/* rdtscll(end); */
+		/* printc("entire cost %llu\n", end-start); */
 		goto redo;
 	}
 
@@ -560,6 +564,7 @@ CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
         /* printc("<<< In: call twrite >>>\n"); */
         struct rec_data_tor *rd;
+
 
 redo:
         rd = update_rd(tid);

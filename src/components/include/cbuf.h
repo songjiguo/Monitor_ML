@@ -403,4 +403,42 @@ cbuf_is_cbuf(void *buf)
 	return cbuf_id(buf) != 0;
 }
 
+static inline int 
+cbuf_claim(cbuf_t cb)
+{
+	int ret = 0;
+	int sz;
+	u32_t id;
+
+	CBUF_TAKE();
+
+	cbuf_unpack(cb, &id, (u32_t*)&sz);
+	ret = cbuf_c_claim(cos_spd_id(), id);
+	
+	CBUF_RELEASE();
+	
+	return ret;
+}
+
+static inline int 
+cbuf_record(cbuf_t cb, int len, int offset, int id)
+{
+	int ret = 0;
+	int sz;
+	u32_t cbid;
+	if (unlikely(!len)) {
+		printc("saved info can not have zero length\n");
+		return -1;
+	}
+
+	CBUF_TAKE();
+
+	cbuf_unpack(cb, &cbid, (u32_t*)&sz);
+	ret = cbuf_c_record(cbid, len, offset, id);
+	
+	CBUF_RELEASE();
+	
+	return ret;
+}
+
 #endif /* CBUF_H */
