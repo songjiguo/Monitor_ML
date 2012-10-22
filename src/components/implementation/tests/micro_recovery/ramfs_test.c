@@ -51,6 +51,7 @@ void cos_init(void)
 	}
 
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
+	/* ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1)); */
 	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
 	ret0 = twrite_pack(cos_spd_id(), t0, data0, strlen(data0));
 	/* printv("write %d & %d, ret %d & %d\n", strlen(data1), strlen(data2), ret1, ret2); */

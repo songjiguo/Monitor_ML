@@ -28,7 +28,7 @@ int cbuf_c_create(spdid_t spdid, int size, long cbid); /* return cbid */
 int cbuf_c_delete(spdid_t spdid, int cbid);
 void *cbuf_c_retrieve(spdid_t spdid, int cbid, int len); /* return client address */
 
-int cbuf_c_introspect(spdid_t spdid, int id, int flag);
+unsigned int cbuf_c_introspect(spdid_t spdid, int id, int nth, int flag);
 int cbuf_c_claim(spdid_t spdid, int cbid);     /* spd wants to own the cbuf, 0 means owner changes  */
 int cbuf_c_record(int cbid, int len, int offset, int fid); /* when some info need be saved in cbuf MM */
 

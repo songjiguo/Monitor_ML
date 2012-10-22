@@ -575,7 +575,7 @@ done:
 }
 
 int 
-twmeta(spdid_t spdid, td_t td, cbuf_t cb, int sz, int offset, int flag)
+twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
 {
 	return -ENOTSUP;
 }

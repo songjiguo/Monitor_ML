@@ -33,7 +33,7 @@ int tread(spdid_t spdid, td_t td, int cbid, int sz);
 int twrite(spdid_t spdid, td_t td, int cbid, int sz);
 
 /* FIXME: this should be more general */
-int twmeta(spdid_t spdid, td_t td, cbuf_t cbid, int sz, int offset, int flag);
+int twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag);
 
 static inline int
 tread_pack(spdid_t spdid, td_t td, char *data, int len)
@@ -66,6 +66,11 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 
 	d = cbuf_alloc(len, &cb);
 	if (!d) return -1;
+
+	/* int sz; */
+	/* u32_t id; */
+	/* cbuf_unpack(cb, &id, (u32_t*)&sz); */
+	/* printc("\n write: cbid is %d\n", id); */
 
 	memcpy(d, data, len);
 	ret = twrite(spdid, td, cb, len);

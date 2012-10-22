@@ -355,7 +355,7 @@ cbuf_free(void *buf)
 
 	/* check if this spd is the owner, 0 for not the owner */
 	if (cm->c.flags & CBUFM_OWNER) {
-		if (!cbuf_c_introspect(cos_spd_id(), d->cbid, CBUF_INTRO_OWNER)) {
+		if (!cbuf_c_introspect(cos_spd_id(), d->cbid, 0, CBUF_INTRO_OWNER)) {
 			CBUF_RELEASE();
 			return;
 		}

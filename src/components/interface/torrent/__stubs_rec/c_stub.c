@@ -21,7 +21,6 @@
 /*           e)      cli                    N/A          */
 /*           f)      cli                    other        */
 
-
 #include <cos_component.h>
 #include <cos_debug.h>
 #include <print.h>
@@ -47,6 +46,13 @@
 
 static unsigned long fcounter = 0;
 
+enum{
+	SPLIT_FCNT,
+	RELEASE_FCNT,
+	READ_FCNT,
+	WRITE_FCNT
+};
+
 /* used for multiple cbufs tracking when twrite  */
 struct w_cbuf {
 	cbuf_t		 cb;
@@ -70,8 +76,7 @@ struct rec_data_tor {
 	tor_flags_t	 tflags;
 	long		 evtid;
 
-	unsigned long	fcnt;
-	
+	unsigned long	 fcnt;
 	struct w_cbuf	*wcbufs_head;
 };
 
@@ -106,20 +111,30 @@ rd_dealloc(struct rec_data_tor *rd)
 	cslab_free_rd(rd);
 }
 
+static void 
+rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *param, int len, tor_flags_t tflags, long evtid)
+{
+	/* printc("rd_cons: ser_tid %d  cli_tid %d\n", ser_tid, cli_tid); */
+	assert(rd);
 
-void 
+	rd->parent_tid	 = tid;
+	rd->s_tid	 = ser_tid;
+	rd->c_tid	 = cli_tid;
+	rd->param	 = param;
+	rd->param_len	 = len;
+	rd->tflags	 = tflags;
+	rd->evtid	 = evtid;
+	rd->fcnt	 = fcounter;
+
+	rd->wcbufs_head->owner_tid = cli_tid; /* remove later */
+
+	return;
+}
+
+static void 
 rd_init(struct rec_data_tor *rd)
 {
 	struct w_cbuf *wcb = NULL;
-
-	rd->parent_tid = 0;
-	rd->s_tid      = 0;
-	rd->c_tid      = 0;
-	rd->param      = 0;
-	rd->param_len  = 0;
-	rd->tflags     = 0;
-	rd->evtid      = 0;
-	rd->fcnt       = 0;
 
 	/* initialize the list head for writing records, only do this once  */
 	wcb = cslab_alloc_wcb();
@@ -134,29 +149,6 @@ rd_init(struct rec_data_tor *rd)
 	INIT_LIST(wcb, right, left);
 	if (!all_wcbufs_list) all_wcbufs_list = wcb;
 	else ADD_LIST(all_wcbufs_list, wcb, right, left);
-
-	return;
-}
-
-void 
-rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *param, int len, tor_flags_t tflags, long evtid)
-{
-	/* printc("rd_cons: ser_tid %d  cli_tid %d\n", ser_tid, cli_tid); */
-	assert(rd);
-
-	rd->parent_tid = tid;
-	rd->s_tid      = ser_tid;
-	rd->c_tid      = cli_tid;
-	rd->param      = param;
-	rd->param_len  = len;
-	rd->tflags     = tflags;
-	rd->evtid      = evtid;
-	rd->fcnt       = fcounter;
-
-	rd->wcbufs_head->owner_tid = cli_tid;
-
-	cvect_add(&rec_vect, rd, cli_tid);
-
 	return;
 }
 
@@ -186,7 +178,7 @@ add_cbufs_record(struct rec_data_tor *rd, cbuf_t cb, int sz, unsigned len)
 
 /* restore the server state */
 static void
-reinstate(td_t tid, int flag)
+reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 {
 	td_t ret, id;
 	struct rec_data_tor *rd;
@@ -195,11 +187,11 @@ reinstate(td_t tid, int flag)
 	printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid);
 	printc("parent tid %d\n", rd->parent_tid);
 	
-	if (flag == 1)
-		id = -1;
-	else
-		id = rd->c_tid;
-
+	/* if (flag == 1) */
+	/* 	id = -1; */
+	/* else */
+	id = rd->c_tid;
+		
 	ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, id);
 	if (ret < 1) {
 		printc("re-split failed %d\n", tid);
@@ -208,6 +200,7 @@ reinstate(td_t tid, int flag)
 	if (ret > 0) rd->s_tid = ret;  	/* update the ramfs side tid, only if return a new server id */
 
 	rd->fcnt = fcounter;
+
 	printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid);
 	
 	return;
@@ -246,7 +239,7 @@ reindata()
 	     wcb != list;
 	     wcb  = LAST_LIST(wcb, next, prev)) {
 		/* printc("found v_wcb->owner_tid %d\n", v_wcb->owner_tid); */
-		reinstate(wcb->owner_tid, order);
+		/* reinstate(wcb->owner_tid, order); */
 		ret = pop_fs_obj(wcb);
 	}
 
@@ -259,7 +252,7 @@ reindata()
 		     v_wcb != v_list;
 		     v_wcb  = LAST_LIST(v_wcb, next, prev)) {
 			/* printc("found v_wcb->owner_tid %d\n", v_wcb->owner_tid); */
-			reinstate(v_wcb->owner_tid, order);
+			/* reinstate(v_wcb->owner_tid, order); */
 			ret = pop_fs_obj(v_wcb);
 		}
 	}
@@ -275,7 +268,7 @@ rebuild_fs(td_t tid)
 	/* printc("\n <<<<<<<<<<<< recovery starts >>>>>>>>>>>>>>>>\n\n"); */
 	/* rdtscll(start); */
 
-	reinstate(tid, 0);
+	reinstate(tid);
 	/* reindata(); */
 
 	/* rdtscll(end); */
@@ -285,18 +278,19 @@ rebuild_fs(td_t tid)
 
 
 static struct rec_data_tor *
-update_rd(td_t tid)
+update_rd(td_t tid, int flag)
 {
         struct rec_data_tor *rd;
 
         rd = rd_lookup(tid);
 	if (!rd) return NULL;
 	/* fast path */
-	if (likely(rd->fcnt == fcounter)) 
-		return rd;
+	if (likely(rd->fcnt == fcounter)) return rd;
 
-	/* printc("rd->fcnt %lu  fcounter %lu\n",rd->fcnt,fcounter); */
+	printc("rd->fcnt %lu    fcounter %lu\n",rd->fcnt,fcounter);
+
 	rebuild_fs(tid);
+
 	return rd;
 }
 
@@ -352,7 +346,7 @@ static int aaa = 0;
 
 CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid)
 
-        /* printc("<<< In: call tsplit >>>\n"); */
+        printc("<<< In: call tsplit >>>\n");
         aaa++;   		/* test only */
         ret = __tsplit(spdid, tid, param, len, tflags, evtid, 0);
 
@@ -361,7 +355,7 @@ CSTUB_POST
 CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid, td_t, desired_tid)
 
         struct __sg_tsplit_data *d;
-        struct rec_data_tor *rd, *rd_p;
+        struct rec_data_tor *rd, *rd_p, *rd_c;
 
 	char *l_param;
 	cbuf_t cb;
@@ -377,13 +371,13 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
 
         sz = len + sizeof(struct __sg_tsplit_data);
         /* replay on slow path */
-        if (unlikely(desired_tid > 0)) reinstate(tid, 0);
+        if (unlikely(desired_tid > 0)) reinstate(tid);
         if ((rd_p = rd_lookup(parent_tid))) parent_tid = rd_p->s_tid;
 
 redo:
         d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
-        /* printc("parent_tid: %d\n", parent_tid); */
+        printc("parent_tid: %d\n", parent_tid);
         d->tid	       = parent_tid;
         d->desired_tid = desired_tid;
         d->tflags      = flags;
@@ -408,6 +402,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, desired_tid)
 			BUG();
 		}
 		cbuf_free(d);
+		
 		rebuild_fs(tid);
 		
 		printc("rebuild is done\n\n");
@@ -423,7 +418,6 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, desired_tid)
 
         ser_tid = ret;
         l_param = param_save(param, len);
-
         rd = rd_alloc();
         assert(rd);
         rd_init(rd);
@@ -435,10 +429,11 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, desired_tid)
 	} else {
 		cli_tid = ser_tid;
 	}
+
         /* client side tid should be guaranteed to be unique now */
         rd_cons(rd, tid, ser_tid, cli_tid, l_param, len, tflags, evtid);
+	cvect_add(&rec_vect, rd, cli_tid);
 
-        assert(rd_lookup(cli_tid));
         ret = cli_tid;
 
 CSTUB_POST
@@ -520,7 +515,7 @@ CSTUB_FN_ARGS_2(int, trelease, spdid_t, spdid, td_t, tid)
         struct rec_data_tor *rd;
 
 redo:
-        rd = update_rd(tid);
+        rd = update_rd(tid, RELEASE_FCNT);
 
 CSTUB_ASM_2(trelease, spdid, rd->s_tid)
 
@@ -533,16 +528,17 @@ CSTUB_ASM_2(trelease, spdid, rd->s_tid)
                 goto redo;
 	}
         assert(rd);
+/* rd_dealloc(rd); */
 
 CSTUB_POST
 
 CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
-        /* printc("<<< In: call tread tid %d>>>\n", tid); */
+        printc("<<< In: call tread tid %d>>>\n", tid);
         struct rec_data_tor *rd;
 
 redo:
-        rd = update_rd(tid);
+        rd = update_rd(tid, READ_FCNT);
 
 CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 
@@ -567,7 +563,8 @@ CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
 
 redo:
-        rd = update_rd(tid);
+
+        rd = update_rd(tid, WRITE_FCNT);
 
 CSTUB_ASM_4(twrite, spdid, rd->s_tid, cb, sz)
 

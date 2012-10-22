@@ -583,6 +583,8 @@ cbuf_c_record(int cbid, int len, int offset, int fid)
 	d->cfi.offset = offset;
 	d->cfi.cbd    = d;
 
+	printc("when record:  address %p\n", d->owner.addr);
+
 	INIT_LIST(&d->cfi, next, prev);
 	INIT_LIST(&d->cfi, down, up); 	/* the writes on the same torrent */
 	
@@ -624,15 +626,51 @@ done:
 err:
 	ret = -1;
 	goto done;
+}
 
+
+static int return_item(int id, int nth, int flag)
+{
+	struct cb_file_info *cfi, *cfi_d;
+	int ret = 0;
+	for (cfi = LAST_LIST(&cfi_list, next, prev);
+	     cfi != &cfi_list;
+	     cfi = LAST_LIST(cfi, next, prev)) {
+		if (cfi->fid == id) {
+			nth--;
+			if (!nth) {
+				if (flag == CBUF_INTRO_CBID) {
+					ret = cfi->cbd->cbid;
+					/* printc("owner spd %d\n", cfi->cbd->owner.spd); */
+					/* printc("its address %p\n", cfi->cbd->owner.addr); */
+				}
+				if (flag == CBUF_INTRO_SIZE) ret = cfi->len;
+				if (flag == CBUF_INTRO_OFFSET) ret = cfi->offset;
+				return ret;
+			} else {
+				for (cfi_d = FIRST_LIST(cfi, down, up) ;
+				     cfi_d != cfi;
+				     cfi_d = FIRST_LIST(cfi_d, down, up)) {
+					nth--;
+					if (!nth) {
+						if (flag == CBUF_INTRO_CBID) ret = cfi_d->cbd->cbid;
+						if (flag == CBUF_INTRO_SIZE) ret = cfi_d->len;
+						if (flag == CBUF_INTRO_OFFSET) ret = cfi_d->offset;
+						return ret;
+					}
+				}
+			}
+		}
+	}
+	return ret;
 }
 
 
 /* id can be either cbid, or unique file id, or something else...., depends on flag */
-int
-cbuf_c_introspect(spdid_t spdid, int id, int flag)
+unsigned int
+cbuf_c_introspect(spdid_t spdid, int id, int nth, int flag)
 {
-	int ret = 0;
+	unsigned int ret = 0;
 	struct spd_tmem_info *sti;
 	spdid_t s_spdid;
 	struct cos_cbuf_item *cci = NULL, *list;
@@ -654,36 +692,18 @@ cbuf_c_introspect(spdid_t spdid, int id, int flag)
 	switch (flag) {
 	case CBUF_INTRO_CBID:   /* introspect from the unique file id here*/
 	{
-		for (cfi = FIRST_LIST(&cfi_list, next, prev);
-		     cfi != &cfi_list;
-		     cfi = FIRST_LIST(cfi, next, prev)) {
-			if (cfi->fid == id) {
-				ret = cfi->cbd->cbid;
-				goto done;
-			}
-		}
+		ret = return_item(id, nth, flag);
+		break;
 	}
 	case CBUF_INTRO_SIZE:
 	{
-		for (cfi = FIRST_LIST(&cfi_list, next, prev);
-		     cfi != &cfi_list;
-		     cfi = FIRST_LIST(cfi, next, prev)) {
-			if (cfi->fid == id) {
-				ret = cfi->len;
-				goto done;
-			}
-		}
+		ret = return_item(id, nth, flag);
+		break;
 	}
 	case CBUF_INTRO_OFFSET:
 	{
-		for (cfi = FIRST_LIST(&cfi_list, next, prev);
-		     cfi != &cfi_list;
-		     cfi = FIRST_LIST(cfi, next, prev)) {
-			if (cfi->fid == id) {
-				ret = cfi->offset;
-				goto done;
-			}
-		}
+		ret = return_item(id, nth, flag);
+		break;
 	}
 	case CBUF_INTRO_TOT:   /* find total numbers of cbufs that is being hold by fid */
 	{
@@ -694,28 +714,50 @@ cbuf_c_introspect(spdid_t spdid, int id, int flag)
 				counter++;
 				for (cfi_d = FIRST_LIST(cfi, down, up) ;
 				     cfi_d != cfi;
-				     cfi_d = FIRST_LIST(cfi, down, up)) {
+				     cfi_d = FIRST_LIST(cfi_d, down, up)) {
 					counter++;
 				}
 				ret = counter;
 				goto done;
 			}
 		}
+		break;
 	}
-	/* case CBUF_INTRO_PAGE: /\* find the page for id *\/ */
-	/* { */
-	/* 	assert(id > 0); */
-	/* 	/\* printc("id ---- %d\n", id); *\/ */
-	/* 	d = cos_map_lookup(&cb_ids, id); */
-	/* 	if (!d) goto done; */
+	case CBUF_INTRO_TOT_TOR:   /* find total numbers of tors */
+	{
+		for (cfi = FIRST_LIST(&cfi_list, next, prev) ;
+		     cfi != &cfi_list;
+		     cfi = FIRST_LIST(cfi, next, prev)) {
+			counter++;	
+		}
+		ret = counter;
+		break;
+	}
+	case CBUF_INTRO_FID:  
+	{
+		for (cfi = FIRST_LIST(&cfi_list, next, prev) ;
+		     cfi != &cfi_list;
+		     cfi = FIRST_LIST(cfi, next, prev)) {
+			nth--;
+			if (nth) continue;
+			ret = cfi->fid;
+			break;
+		}
+		break;
+	}
+	case CBUF_INTRO_PAGE: /* find the page for id */
+	{
+		assert(id > 0);
+		d = cos_map_lookup(&cb_ids, id);
+		if (!d) goto done;
 		
-	/* 	m = &d->owner;  /\* get the current cbuf owner descriptor *\/ */
-	/* 	/\* printc("PAGE:id %d owner is %d, we are spd %d\n", id, m->spd, spdid); *\/ */
-	/* 	/\* printc("PAGE: d->addr %p, m->addr %p\n", d->addr, m->addr); *\/ */
+		m = &d->owner;  /* get the current cbuf owner descriptor */
+		/* printc("PAGE:id %d owner is %d, we are spd %d\n", id, m->spd, spdid); */
+		/* printc("PAGE: d->addr %p, m->addr %p\n", d->addr, m->addr); */
 
-	/* 	if (m->spd == spdid) ret = (void *)m->addr; */
-	/* 	goto done; */
-	/* } */
+		if (m->spd == spdid) ret = (unsigned int)m->addr;
+		goto done;
+	}
 	case CBUF_INTRO_OWNER: /* find the current owner for id */
 	{
 		assert(id > 0);
@@ -726,7 +768,7 @@ cbuf_c_introspect(spdid_t spdid, int id, int flag)
 		m = &d->owner;  /* get the current cbuf owner descriptor */
 		/* printc("OWNER:id %d owner is %d, we are spd %d\n", id, m->spd, spdid); */
 		if (m->spd == spdid) ret = m->spd;
-		goto done;
+		break;
 	}
 	default:
 		return 0;

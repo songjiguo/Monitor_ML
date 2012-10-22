@@ -90,26 +90,26 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	if (!nt) ERR_THROW(-ENOMEM, free);
 	ret = nt->td;
 
-	/* ************** */
-	int s_len = strlen(fsc->name);
-	/* printc("tsplit path name %s, size %d\n", fsc->name, s_len); */
-	char *l_name;
-	int uid = -1, uid_t = 0;
-	cbuf_t cb;
-	char *d;
-	d = cbuf_alloc(s_len, &cb);
-	if (!d) return -1;
-	memcpy(d, fsc->name, s_len);
+	/* /\* ************** *\/ */
+	/* int s_len = strlen(fsc->name); */
+	/* /\* printc("tsplit path name %s, size %d\n", fsc->name, s_len); *\/ */
+	/* char *l_name; */
+	/* int uid = -1, uid_t = 0; */
+	/* cbuf_t cb; */
+	/* char *d; */
+	/* d = cbuf_alloc(s_len, &cb); */
+	/* if (!d) return -1; */
+	/* memcpy(d, fsc->name, s_len); */
 
-	uid_t = tmap_lookup(cos_spd_id(), cb, s_len);
-	if (uid_t == -1) {
-		/* printc("can not find the file\n"); */
-		uid = tmap_get(cos_spd_id(), cb, s_len);
-		/* printc("uid %d\n", uid); */
-		assert(uid >= 0);
-	}
-	cbuf_free(d);
-	/* ************** */
+	/* uid_t = tmap_lookup(cos_spd_id(), cb, s_len); */
+	/* if (uid_t == -1) { */
+	/* 	/\* printc("can not find the file\n"); *\/ */
+	/* 	uid = tmap_get(cos_spd_id(), cb, s_len); */
+	/* 	/\* printc("uid %d\n", uid); *\/ */
+	/* 	assert(uid >= 0); */
+	/* } */
+	/* cbuf_free(d); */
+	/* /\* ************** *\/ */
 
 done:
 	UNLOCK();
@@ -120,57 +120,60 @@ free:
 }
 
 int 
-twmeta(spdid_t spdid, td_t td, cbuf_t cb, int sz, int offset, int flag)
+twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
 {
-	int ret = -1, left;
 	struct torrent *t;
 	struct fsobj *fso;
 	char *buf, *test;
 
-	int buf_sz;
-	u32_t id;
-	cbuf_unpack(cb, &id, (u32_t *)&buf_sz);
+	int left;
+	int ret = -1;
+
+	printc("META: spdid %d tid %d cbid %d sz %d offset %d flag %d\n", spdid, td, cbid, sz, offset, flag);
 
 	if (tor_isnull(td)) return -EINVAL;
 
 	LOCK();
 	t = tor_lookup(td);
-	if (!t) ERR_THROW(-EINVAL, done);
 	assert(t->data);
 	fso = t->data;
 	assert(fso->size <= fso->allocated);
 	assert(t->offset <= fso->size);
 
-	/* if (flag == 1) { 		/\* recovery in the order*\/ */
-	/* 	/\* printc("look up cbuf of id %d\n", id); *\/ */
-	/* 	buf = cbuf_c_introspect(cos_spd_id(), id, 0, CBUF_INTRO_PAGE); */
-	/* 	if (!buf) ERR_THROW(-EINVAL, done); */
-	     
-	/* 	left = fso->allocated - t->offset; */
-	/* 	if (left >= sz) { */
-	/* 		ret = sz; */
-	/* 		if (fso->size < (t->offset + sz)) fso->size = t->offset + sz; */
-	/* 	} else { */
-	/* 		char *new; */
-	/* 		int new_sz; */
+	printc("fso->allocated %d, t->offset %d\n", fso->allocated, t->offset);
 
-	/* 		new_sz = fso->allocated == 0 ? MIN_DATA_SZ : fso->allocated * 2; */
-	/* 		new    = malloc(new_sz); */
-	/* 		if (!new) ERR_THROW(-ENOMEM, done); */
-	/* 		if (fso->data) { */
-	/* 			memcpy(new, fso->data, fso->size); */
-	/* 			free(fso->data); */
-	/* 		} */
+	if (flag == 1) { 		/* recovery*/
+		left = fso->allocated - t->offset;
+		if (left >= sz) {
+			ret = sz;
+			if (fso->size < (t->offset + sz)) fso->size = t->offset + sz;
+		} else {
+			char *new;
+			int new_sz;
+			new_sz = fso->allocated == 0 ? MIN_DATA_SZ : fso->allocated * 2;
+			new    = malloc(new_sz);
+			if (!new) ERR_THROW(-ENOMEM, done);
+			if (fso->data) {
+				memcpy(new, fso->data, fso->size);
+				free(fso->data);
+			}
+			
+			fso->data      = new;
+			fso->allocated = new_sz;
+			left           = new_sz - t->offset;
+			ret            = left > sz ? sz : left;
+			fso->size      = t->offset + ret;
+		}
 
-	/* 		fso->data      = new; */
-	/* 		fso->allocated = new_sz; */
-	/* 		left           = new_sz - t->offset; */
-	/* 		ret            = left > sz ? sz : left; */
-	/* 		fso->size      = t->offset + ret; */
-	/* 	} */
-	/* 	memcpy(fso->data + t->offset, buf, ret); */
-	/* 	t->offset += ret; */
-	/* } */
+		buf = cbuf_c_introspect(cos_spd_id(), cbid, 0, CBUF_INTRO_PAGE);
+		if (!buf) BUG();
+		/* printc("introspect buf @%p\n", buf); */
+		printc("str at buf is %s size %d\n", buf, sz);
+		memcpy(fso->data + offset, buf, sz);
+		printc("mem cp done\n");
+		t->offset += offset;
+		ret = sz;
+	}
 
 done:	
 	UNLOCK();
