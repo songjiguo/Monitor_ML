@@ -85,7 +85,7 @@ static rb_meta_t rb1_md_wildcard, rb2_md;
 static ring_buff_t rb1, rb2;
 static unsigned short int wildcard_brand_id;
 
-//cos_lock_t tmap_lock;
+//cos_lock_t uniq_map_lock;
 struct thd_map {
 	rb_meta_t *uc_rb;
 };

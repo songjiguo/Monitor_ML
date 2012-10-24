@@ -5,30 +5,42 @@
 #include <evt.h>
 #include <torrent.h>
 
-/* based on the code from unit test for ramfs */
-
-#define VERBOSE 1
-#ifdef VERBOSE
-#define printv(fmt,...) printc(fmt, ##__VA_ARGS__)
-#else
-#define printv(fmt,...) 
-#endif
-
 char buffer[1024];
 
-void cos_init(void)
+void ramfs_test2(void)
 {
 	td_t t1, t2, t0;
 	long evt1, evt2, evt0;
-	char *params0 = "who";
-	char *params1 = "bar/";
-	char *params2 = "foo/";
-	char *params3 = "foo/bar/who";
-	char *data1 = "1234567890", *data2 = "asdf;lkj", *data3 = "asdf;lkj1234567890";
-	char *data0 = "kevinandy";
+	char *params0, *params1, *params2, *params3;
+	char *data0, *data1, *data2, *data3;
 	unsigned int ret1, ret2, ret0;
+	char *strl, *strh;
 
-	printc("<<< TEST START >>>\n");
+	printc("\n<<thread %d now is entering spd %ld>>\n", cos_get_thd_id(), cos_spd_id());
+
+	if (cos_get_thd_id() == 13) { /* can passed this tid in here */
+		params0 = "war";
+		params1 = "bcr/";
+		params2 = "foo/";
+		params3 = "foo/bcr/who";
+		data0 = "hsongyuxuan";
+		data1 = "hqianduoduo";
+		data2 = "aajshdh";
+		data3 = "aajshdhhqianduoduo";
+		strh = "onemore_h";
+	}
+
+	if (cos_get_thd_id() == 14) {
+		params0 = "who";
+		params1 = "bar/";
+		params2 = "koo/";
+		params3 = "koo/bar/who";
+		data0 = "fromotherfiles";
+		data1 = "isdifferent";
+		data2 = "iknowthis";
+		data3 = "iknowthisisdifferent";
+		strl = "twomore_l";
+	}
 
 	evt1 = evt_create(cos_spd_id());
 	evt2 = evt_create(cos_spd_id());
@@ -51,15 +63,17 @@ void cos_init(void)
 	}
 
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
-	/* ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1)); */
+	printc("thread %d writes str %s in %s\n", cos_get_thd_id(), data1, params2);
+
 	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
+	printc("thread %d writes str %s in %s%s\n", cos_get_thd_id(), data2, params2, params1);
+	
 	ret0 = twrite_pack(cos_spd_id(), t0, data0, strlen(data0));
-	/* printv("write %d & %d, ret %d & %d\n", strlen(data1), strlen(data2), ret1, ret2); */
+	printc("thread %d writes str %s in %s%s%s\n", cos_get_thd_id(), data0, params2, params1, params0);
 
 	trelease(cos_spd_id(), t1);
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t0);
-	/* printc("  2 split -> 2 write -> 2 release\n"); */
 
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
 	t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2);
@@ -68,37 +82,27 @@ void cos_init(void)
 		printc("later splits failed\n");
 		return;
 	}
-	printc("t1 tid %d\n", t1);
-	printc("t2 tid %d\n", t2);
-	printc("t0 tid %d\n", t0);
-	printc("thread %ld\n", cos_get_thd_id());
 
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
 	if (ret1 > 0) buffer[ret1] = '\0';
-	printv("read %d (%d): %s (%s)\n", ret1, strlen(data1), buffer, data1);
-	assert(!strcmp(buffer, data1));
-	assert(ret1 == strlen(data1));
+	printc("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret1, strlen(data1), buffer, data1);
 	buffer[0] = '\0';
 	
 	ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023);
 	if (ret2 > 0) buffer[ret2] = '\0';
-	assert(!strcmp(buffer, data2));
-	assert(ret2 == strlen(data2));
-	printv("read %d: %s\n", ret2, buffer);
+	printc("thread %d read %d: %s\n", cos_get_thd_id(), ret2, buffer);
 	buffer[0] = '\0';
 
 	ret0 = tread_pack(cos_spd_id(), t0, buffer, 1023);
 	if (ret0 > 0) buffer[ret0] = '\0';
-	assert(!strcmp(buffer, data0));
-	assert(ret0 == strlen(data0));
-	printv("read %d: %s\n", ret0, buffer);
+	printc("thread %d read %d: %s\n", cos_get_thd_id(), ret0, buffer);
 	buffer[0] = '\0';
-
+		
 	trelease(cos_spd_id(), t1);
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t0);
 
-	printc("<<< TEST PASSED >>>\n");
-
+	printc("\n<<thread %d now is leaving spd %ld>>\n", cos_get_thd_id(), cos_spd_id());
 	return;
 }
+

@@ -77,9 +77,10 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 		printc("return 0\n");
-		/* cos_upcall(spdid); */
 		return 0;
 	}
 
+	/* cos_upcall(spdid); */
+	/* or use the trick that set ip sp to 0 */
 	assert(0);
 }

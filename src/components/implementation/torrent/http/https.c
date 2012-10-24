@@ -702,7 +702,7 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 /* } */
 
 td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, td_t desired_tid)
+	      tor_flags_t tflags, long evtid, int flag)
 {
 	return 0;
 }

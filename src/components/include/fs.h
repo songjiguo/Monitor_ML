@@ -45,6 +45,7 @@ typedef enum {
 
 struct fsobj {
 	char *name;
+	char *unique_path;  	/* when read/write, only tid is passed in */
 	fsobj_type_t type;
 	u32_t size, allocated, refcnt;
 	int flags; 		/* only defined in client code */
@@ -59,6 +60,7 @@ static void
 fs_init_root(struct fsobj *o)
 {
 	o->name = "";
+	o->unique_path = NULL;  	/* for unique map */
 	o->type = FSOBJ_DIR;
 	o->size = o->allocated = 0;
 	o->refcnt = 1;
@@ -86,7 +88,7 @@ fsobj_child_add(struct fsobj *child, struct fsobj *parent)
  */
 static inline int 
 fsobj_cons(struct fsobj *o, struct fsobj *parent, 
-	    char *name, fsobj_type_t t, u32_t sz, char *data)
+	   char *name, fsobj_type_t t, u32_t sz, char *data)
 {
 	assert(o && parent && name);
 	assert(!(sz && (t == FSOBJ_DIR)));

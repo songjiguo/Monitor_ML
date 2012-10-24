@@ -566,7 +566,7 @@ cbuf_c_record(int cbid, int len, int offset, int fid)
 	struct cb_file_info *cfi;
 	int id;
 
-	printc("cbuf_c_record:: cbid %d len %d offset %d fid %d\n", cbid, len, offset, fid);
+	/* printc("cbuf_c_record:: cbid %d len %d offset %d fid %d\n", cbid, len, offset, fid); */
 
 	assert(cbid >= 0 && len > 0);
 
@@ -583,7 +583,7 @@ cbuf_c_record(int cbid, int len, int offset, int fid)
 	d->cfi.offset = offset;
 	d->cfi.cbd    = d;
 
-	printc("when record:  address %p\n", d->owner.addr);
+	/* printc("when record:  address %p\n", d->owner.addr); */
 
 	INIT_LIST(&d->cfi, next, prev);
 	INIT_LIST(&d->cfi, down, up); 	/* the writes on the same torrent */

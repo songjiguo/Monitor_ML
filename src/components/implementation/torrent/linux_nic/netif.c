@@ -92,7 +92,7 @@ static rb_meta_t rb1_md_wildcard, rb2_md;
 static ring_buff_t rb1, rb2;
 static unsigned short int wildcard_brand_id;
 
-//cos_lock_t tmap_lock;
+//cos_lock_t uniq_map_lock;
 struct thd_map {
 	rb_meta_t *uc_rb;
 };
@@ -539,7 +539,7 @@ int netif_event_xmit(spdid_t spdid, char *mem, int sz)
 }
 
 td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, td_t desired_tid)
+	      tor_flags_t tflags, long evtid, int flag)
 {
 	return 0;
 }
