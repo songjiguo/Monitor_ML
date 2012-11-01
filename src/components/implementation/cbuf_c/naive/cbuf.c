@@ -592,7 +592,7 @@ cbuf_c_record(int cbid, int len, int offset, int fid)
 	     cfi != &cfi_list;
 	     cfi = FIRST_LIST(cfi, next, prev)) {
 		if (cfi->fid == fid) {
-			if (offset == 0) { /* tsplit is called here, so discard any previous data */
+			if (offset == 0) { /* tsplit is called here, so overwrite any previous data */
 				cfi->fid    = fid;
 				cfi->len    = len;
 				cfi->offset = offset;
@@ -621,6 +621,51 @@ done:
 	/* } */
 	
 
+	RELEASE();
+	return ret;
+err:
+	ret = -1;
+	goto done;
+}
+
+int 
+cbuf_c_remrecord(int fid)
+{
+	int ret = 0;
+	struct cb_desc *d, *f_d;
+	struct cb_file_info *cfi, *i_cfi;
+	int id;
+
+	assert(fid >= 0);
+
+	TAKE();
+
+	for (cfi = FIRST_LIST(&cfi_list, next, prev);
+	     cfi != &cfi_list;
+	     cfi = FIRST_LIST(cfi, next, prev)) {
+		if (cfi->fid == fid) {
+			for (i_cfi = FIRST_LIST(cfi, down, up);
+			     i_cfi != cfi;
+			     i_cfi = FIRST_LIST(cfi, down, up)) {
+				d = i_cfi->cbd;
+				/* if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_RW, cos_spd_id(), (vaddr_t)d->addr, 0)) { */
+				/* 	printc("set page to be read/write only failed 1\n"); */
+				/* 	goto err; */
+				/* } */
+				REM_LIST(i_cfi, down, up);
+			}
+			assert(cfi->fid == fid);
+			d = cfi->cbd;
+			/* if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_RW, cos_spd_id(), (vaddr_t)d->addr, 0)) { */
+			/* 	printc("set page to be read/write only failed 2\n"); */
+			/* 	goto err; */
+			/* } */
+			REM_LIST(cfi, down, up);
+			goto done;
+		}
+	}
+
+done:
 	RELEASE();
 	return ret;
 err:
@@ -873,7 +918,7 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 	ret = mgr_update_owner(r_spdid, cbid); // -1 fail, 0 success
 
 	/* FIXME: when does this need to be changed to RW again? */
-	if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_READONLY, cos_spd_id(), (vaddr_t)d->addr, 0)) {
+	if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_RO, cos_spd_id(), (vaddr_t)d->addr, 0)) {
 		printc("set page to be read only failed\n");
 		BUG();
 	}

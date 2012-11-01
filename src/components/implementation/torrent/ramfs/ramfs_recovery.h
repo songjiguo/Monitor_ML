@@ -16,11 +16,6 @@
 /* use ramfs_rec.sh */
 /* ramfs_trest1 nad ramfs_test2 in implementation/test */
 
-#define TSPLIT_FAULT
-//#define TWRITE_FAULT
-//#define TREAD_FAULT
-//#define TRELEASE_FAULT
-
 /* create an inconsistency list, so we can tell later when read/write
  * on an un-recovered file */
 
@@ -143,7 +138,7 @@ find_update(int fid, int val)
 
 
 static void
-build_tor_list()
+set_tor_list()
 {
 	int total_tor = 0, nth_fid = 0;
 	int fid;
@@ -174,6 +169,32 @@ build_tor_list()
 	return;
 }
 
+static char *
+get_unique_path(struct fsobj *fsp)
+{
+	struct fsobj *item, *fso, *test;
+	struct torrent *p, *t;
+	char *name = "";
+	unsigned int end_l;
+	
+	assert(fsp->parent);  	/* non root */
+
+	/* printc("unique path does not exist...\n"); */
+	item = fsp->parent;
+	if (!item->parent) {
+		name = strcpy(name, fsp->name);	/* top */
+	} else {
+		name = strcpy(name, item->unique_path);
+		name = strcat(name, "/");
+		name = strcat(name, fsp->name);
+	}
+
+	fsp->unique_path = (char *)malloc(strlen(name));
+	memcpy(fsp->unique_path, name, strlen(name));
+	
+	return fsp->unique_path;
+}
+
 
 /* 
  * find the full path as the unique map index, e.g, "foo/bar/who" is
@@ -183,41 +204,101 @@ build_tor_list()
 static char *
 find_fullpath(td_t td)
 {
-	struct fsobj *item, *fsp;
+	struct fsobj *fsp;
 	struct torrent *p;
-	char *name, *str, *end, *t_end;
-	unsigned int end_l;
+	char *name;
 
 	p  = tor_lookup(td);
+	assert(p);
 	fsp = p->data;
+	assert(fsp);
 
 	if (unlikely(!fsp->unique_path)) {
-		/* printc("unique path does not exist...\n"); */
-		name = str = "";
-		item  = fsp->parent;
-		/* printc("before item name %s\n", item->name5B); */
-		if (item->name == "") name = fsp->name;
-		else {
-			t_end = strchr(item->name, '/');
-			if (t_end) *t_end = '\0';
-			/* printc("after item name %s\n", item->name); */
-
-			while(item->name != "") {
-				str = strcat(item->name, "/");
-				name = item->name;
-				item  = item->parent;
-			}
-			name = strcat(name, fsp->name);
-		}
-		fsp->unique_path = malloc(strlen(name));
-		memcpy(fsp->unique_path, name, strlen(name));
+		name = get_unique_path(fsp);
 	} else {
 		name = fsp->unique_path;
 	}
+
 	/* printc("unique path %s in fn with size %d\n", name, strlen(name)); */
 
 	return name;
 }
 
+static int
+preserve_cbuf_path(cbuf_t cb, td_t td, u32_t offset, int len)
+{
+	int ret = 0, sz_p, fid = 0;
+	cbuf_t cb_p;
+	char *d, *path;
+
+	/* update the cbuf owner to ramfs */
+	/* only the owner can free/revoke the cbuf */
+	if (cbuf_claim(cb)) {
+		printc("failed to claim the ownership\n");
+		BUG();
+	}
+
+	path = find_fullpath(td);
+	sz_p = strlen(path);
+	/* printc("unique path (when write) ---> %s with size %d\n", path, sz_p); */
+
+	d = cbuf_alloc(sz_p, &cb_p);
+	if (!d) {
+		ret = -1;
+		printc("failed to cbuf_alloc\n");
+		goto done;
+	};
+	memcpy(d, path, sz_p);
+
+	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p);
+	assert(fid >= 0);
+	/* printc("existing fid %d\n", fid); */
+
+	cbuf_free(d);
+
+	/* pass the FT relevant info to cbuf manager  */
+	if (cbuf_add_record(cb, len, offset, fid)) {
+		printc("failed to record cbuf\n");
+		ret = -1;
+	}
+
+done:
+	return ret;
+}
 
 
+static int
+remove_cbuf_path(td_t td)
+{
+	int ret = 0, sz_p, fid = 0;
+	cbuf_t cb_p;
+	char *d, *path;
+
+	path = find_fullpath(td);
+	sz_p = strlen(path);
+	/* printc("unique path (when remove path info) ---> %s with size %d\n", path, sz_p); */
+
+	d = cbuf_alloc(sz_p, &cb_p);
+	if (!d) {
+		ret = -1;
+		printc("failed to cbuf_alloc\n");
+		goto done;
+	};
+	memcpy(d, path, sz_p);
+
+	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p);
+	assert(fid >= 0);
+	/* printc("existing fid %d\n", fid); */
+
+	cbuf_free(d);
+
+	/* FIXME: set page RW back?? */
+	/* remove the FT relevant info in cbuf manager, this should be the leaf  */
+	if (cbuf_rem_record(fid)) {
+		printc("failed to remove record\n");
+		ret = -1;
+	}
+
+done:
+	return ret;
+}

@@ -17,17 +17,6 @@
 #define printv(fmt,...) 
 #endif
 
-/* single thread fails (T writes to foo/bar/who) */
-//#define TEST_1		
-
-/* 2 threads, operate on the same files, one fails, (Both writes to
- * foo/bar/who) */
-//#define TEST_2			
-
-/* 2 threads, operate on the different files, one fails, (T1 writes
- * foo/bar/who, T2 writes foo/boo/who) */
-#define TEST_3			
-
 char buffer[1024];
 
 int high, low;
@@ -38,18 +27,20 @@ void test1(void)
 	long evt1, evt2, evt0;
 	char *params0, *params1, *params2, *params3;
 	char *data0, *data1, *data2, *data3;
-	unsigned int ret1, ret2, ret0;
+	int ret1, ret2, ret0;
 	char *strl, *strh;
 
 	params0 = "who";
-	params1 = "bar/";
+	params1 = "bar1234567/";
 	params2 = "foo/";
-	params3 = "foo/bar/who";
+	params3 = "foo/bar1234567/who";
 	data0 = "lkevinandy";
 	data1 = "l0987654321";
 	data2 = "laabbccddeeff";
 	data3 = "laabbccddeeffl0987654321";
 	strl = "testmore_l";
+
+	char *merge = "delete";
 
 	printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id());
 
@@ -73,8 +64,8 @@ void test1(void)
 		printc("  split0 failed %d\n", t0); return;
 	}
 
+	printc("\nthread %d writes str %s in %s\n", cos_get_thd_id(), data1, params2);
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
-	printc("thread %d writes str %s in %s\n", cos_get_thd_id(), data1, params2);
 
 	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
 	printc("thread %d writes str %s in %s%s\n", cos_get_thd_id(), data2, params2, params1);
@@ -92,25 +83,36 @@ void test1(void)
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
 	t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2);
 	t0 = tsplit(cos_spd_id(), t2, params0, strlen(params0), TOR_ALL, evt0);
+
 	if (t1 < 1 || t2 < 1 || t0 < 1) {
 		printc("later splits failed\n");
 		return;
 	}
 
+	if (tmerge(cos_spd_id(), t1, td_null, merge , strlen(merge))) printc("NO! can not delete %s!!\n", params2);
+	if (tmerge(cos_spd_id(), t2, td_null, merge , strlen(merge))) printc("NO! can not delete %s!!\n", params1);
+	if (tmerge(cos_spd_id(), t0, td_null, merge , strlen(merge))) printc("NO! can not delete %s!!\n", params0);
+
+	/* t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1); */
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
 	if (ret1 > 0) buffer[ret1] = '\0';
 	printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret1, strlen(data1), buffer, data1);
 	buffer[0] = '\0';
 	
+	/* t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2); */
 	ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023);
 	if (ret2 > 0) buffer[ret2] = '\0';
 	printv("thread %d read %d: %s\n", cos_get_thd_id(), ret2, buffer);
 	buffer[0] = '\0';
 
+	/* t0 = tsplit(cos_spd_id(), t2, params0, strlen(params0), TOR_ALL, evt0); */
 	ret0 = tread_pack(cos_spd_id(), t0, buffer, 1023);
-	if (ret0 > 0) buffer[ret0] = '\0';
-	printv("thread %d read %d: %s\n", cos_get_thd_id(), ret0, buffer);
-	buffer[0] = '\0';
+	if (ret0 < 0){printc("No such file\n");}
+	if (ret0 > 0) {
+		buffer[ret0] = '\0';
+		printv("thread %d read %d: %s\n", cos_get_thd_id(), ret0, buffer);
+		buffer[0] = '\0';
+	}
 		
 	trelease(cos_spd_id(), t1);
 	trelease(cos_spd_id(), t2);
@@ -128,20 +130,18 @@ void test2(void)
 	long evt1, evt2, evt0;
 	char *params0, *params1, *params2, *params3;
 	char *data0, *data1, *data2, *data3;
-	unsigned int ret1, ret2, ret0;
+	int ret1, ret2, ret0;
 	char *strl, *strh;
 
 	params0 = "who";
-	params1 = "bar/";
+	params1 = "barasd/";
 	params2 = "foo/";
-	params3 = "foo/bar/who";
-	data0 = "lkevinandy";
-	data1 = "l0987654321";
-	data2 = "laabbccddeeff";
-	data3 = "laabbccddeeffl0987654321";
-	strl = "testmore_l";
-
-	printc("\n<<< TEST 2 START (thread %d)>>>\n", cos_get_thd_id());
+	params3 = "foo/barasd/who";
+	data0 = "kevinandy";
+	data1 = "0987654321";
+	data2 = "aabbccddeeff";
+	data3 = "aabbccddeeff0987654321";
+	strl = "testmore";
 
 	evt1 = evt_create(cos_spd_id());
 	evt2 = evt_create(cos_spd_id());
@@ -212,8 +212,6 @@ void test2(void)
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t0);
 
-	printc("<<< TEST 2 PASSED (thread %d)>>>\n\n", cos_get_thd_id());
-
 	return;
 }
 
@@ -224,14 +222,14 @@ void test3(void)
 	long evt1, evt2, evt0;
 	char *params0, *params1, *params2, *params3;
 	char *data0, *data1, *data2, *data3;
-	unsigned int ret1, ret2, ret0;
+	int ret1, ret2, ret0;
 	char *strl, *strh;
 
 	if (cos_get_thd_id() == high) {
 		params0 = "who";
-		params1 = "bbr/";
+		params1 = "bbrabc/";
 		params2 = "foo/";
-		params3 = "foo/bbr/who";
+		params3 = "foo/bbrabc/who";
 		data0 = "handykevin";
 		data1 = "h1234567890";
 		data2 = "hasdf;lkj";
@@ -272,8 +270,8 @@ void test3(void)
 		printc("  split0 failed %d\n", t0); return;
 	}
 
+	printc("\nthread %d writes str %s in %s\n", cos_get_thd_id(), data1, params2);
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
-	printc("thread %d writes str %s in %s\n", cos_get_thd_id(), data1, params2);
 
 	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
 	printc("thread %d writes str %s in %s%s\n", cos_get_thd_id(), data2, params2, params1);
@@ -300,7 +298,9 @@ void test3(void)
 		sched_wakeup(cos_spd_id(), high);
 	}
 
+#ifdef TEST_4
 	ramfs_test2();  	/* all another component to mimic the situation */
+#endif
 
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
 	t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2);

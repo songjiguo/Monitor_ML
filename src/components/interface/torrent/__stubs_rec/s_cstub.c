@@ -28,38 +28,38 @@ td_t __sg_tsplit(spdid_t spdid, cbuf_t cb, int len, int flag)
 	return s_torid;
 }
 
-struct __sg_twmeta_data {
-	td_t td;
-	cbuf_t cb;
-	int sz;
-	int offset;
-	int flag;
-};
+/* struct __sg_twmeta_data { */
+/* 	td_t td; */
+/* 	cbuf_t cb; */
+/* 	int sz; */
+/* 	int offset; */
+/* 	int flag; */
+/* }; */
 
-int __sg_twmeta(spdid_t spdid, cbuf_t cb_m, int len_m)
-{
-	struct __sg_twmeta_data *d;
+/* int __sg_twmeta(spdid_t spdid, cbuf_t cb_m, int len_m) */
+/* { */
+/* 	struct __sg_twmeta_data *d; */
 
-	d = cbuf2buf(cb_m, len_m);
-	if (unlikely(!d)) return -1;
-	/* mainly to inform the compiler that optimizations are possible */
-	if (unlikely(d->sz == 0)) return -1;
-	if (unlikely(d->cb == 0)) return -1;
-	if (unlikely(d->offset < 0)) return -1;
+/* 	d = cbuf2buf(cb_m, len_m); */
+/* 	if (unlikely(!d)) return -1; */
+/* 	/\* mainly to inform the compiler that optimizations are possible *\/ */
+/* 	if (unlikely(d->sz == 0)) return -1; */
+/* 	if (unlikely(d->cb == 0)) return -1; */
+/* 	if (unlikely(d->offset < 0)) return -1; */
 
-	return twmeta(spdid, d->td, d->cb, d->sz, d->offset, d->flag);
-}
+/* 	return twmeta(spdid, d->td, d->cb, d->sz, d->offset, d->flag); */
+/* } */
 
 
-int __sg_twrite(spdid_t spdid, td_t tid, cbuf_t cb, int sz)
-{
-	return twrite(spdid, tid, cb, sz);	
-}
+/* int __sg_twrite(spdid_t spdid, td_t tid, cbuf_t cb, int sz) */
+/* { */
+/* 	return twrite(spdid, tid, cb, sz);	 */
+/* } */
 
-int __sg_tread(spdid_t spdid, td_t tid, cbuf_t cb, int sz)
-{
-	return tread(spdid, tid, cb, sz);	
-}
+/* int __sg_tread(spdid_t spdid, td_t tid, cbuf_t cb, int sz) */
+/* { */
+/* 	return tread(spdid, tid, cb, sz);	 */
+/* } */
 
 
 struct __sg_tmerge_data {

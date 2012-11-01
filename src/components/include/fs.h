@@ -37,6 +37,10 @@ typedef unsigned long u32_t;
 #define FS_DATA_FREE free
 #endif
 
+#ifndef FS_UNIQPATH_FREE
+#define FS_UNIQPATH_FREE free
+#endif
+
 typedef enum {
 	FSOBJ_FILE,
 	FSOBJ_DIR,
@@ -45,7 +49,11 @@ typedef enum {
 
 struct fsobj {
 	char *name;
+
 	char *unique_path;  	/* when read/write, only tid is passed in */
+	/* int zombie;   		/\* when deleted, set if it has any child *\/ */
+	/* int internal_cnt; 	/\* total number of alive children (not grandchildren) on its subtree *\/ */
+
 	fsobj_type_t type;
 	u32_t size, allocated, refcnt;
 	int flags; 		/* only defined in client code */
@@ -60,7 +68,11 @@ static void
 fs_init_root(struct fsobj *o)
 {
 	o->name = "";
-	o->unique_path = NULL;  	/* for unique map */
+
+	o->unique_path = "";  	/* for unique map */
+	/* o->zombie = 0; */
+	/* o->internal_cnt = 0; */
+
 	o->type = FSOBJ_DIR;
 	o->size = o->allocated = 0;
 	o->refcnt = 1;
@@ -80,6 +92,8 @@ fsobj_child_add(struct fsobj *child, struct fsobj *parent)
 	else ADD_LIST(parent->child, child, next, prev);
 	child->parent = parent;
 
+	/* parent->internal_cnt++; */
+
 	return 0;
 }
 
@@ -94,6 +108,11 @@ fsobj_cons(struct fsobj *o, struct fsobj *parent,
 	assert(!(sz && (t == FSOBJ_DIR)));
 
 	o->name = name;
+
+	/* o->unique_path = "";  	// set in find_uniq_path */
+	/* o->zombie = 0; */
+	/* o->internal_cnt = 0; */
+
 	o->type = t;
 	o->allocated = o->size = sz;
 	o->refcnt = 1;
@@ -138,6 +157,7 @@ fsobj_alloc(char *name, struct fsobj *parent)
 	chld_name[len] = '\0';
 
 	if (fsobj_cons(chld, parent, chld_name, t, 0, NULL)) { printc("3\n"); goto free2; }
+
 done:
 	return chld;
 free2:
@@ -191,7 +211,7 @@ fsobj_rem(struct fsobj *o, struct fsobj *parent)
 {
 	assert(o);
 	assert(parent || !o->parent);
-	
+
 	if (parent && parent->child == o) {
 		struct fsobj *sibling = FIRST_LIST(o, next, prev);
 
@@ -212,11 +232,15 @@ fsobj_rem(struct fsobj *o, struct fsobj *parent)
 static void
 fsobj_free(struct fsobj *o)
 {
+	printc("free %s now....\n", o->name);
 	assert(o && o->name);
 	assert(!o->parent && !o->child);
 	FS_FREE(o->name);
 	if (o->data) FS_DATA_FREE(o->data);
+	if (o->unique_path) FS_UNIQPATH_FREE(o->unique_path);
 	FS_FREE(o);
+
+	return;
 }
 
 static inline void __fsobj_free_hier(struct fsobj *o);
@@ -225,9 +249,11 @@ static void
 fsobj_release(struct fsobj *o)
 { 
 	assert(o->refcnt);
+	/* printc("refcnt %d\n", o->refcnt); */
 	o->refcnt--; 
 	if (!o->refcnt) {
 		/* free the subtree if we are the only reference */
+		/* printc("free the subtree\n"); */
 		if (o->child) __fsobj_free_hier(o);
 		fsobj_free(o);
 	}
@@ -247,10 +273,11 @@ __fsobj_free_hier(struct fsobj *o)
 	 * This is complicated because we avoid recursion, yet
 	 * linearize a hierarchy.
 	 */
+	/* printc("00000  o %s\n", o->name); */
 	next = o->child;
 	while (o->child) {
 		struct fsobj *curr = next;
-
+		/* printc("yyyyyy  curr %s\n", curr->name); */
 		assert(curr);
 		/* find a leaf, or a obj that should persist. */
 		while (curr->child && curr->refcnt >= 1) {
@@ -262,10 +289,13 @@ __fsobj_free_hier(struct fsobj *o)
 			next = curr->parent;
 			assert(next);
 		}
+		printc("xxxxx  curr %s\n", curr->name);
 		fsobj_rem(curr, curr->parent);
-		fsobj_release(curr);
+
+		fsobj_free(curr);	     /* remove the node */
+		/* fsobj_release(curr); */   // this is Gabe's version, should we just free the memory?
 	}
-	fsobj_rem(o, NULL);
+	/* fsobj_rem(o, NULL); */  // this is Gabe's version...
 }
 
 static inline void
@@ -273,6 +303,48 @@ fsobj_free_hier(struct fsobj *o)
 {
 	__fsobj_free_hier(o);
 	fsobj_release(o);
+}
+
+/* if assume that no node can be removed, this will not be called */
+/* flag: 1 leaf, 0 internal node */
+static int
+fsobj_update(struct fsobj *o)
+{
+	int ret = 0;
+	struct fsobj *fso, *fsc;
+
+	/* assert(o && o->name); */
+	/* assert(o->parent); */
+
+	/* printc("set %s to be zombie....\n", o->name); */
+	/* /\* o->zombie = 1;	 *\/ */
+	/* if (!o->child) { */
+	/* 	fsc = o; */
+	/* 	fso = o->parent; */
+	/* 	assert(fso->internal_cnt >= 1); */
+	/* 	fso->internal_cnt--; */
+	/* 	printc("I am the last child....%s and parent is %s\n", o->name, fso->name); */
+
+	/* 	/\* find the node whose subtree can be removed *\/ */
+	/* 	while(!fso->internal_cnt && fso->parent) { */
+	/* 		if (!fso->zombie) break; */
+	/* 		fsc = fso; */
+	/* 		fso = fso->parent; */
+	/* 		fso->internal_cnt--; */
+	/* 		printc("I am the parent....%s\n", fso->name); */
+	/* 	} */
+		
+	/* 	printc("actually removing the node %s\n", fsc->name); */
+	/* 	fsobj_rem(fsc, fsc->parent); /\* remove from the list *\/ */
+	/* 	__fsobj_free_hier(fsc);	     /\* remove the subtree *\/ */
+	/* 	fsobj_free(fsc);	     /\* remove the node *\/ */
+	/* 	ret = 0;		     /\* removed *\/ */
+	/* } else { */
+	/* 	printc("the node %s has child\n", o->name); /\* do not remove the node if it has any child *\/ */
+	/* 	ret = 1;				    /\* still on the list *\/ */
+	/* } */
+
+	return ret;
 }
 
 /* 

@@ -104,7 +104,8 @@ reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 
 	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
 	/* printc("parent tid %d\n", rd->parent_tid); */
-	
+
+	/* printc("param reinstate %s of length %d\n", rd->param, rd->param_len); */
 	ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid);
 	if (ret < 1) {
 		printc("re-split failed %d\n", tid);
@@ -201,8 +202,10 @@ static int aaa = 0;
 
 CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid)
 
+/* printc("\ncli interface... param... %s\n", param); */
         /* printc("<<< In: call tsplit  (thread %d) >>>\n", cos_get_thd_id()); */
         if (cos_get_thd_id() == 13) aaa++;   		/* test only */
+/* printc("thread %d aaa is %d\n", cos_get_thd_id(), aaa); */
         ret = __tsplit(spdid, tid, param, len, tflags, evtid, 0);
 
 CSTUB_POST
@@ -232,6 +235,7 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
 redo:
         d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
+
         /* printc("parent_tid: %d\n", parent_tid); */
         d->tid	       = parent_tid;
         d->flag = flag;
@@ -242,8 +246,11 @@ redo:
         /* printc("c: subpath name %s len %d\n", param, len); */
 	memcpy(&d->data[0], param, len);
 
-
-        if (aaa == 6 && cos_spd_id() == 17) {
+#ifdef TEST_3
+        if (aaa == 6 && cos_spd_id() == 17) { //for TEST_3 only   
+#else
+        if (aaa == 6) {
+#endif
 		d->flag = -10; /* test purpose only */
 		aaa = 100;
 		/* rdtscll(start); */
@@ -257,6 +264,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 			printc("set cap_fault_cnt failed\n");
 			BUG();
 		}
+		memset(&d->data[0], 0, len);
 		cbuf_free(d);
 		
 		rebuild_fs(tid);
@@ -268,6 +276,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 	}
 
         /* printc("ret from ramfs: %d\n",ret); */
+        memset(&d->data[0], 0, len);
         cbuf_free(d);
 
         if (unlikely(flag > 0 || flag == -1)) return ret;
@@ -343,24 +352,47 @@ struct __sg_tmerge_data {
 };
 CSTUB_FN_ARGS_5(int, tmerge, spdid_t, spdid, td_t, td, td_t, td_into, char *, param, int, len)
 	struct __sg_tmerge_data *d;
+        struct rec_data_tor *rd;
 	cbuf_t cb;
 	int sz = len + sizeof(struct __sg_tmerge_data);
 
+        /* printc("<<< In: call tmerge (thread %d) >>>\n", cos_get_thd_id()); */
+
         assert(param && len > 0);
-	assert(param[len-1] == '\0');
+	assert(param[len] == '\0');
+
+redo:
+        rd = update_rd(td);
+	if (!rd) {
+		printc("try to merge a non-existing tor\n");
+		return -1;
+	}
 
 	d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
 
-	d->td = td;
+        /* printc("c: tmerge td %d (server td %d) len %d param %s\n", td, rd->s_tid, len, param);	 */
+	d->td = rd->s_tid;   	/* actual server side torrent id */
 	d->td_into = td_into;
         d->len[0] = 0;
         d->len[1] = len;
 	memcpy(&d->data[0], param, len);
 
 CSTUB_ASM_3(tmerge, spdid, cb, sz)
+        if (unlikely(fault)) {
+		fcounter++;
+		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+			printc("set cap_fault_cnt failed\n");
+			BUG();
+		}
+		cbuf_free(d);
+                goto redo;
+	}
 
 	cbuf_free(d);
+        if (!ret) rd_dealloc(rd); /* this must be a leaf */
+
+
 CSTUB_POST
 
 
@@ -371,6 +403,10 @@ CSTUB_FN_ARGS_2(int, trelease, spdid_t, spdid, td_t, tid)
 
 redo:
         rd = update_rd(tid);
+	if (!rd) {
+		printc("try to release a non-existing tor\n");
+		return -1;
+	}
 
 CSTUB_ASM_2(trelease, spdid, rd->s_tid)
 
@@ -383,7 +419,6 @@ CSTUB_ASM_2(trelease, spdid, rd->s_tid)
                 goto redo;
 	}
         assert(rd);
-/* rd_dealloc(rd); */
 
 CSTUB_POST
 
@@ -394,6 +429,10 @@ CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
 redo:
         rd = update_rd(tid);
+	if (!rd) {
+		printc("try to read a non-existing tor\n");
+		return -1;
+	}
 
 CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 
@@ -419,6 +458,10 @@ CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 redo:
 
         rd = update_rd(tid);
+	if (!rd) {
+		printc("try to write a non-existing tor\n");
+		return -1;
+	}
 
 CSTUB_ASM_4(twrite, spdid, rd->s_tid, cb, sz)
 

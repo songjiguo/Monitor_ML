@@ -31,6 +31,7 @@ void *cbuf_c_retrieve(spdid_t spdid, int cbid, int len); /* return client addres
 unsigned int cbuf_c_introspect(spdid_t spdid, int id, int nth, int flag);
 int cbuf_c_claim(spdid_t spdid, int cbid);     /* spd wants to own the cbuf, 0 means owner changes  */
 int cbuf_c_record(int cbid, int len, int offset, int fid); /* when some info need be saved in cbuf MM */
+int cbuf_c_remrecord(int fid);
 
 /* CbufMgr API that works with Cbuf_policy*/
 int cbufmgr_set_concurrency(spdid_t spdid, int concur_lvl, int remove_spare);

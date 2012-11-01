@@ -56,6 +56,8 @@ uniq_map_get(spdid_t spdid, cbuf_t cb, int sz)
 	}
 	memcpy(param, str, sz);
 
+	/* printc("get after copy : string passed in  %s\n", param); */
+
 	item  = (struct obj_id *)malloc(sizeof(struct obj_id));
 	if (!item) {
 		printc("failed to malloc\n");
@@ -88,7 +90,7 @@ uniq_map_lookup(spdid_t spdid, cbuf_t cb, int sz)
 	
 	str = (char *)cbuf2buf(cb, sz);
 	assert(str);
-	*(str+sz) = '\0';
+	*(str+sz) = '\0';  	/* previous cbuf might still contain data */
 
 	/* printc("look up string passed in size  %d\n", sz); */
 	/* printc("look up string passed in  %s\n", str); */

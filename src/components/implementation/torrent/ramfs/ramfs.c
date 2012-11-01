@@ -45,10 +45,10 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 
 	LOCK();
 
-	/* ver 1 want to use foo/bar/who as a whole*/
+	/* want to use foo/bar/who as a whole*/
 	path = find_fullpath(ret);
 	sz = strlen(path);
-	/* printc("unique path ---> %s with size %d\n", path, sz); */
+	/* printc("unique path (ret tid %d from c_tid %d) ---> %s with size %d\n", ret, tid, path, sz); */
 
 	d = cbuf_alloc(sz, &cb_p);
 	if (!d) return -1;
@@ -65,14 +65,14 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	/* printc("fid %d flag %d\n", fid, flag); */
 	
 	if (unlikely(flag)) { /* recovery */
-		if (!all_tor_list) build_tor_list(); 
+		if (!all_tor_list) set_tor_list(); 
                 /* FIXME: we should really use cbuf to introspect these parameter with 1 invocation */
 		restore_tor(fid, ret); 
 		/* printc("rebuild meta done\n"); */
 	}
 
 	if (all_tor_list) find_update(fid, ret);
-	
+
 	UNLOCK();
 
 	return ret;
@@ -87,6 +87,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
 	char *subpath;
 
+	/* printc("... param... %s\n", param); */
 #ifdef TSPLIT_FAULT
 	if (aaa == 1){
 		/* printc("\n\n<< tsplit: Before Assert >> \n"); */
@@ -124,19 +125,40 @@ free:
 	goto done;
 }
 
+
+/* The assumption (analogy to Unix)
+ * The fsob can be deleted only if it has no children Otherwise, 
+ * return the error code (simplest way!)
+*/
+
 int 
 tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
 {
 	struct torrent *t;
+	struct fsobj *fso;
 	int ret = 0;
 
 	if (!tor_is_usrdef(td)) return -1;
 
+	/* printc("(tmerge) td %d param  %s  len %d\n", td, param, len); */
 	LOCK();
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
 	/* currently only allow deletion */
 	if (td_into != td_null) ERR_THROW(-EINVAL, done);
+	
+	fso = t->data;
+	/* ret = fsobj_update(fso); */  // do we need remove the all 'dead' nodes, if they have no children?
+	assert(fso && fso->parent);
+	
+	if (!fso->child) {
+		fsobj_rem(fso, fso->parent); 
+		fsobj_free(fso);
+		if (remove_cbuf_path(td)) BUG();
+	} else {
+		/* fso->zombie = 1; */
+		ERR_THROW(-EINVAL, done);
+	}
 
 	tor_free(t);
 done:   
@@ -180,7 +202,6 @@ tread(spdid_t spdid, td_t td, int cb, int sz)
 	struct torrent *t;
 	struct fsobj *fso;
 	char *buf;
-
 	if (tor_isnull(td)) return -EINVAL;
 
 #ifdef TREAD_FAULT
@@ -192,7 +213,7 @@ tread(spdid_t spdid, td_t td, int cb, int sz)
 	LOCK();
 
 	if (unlikely(all_tor_list)) { /* has crashed before, need check if the file still presents */
-		printc("when tread, tid is %d\n", td);
+		/* printc("when tread, tid is %d\n", td); */
 		find_restore(td);
 	}
 
@@ -235,6 +256,7 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 
 	int buf_sz;
 	u32_t id;
+	u32_t offset;
 
 	if (tor_isnull(td)) return -EINVAL;
 
@@ -261,17 +283,12 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	fso = t->data;
 	assert(fso->size <= fso->allocated);
 	assert(t->offset <= fso->size);
+	offset = t->offset;
 
+	/* printc("unique path should already exist...%s\n", fso->unique_path); */
+	/* printc("before write: fso->size %d, t->offset %d\n", fso->size, t->offset); */
 	buf = cbuf2buf(cb, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
-
-	/* update the cbuf owner to ramfs */
-	/* only the owner can free/revoke the cbuf */
-	if (cbuf_claim(cb)) {
-		printc("failed to claim the ownership\n");
-		BUG();
-	}
-	/* printc("before write: fso->size %d, t->offset %d\n", fso->size, t->offset); */
 
 	left = fso->allocated - t->offset;
 	if (left >= sz) {
@@ -297,30 +314,9 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	/* printc("1 %s\n", *buf++); */
 	/* printc("fso->allocated %d t->offset %d \n",fso->allocated, t->offset); */
 	memcpy(fso->data + t->offset, buf, ret);
-
-	int fid = 0;
-	cbuf_t cb_p;
-	char *d, *path;
-	
-	path = find_fullpath(td);
-	int sz_p = strlen(path);
-	/* printc("unique path (when write) ---> %s with size %d\n", path, sz_p); */
-
-	d = cbuf_alloc(sz_p, &cb_p);
-	if (!d) return -1;
-	memcpy(d, path, sz_p);
-
-	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p);
-	assert(fid >= 0);
-	/* printc("existing fid %d\n", fid); */
-
-	cbuf_free(d);
-
-	/* pass the FT relevant info to cbuf manager  */
-	if (cbuf_record(cb, ret, (unsigned long)t->offset, (unsigned long)fid)) BUG(); /* any better name? */
-
 	t->offset += ret;
-	/* printc("after write: fso->size %d, t->offset %d\n", fso->size, t->offset); */
+
+	if (preserve_cbuf_path(cb, td, offset, ret)) BUG();
 done:	
 	UNLOCK();
 	return ret;

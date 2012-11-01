@@ -283,17 +283,20 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 #ifdef MEAS_NOTIF_COST_2
 	unsigned long long start, end;
 	rdtscll(start);
-#endif MEAS_NOTIF_COST_2
+#endif
+
 	int tid = cos_get_thd_id();
 	printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
+
 #ifdef MEAS_NOTIF_COST_2
 		rdtscll(end);
 		/* printc("LL: notification cost 2: %llu\n", (end-start)); */
 #endif
+
 		return 0;
 	}
 	printc("<< LL fault notification 2>>\n");
@@ -304,6 +307,8 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	cos_upcall(flags);	/* upcall to ths dest spd (home spd), for other threads */
 
 	assert(0);
+	
+	return 0;
 }
 
 /* memory operations... */

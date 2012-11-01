@@ -19,10 +19,10 @@ void ramfs_test2(void)
 	printc("\n<<thread %d now is entering spd %ld>>\n", cos_get_thd_id(), cos_spd_id());
 
 	if (cos_get_thd_id() == 13) { /* can passed this tid in here */
-		params0 = "war";
+		params0 = "wariscoming";
 		params1 = "bcr/";
 		params2 = "foo/";
-		params3 = "foo/bcr/who";
+		params3 = "foo/bcr/wariscoming";
 		data0 = "hsongyuxuan";
 		data1 = "hqianduoduo";
 		data2 = "aajshdh";
@@ -32,9 +32,9 @@ void ramfs_test2(void)
 
 	if (cos_get_thd_id() == 14) {
 		params0 = "who";
-		params1 = "bar/";
+		params1 = "barimpossible/";
 		params2 = "koo/";
-		params3 = "koo/bar/who";
+		params3 = "koo/barimpossible/who";
 		data0 = "fromotherfiles";
 		data1 = "isdifferent";
 		data2 = "iknowthis";

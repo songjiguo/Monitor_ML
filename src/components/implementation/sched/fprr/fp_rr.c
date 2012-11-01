@@ -423,7 +423,6 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 			if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
 			if (cos_sched_cntl(COS_SCHED_RECORD_VALUE, t->id, (int)t_ps->type)) BUG();
 	}
-done:
 #endif
 	return 0;
 }

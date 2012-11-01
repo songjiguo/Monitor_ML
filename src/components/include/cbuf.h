@@ -421,7 +421,7 @@ cbuf_claim(cbuf_t cb)
 }
 
 static inline int 
-cbuf_record(cbuf_t cb, int len, int offset, int id)
+cbuf_add_record(cbuf_t cb, int len, unsigned int offset, int id)
 {
 	int ret = 0;
 	int sz;
@@ -436,6 +436,18 @@ cbuf_record(cbuf_t cb, int len, int offset, int id)
 	cbuf_unpack(cb, &cbid, (u32_t*)&sz);
 	ret = cbuf_c_record(cbid, len, offset, id);
 	
+	CBUF_RELEASE();
+	
+	return ret;
+}
+
+static inline int 
+cbuf_rem_record(int fid)  	/* torrent related */
+{
+	int ret = 0;
+
+	CBUF_TAKE();
+	ret = cbuf_c_remrecord(fid);
 	CBUF_RELEASE();
 	
 	return ret;
