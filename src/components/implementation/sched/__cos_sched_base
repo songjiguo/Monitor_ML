@@ -1686,6 +1686,8 @@ int sched_root_init(void)
 	/* Create the clock tick (timer) thread */
 	fp_create_timer();
 
+	printc("timer thread %d is created\n", cos_get_thd_id());
+
 	new = schedule(NULL);
 	if ((ret = cos_switch_thread(new->id, 0))) {
 		printc("switch thread failed with %d\n", ret);

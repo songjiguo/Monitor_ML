@@ -5,6 +5,9 @@
 #include <evt.h>
 #include <torrent.h>
 
+#include <periodic_wake.h>
+#include <timed_blk.h>
+
 #include <ramfs_test2.h>
 
 /* Military Slang: SNAFU, SUSFU, FUBAR, TARFU, BOCHIA */
@@ -20,6 +23,7 @@
 char buffer[1024];
 
 int high, low;
+
 
 void test1(void)
 {
@@ -63,6 +67,7 @@ void test1(void)
 	if (t0 < 1) {
 		printc("  split0 failed %d\n", t0); return;
 	}
+
 
 	printc("\nthread %d writes str %s in %s\n", cos_get_thd_id(), data1, params2);
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
@@ -337,22 +342,27 @@ void cos_init(void)
 {
 	static int first = 0;
 	union sched_param sp;
-
+	
 	if(first == 0){
 		first = 1;
 
 		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 10;
+		sp.c.value = 11;
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 12;
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
-
 	} else {
-		printc("(thread %d in spd %ld)\n", cos_get_thd_id(), cos_spd_id());
+
 #ifdef TEST_1
-		if (cos_get_thd_id() == high) test1();
+	if (cos_get_thd_id() == high) {
+		while(1) {
+			unsigned long long ttt;
+			for (ttt = 0; ttt < 5000000; ttt++) {;}
+			test1();
+		}
+	}
 #endif
 
 #ifdef TEST_2

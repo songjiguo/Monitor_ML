@@ -26,14 +26,15 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	unsigned long r_ip; 	/* the ip to return to */
 	int tid = cos_get_thd_id();
 
-	first++;
-	if(first == 5) {
-		printc("has failed %d times\n",first);
-		assert(0);
-	}
+	/* first++; */
+	/* if(first == 5) { */
+	/* 	printc("has failed %d times\n",first); */
+	/* 	assert(0); */
+	/* } */
 
-	/* printc("\nPGFAULT: thd %d faults in spd %d @ %p\n", */
-	/*        tid, spdid, fault_addr); */
+
+	printc("\nPGFAULT: thd %d faults in spd %d @ %p\n",
+	       tid, spdid, fault_addr);
 
          /*
 	 * Look at the booter: when recover is happening, the sstub is
@@ -68,7 +69,6 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip
 	int tid = cos_get_thd_id();
 	/* printc("pgf notif parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip); */
 	printc("<< thd %d in Fault FLT Notif>> \n", cos_get_thd_id());
-	/* printc("....kevin.....andy.....\n"); */
 
 	unsigned long r_ip; 	/* the ip to return to */
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
@@ -77,7 +77,6 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip
 		return 0;
 	}
 
-	/* cos_upcall(spdid); */
 	/* or use the trick that set ip sp to 0 */
 	assert(0);
 	return 0;

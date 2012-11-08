@@ -217,6 +217,10 @@ tread(spdid_t spdid, td_t td, int cb, int sz)
 		find_restore(td);
 	}
 
+
+	unsigned long long ttt;
+	for (ttt = 0; ttt < 5000000; ttt++) {;}
+
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
 	assert(!tor_is_usrdef(td) || t->data);

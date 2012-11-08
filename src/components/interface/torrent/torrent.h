@@ -14,7 +14,7 @@
 #include <evt.h>
 
 
-#define TSPLIT_FAULT
+//#define TSPLIT_FAULT
 //#define TWRITE_FAULT
 //#define TREAD_FAULT
 //#define TRELEASE_FAULT

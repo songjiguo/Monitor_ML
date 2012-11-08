@@ -661,6 +661,7 @@ cbuf_c_remrecord(int fid)
 			/* 	goto err; */
 			/* } */
 			REM_LIST(cfi, down, up);
+			printc("remove fid %d record from cbuf\n", fid);
 			goto done;
 		}
 	}

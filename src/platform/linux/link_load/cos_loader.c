@@ -469,10 +469,10 @@ int set_object_addresses(bfd *obj, struct service_symbs *obj_data)
 	for (i = 0 ; i < st->num_symbs ; i++) {
 		char *symb = st->symbs[i].name;
 		unsigned long addr = getsym(obj, symb);
-/*
-		printl(PRINT_DEBUG, "Symbol %s at address 0x%x.\n", symb, 
-		       (unsigned int)addr);
-*/
+
+		/* printl(PRINT_DEBUG, "Symbol %s at address 0x%x.\n", symb,  */
+		/*        (unsigned int)addr); */
+
 		if (addr == 0) {
 			printl(PRINT_DEBUG, "Symbol %s has invalid address.\n", symb);
 			return -1;
@@ -499,6 +499,7 @@ vaddr_t get_symb_address(struct symb_type *st, const char *symb)
 static int make_cobj_symbols(struct service_symbs *s, struct cobj_header *h);
 static int make_cobj_caps(struct service_symbs *s, struct cobj_header *h);
 
+/* this should be the place that the fault is injected...I think */
 static int load_service(struct service_symbs *ret_data, unsigned long lower_addr, 
 			unsigned long size)
 {
@@ -1659,6 +1660,18 @@ static int load_all_services(struct service_symbs *services)
 		if (load_service(services, service_addr, DEFAULT_SERVICE_SIZE)) {
 			return -1;
 		}
+
+		/* 
+		   after the service's text, bss and data are loaded,
+		   we can inject the fault here....maybe?  
+		   
+		   1. we need know which service to inject the fault
+		   2. find the range, then randomly flip the bit
+		   3. this is run-time (loading stage) 
+		   4. transient and intermittent fault
+		   5. other type fault injection, but need exact instruction maybe?
+		      can do in setup_kernel
+		 */
 
 		service_addr += DEFAULT_SERVICE_SIZE;
 		/* note this works for the llbooter too */
@@ -2934,6 +2947,11 @@ int main(int argc, char *argv[])
 	}
 	
 	gen_stubs_and_link(stub_gen_prog, services);
+
+	/* we should inject fault here....? 
+	   system level fault tolerance...mm, fprr 
+	   But ramFS is not...
+	*/
 	if (load_all_services(services)) {
 		printl(PRINT_HIGH, "Error loading services, aborting.\n");
 		goto dealloc_exit;

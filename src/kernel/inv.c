@@ -741,7 +741,7 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 		int i;
 
 		for (i = 0 ; (tif = thd_invstk_nth(thd, i)) ; i++) {
-			if (arg1 == spd_get_index(tif->spd)) return i;
+			if (arg1 == spd_get_index(tif->spd)) return arg1;
 		}
 		return -1;
 	}

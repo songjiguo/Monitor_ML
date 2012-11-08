@@ -65,6 +65,7 @@ boot_spd_symbs(struct cobj_header *h, spdid_t spdid, vaddr_t *comp_info)
 
 		symb = cobj_symb_get(h, i);
 		assert(symb);
+
 		if (COBJ_SYMB_UNDEF == symb->type) break;
 
 		switch (symb->type) {
@@ -119,9 +120,8 @@ boot_symb_process(struct cobj_header *h, spdid_t spdid, vaddr_t heap_val,
 	for (i = 0 ; init_args[i].spdid ; i++) {
 		char *start, *end;
 		int len;
-		
+
 		if (init_args[i].spdid != spdid) continue;
-		
 		start = strchr(init_args[i].init_str, '\'');
 		if (!start) break;
 		start++;

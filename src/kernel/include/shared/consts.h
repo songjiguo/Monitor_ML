@@ -45,8 +45,8 @@ struct pt_regs {
 #endif
 
 #define MAX_SERVICE_DEPTH 31
-/* #define MAX_NUM_THREADS 40 */
-#define MAX_NUM_THREADS 15  	/* reduce the number of thread, help recovery */
+#define MAX_NUM_THREADS 40
+//#define MAX_NUM_THREADS 15  	/* reduce the number of thread, help recovery */
 /* Stacks are 2 * page_size (expressed in words) */
 #define MAX_STACK_SZ    (PAGE_SIZE/4) /* a page */
 #define ALL_STACK_SZ    (MAX_NUM_THREADS*MAX_STACK_SZ)
