@@ -25,5 +25,5 @@ fi.o-sm.o|fprr.o|print.o|mm.o|va.o|te.o;\
 rfs.o-sm.o|fprr.o|print.o|mm.o|buf.o|l.o|e.o|va.o|unique_map.o|pfr.o;\
 unique_map.o-sm.o|fprr.o|print.o|mm.o|l.o|e.o|va.o|buf.o;\
 ramfs_rec_test2.o-sm.o|fprr.o|print.o|mm.o|buf.o|va.o|l.o|rfs.o|e.o;\
-ramfs_rec_test1.o-sm.o|fprr.o|print.o|mm.o|buf.o|va.o|l.o|rfs.o|e.o|ramfs_rec_test2.o|fi.o|te.o\
+ramfs_rec_test1.o-sm.o|fprr.o|print.o|mm.o|buf.o|va.o|l.o|rfs.o|e.o|ramfs_rec_test2.o|te.o\
 " ./gen_client_stub

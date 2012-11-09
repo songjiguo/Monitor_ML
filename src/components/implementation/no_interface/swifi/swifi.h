@@ -10,7 +10,6 @@ struct cos_regs {
 	struct pt_regs regs;
 };
 
-
 /**********************/
 /* Borrowed this from the Nooks */
 /*
@@ -37,18 +36,6 @@ random()
 	return t;
 }
 /**********************/
-
-static void flip_reg_bit(long *reg)
-{
-	int flip_bit = 0;
-
-	flip_bit = random() & 0x1f;
-	printc("%2dth bit is going to be flipped ==> \n", flip_bit + 1);
-	flip_bit = 1 << flip_bit;
-	
-	*reg = (*reg) ^ flip_bit;
-}
-
 
 static void cos_regs_read(int tid, spdid_t spdid, struct cos_regs *r)
 {
@@ -78,32 +65,6 @@ static void cos_regs_set(struct cos_regs *r)
 	cos_thd_cntl(COS_THD_SET_6,  r->tid, r->regs.si, 0);
 }
 
-/* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
-static void flip_all_regs(struct cos_regs *r) {
-	/* printc("flip all registers for the next instruction, except eip\n"); */
-
-	printc("ESP's ");
-	flip_reg_bit(&r->regs.sp); /* esp */
-	/* printc("EBP's "); */
-	/* flip_reg_bit(&r->regs.bp); /\* ebp *\/ */
-	printc("EAX's ");
-	flip_reg_bit(&r->regs.ax); /* eax */
-	printc("EBX's ");
-	flip_reg_bit(&r->regs.bx); /* ebx */
-	printc("ECX's ");
-	flip_reg_bit(&r->regs.cx); /* ecx */
-	printc("EDX's ");
-	flip_reg_bit(&r->regs.dx); /* edx */
-	printc("EDI's ");
-	flip_reg_bit(&r->regs.di); /* edi */
-	printc("ESI's ");
-	flip_reg_bit(&r->regs.si); /* esi */
-
-	cos_regs_set(r);
-
-	return;
-}
-
 static void cos_regs_print(struct cos_regs *r)
 {
 	printc("EIP:%10x\tESP:%10x\tEBP:%10x\n"
@@ -115,5 +76,44 @@ static void cos_regs_print(struct cos_regs *r)
 
 	return;
 }
+
+
+static void flip_reg_bit(long *reg)
+{
+	int flip_bit = 0;
+
+	flip_bit = random() & 0x1f;
+	/* printc("%2dth bit is going to be flipped ==> \n", flip_bit + 1); */
+	flip_bit = 1 << flip_bit;
+	
+	*reg = (*reg) ^ flip_bit;
+}
+
+/* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
+static void flip_all_regs(struct cos_regs *r) {
+	/* printc("flip all registers for the next instruction, except eip\n"); */
+
+	/* printc("ESP's "); */
+	flip_reg_bit(&r->regs.sp); /* esp */
+	/* printc("EBP's "); */
+	/* flip_reg_bit(&r->regs.bp); /\* ebp *\/ */
+	/* printc("EAX's "); */
+	flip_reg_bit(&r->regs.ax); /* eax */
+	/* printc("EBX's "); */
+	flip_reg_bit(&r->regs.bx); /* ebx */
+	/* printc("ECX's "); */
+	flip_reg_bit(&r->regs.cx); /* ecx */
+	/* printc("EDX's "); */
+	flip_reg_bit(&r->regs.dx); /* edx */
+	/* printc("EDI's "); */
+	flip_reg_bit(&r->regs.di); /* edi */
+	/* printc("ESI's "); */
+	flip_reg_bit(&r->regs.si); /* esi */
+
+	cos_regs_set(r);
+
+	return;
+}
+
 
 #endif	/* SWIFI_REGS_H */

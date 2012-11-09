@@ -1032,7 +1032,10 @@ int main_page_fault_interposition(struct pt_regs *rs, unsigned int error_code)
 
 	fault_addr = read_cr2();
 
-	if (fault_addr > KERN_BASE_ADDR) goto linux_handler;
+	/* ...comment out for now: Fault injection will cause segment
+	 * fault if it faults at kernel address */
+
+	/* if (fault_addr > KERN_BASE_ADDR) goto linux_handler; */
 
 	/* 
 	 * Composite doesn't know how to handle kernel faults, and

@@ -273,7 +273,7 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	LOCK();
 
 	if (unlikely(all_tor_list)) { /* has crashed before, need check if the file still presents */
-		printc("when write, tid is %d\n", td);
+		/* printc("when write, tid is %d\n", td); */
 		find_restore(td);
 	}
 

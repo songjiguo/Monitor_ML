@@ -46,7 +46,7 @@ void test1(void)
 
 	char *merge = "delete";
 
-	printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id());
+	/* printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id()); */
 
 	evt1 = evt_create(cos_spd_id());
 	evt2 = evt_create(cos_spd_id());
@@ -100,20 +100,20 @@ void test1(void)
 
 	/* t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1); */
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
-	if (ret1 > 0) buffer[ret1] = '\0';
+	if (ret1 > 0 && ret1 <= 1023) buffer[ret1] = '\0';
 	printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret1, strlen(data1), buffer, data1);
 	buffer[0] = '\0';
 	
 	/* t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2); */
 	ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023);
-	if (ret2 > 0) buffer[ret2] = '\0';
+	if (ret2 > 0 && ret2 <= 1023) buffer[ret2] = '\0';
 	printv("thread %d read %d: %s\n", cos_get_thd_id(), ret2, buffer);
 	buffer[0] = '\0';
 
 	/* t0 = tsplit(cos_spd_id(), t2, params0, strlen(params0), TOR_ALL, evt0); */
 	ret0 = tread_pack(cos_spd_id(), t0, buffer, 1023);
 	if (ret0 < 0){printc("No such file\n");}
-	if (ret0 > 0) {
+	if (ret0 > 0 && ret0 <= 1023) {
 		buffer[ret0] = '\0';
 		printv("thread %d read %d: %s\n", cos_get_thd_id(), ret0, buffer);
 		buffer[0] = '\0';
@@ -123,7 +123,7 @@ void test1(void)
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t0);
 
-	printc("<<< TEST 1 PASSED (thread %d)>>>\n\n", cos_get_thd_id());
+	/* printc("<<< TEST 1 PASSED (thread %d)>>>\n\n", cos_get_thd_id()); */
 
 	return;
 }
@@ -357,10 +357,11 @@ void cos_init(void)
 
 #ifdef TEST_1
 	if (cos_get_thd_id() == high) {
+		timed_event_block(cos_spd_id(), 1);
+		periodic_wake_create(cos_spd_id(), 2);
 		while(1) {
-			unsigned long long ttt;
-			for (ttt = 0; ttt < 5000000; ttt++) {;}
 			test1();
+			periodic_wake_wait(cos_spd_id());
 		}
 	}
 #endif

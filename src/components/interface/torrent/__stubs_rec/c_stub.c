@@ -147,6 +147,7 @@ update_rd(td_t tid)
 
 	rebuild_fs(tid);
 
+	printc("rebuild fs is done\n\n");
 	return rd;
 }
 

@@ -415,7 +415,7 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 	if (sched_thd_ready(t)) fp_rem_thd(t);
 	fp_add_thd(t, prio);
 
-	printc("thread %d prio is %d\n", t->id, prio);
+	/* printc("thread %d prio is %d\n", t->id, prio); */
 #ifdef RECOVERY_ENABLE
 	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
 			/* printc("thd %d start recording...\n", cos_get_thd_id()); */
