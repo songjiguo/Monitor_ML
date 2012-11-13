@@ -103,7 +103,7 @@ static inline int
 ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
 	if (cap_entry->fault.cnt != dest_spd->fault.cnt) {
-		printk("dest spd %d fault cnt %d\n", spd_get_index(dest_spd), dest_spd->fault.cnt);
+		/* printk("dest spd %d fault cnt %d\n", spd_get_index(dest_spd), dest_spd->fault.cnt); */
 		return 1;
 	}
 	else return 0;

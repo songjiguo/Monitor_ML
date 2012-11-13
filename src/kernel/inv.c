@@ -214,7 +214,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 
 	/* printk("----cap %d cap flt %d dest_flt %d---\n",capability, cap_entry->fault.cnt, dest_spd->fault.cnt); */
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
-
+		/* printk("invocation....from %d to %d\n", spd_get_index(curr_spd), spd_get_index(dest_spd)); */
 		/* s = virtual_namespace_query(cap_entry->dest_entry_instruction); */
 		/* printk("cos: s spd %d\n", spd_get_index(s)); */
 
@@ -356,7 +356,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	memcpy(&thd->fault_regs, regs, sizeof(struct pt_regs));
 	a = ipc_walk_static_cap(thd, fault_cap<<20, regs->sp, regs->ip, &r);
 	
-	/* printk("r.spd_id %d\n", r.spd_id); */
+	/* printk("r.spd_id %d a %p\n", r.spd_id, a); */
 
 	/* setup the registers for the fault handler invocation */
 	regs->ax = r.thd_id;
@@ -391,7 +391,7 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd)
 {
-	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n"); */
 
 	return __fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, dest_spd);
 }
@@ -407,7 +407,7 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd));
+	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd)); */
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
 
@@ -1326,6 +1326,9 @@ upcall_setup_regs(struct thread *uc, struct spd *dest,
 		  upcall_type_t option, long arg1, long arg2, long arg3)
 {
 	struct pt_regs *r = &uc->regs;
+
+	/* printk("arg1 %p, arg2 %p, arg3 %p, option %p, dest->upcall_entry %p, thd_get_id(uc) %d\n", */
+	/*        arg1, arg2, arg3, option, dest->upcall_entry, thd_get_id(uc)); */
 
 	r->bx = arg1;
 	r->di = arg2;
@@ -2356,6 +2359,10 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 
 	op     = op_spd >> 16;
 	spd_id = 0xFFFF & op_spd;
+
+	int test = spd_id;
+	if (spd_id == 33) spd_id = 8;
+
 	dest = spd_get_by_index(spd_id);
 	thd = thd_get_current();
 	curr_spd = thd_validate_get_current_spd(thd, this_spd_id);
@@ -2383,7 +2390,45 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	spd_mpd_ipc_release((struct composite_spd *)thd_get_thd_spdpoly(thd));//curr_spd->composite_spd);
 	//spd_mpd_ipc_take((struct composite_spd *)dest->composite_spd);
 
+	struct pt_regs *r = &thd->regs;
+
+	/* printk("r->bx %p\n", r->bx); */
+	/* printk("r->di %p\n", r->di); */
+	/* printk("r->si %p\n", r->si); */
+	/* printk("r->cx %p\n", r->cx); */
+	/* printk("r->dx %p\n", r->dx); */
+	/* printk("r->ax %p\n", r->ax); */
+	/* printk("r->ip %p\n", r->ip); */
+	/* printk("r->sp %p\n", r->sp); */
+	/* printk("~~~~~\n"); */
+
 	upcall_setup(thd, dest, op, arg, 0, 0);
+
+	/* printk("r->bx %p\n", r->bx); */
+	/* printk("r->di %p\n", r->di); */
+	/* printk("r->si %p\n", r->si); */
+	/* printk("r->cx %p\n", r->cx); */
+	/* printk("r->dx %p\n", r->dx); */
+	/* printk("r->ax %p\n", r->ax); */
+	/* printk("r->ip %p\n", r->ip); */
+	/* printk("r->sp %p\n", r->sp); */
+
+
+	if (test == 33) {
+
+		printk("r->bx %p\n", r->bx);
+		printk("r->di %p\n", r->di);
+		printk("r->si %p\n", r->si);
+		printk("r->cx %p\n", r->cx);
+		printk("r->dx %p\n", r->dx);
+		printk("r->ax %p\n", r->ax);
+		printk("r->ip %p\n", r->ip);
+		printk("r->sp %p\n", r->sp);
+
+		printk("thd %d before upcall ETF  with op %d\n", thd_get_id(thd), op);
+		return 2;
+	}
+
 	/* if (!arg) upcall_setup(thd, dest, COS_UPCALL_BOOTSTRAP, 0, 0, 0); */
 	/* if (1 == arg) upcall_setup(thd, dest, COS_UPCALL_REBOOT, 0, 0, 0); */
 	/* if (arg > 1) upcall_setup(thd, dest, COS_UPCALL_RECOVERY, arg, 0, 0); */
@@ -3618,9 +3663,9 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		mem_id += this_spd->pfn_base;
 		if (mem_id < this_spd->pfn_base || /* <- check for overflow? */
 		    mem_id >= (this_spd->pfn_base + this_spd->pfn_extent)) {
-			printk("Accessing physical frame outside of allowed range (%d outside of [%d, %d).\n",
-			       (int)mem_id, this_spd->pfn_base, 
-			       this_spd->pfn_base + this_spd->pfn_extent);
+			/* printk("Accessing physical frame outside of allowed range (%d outside of [%d, %d).\n", */
+			/*        (int)mem_id, this_spd->pfn_base,  */
+			/*        this_spd->pfn_base + this_spd->pfn_extent); */
 			return -EINVAL;
 		}
 		page = cos_access_page(mem_id);
@@ -3704,10 +3749,11 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 		int frame_num;
 
 		if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) {
-			/* printk("cos: try find phy frame -- no page table entry found.\n"); */
+			printk("cos: try find phy frame -- no page table entry found.\n");
 			return -EINVAL;
 		}
 		frame_num = cos_paddr_to_cap(phy_addr) - this_spd->pfn_base;
+		/* printk("to intro: pfn base %d\n", this_spd->pfn_base); */
 		/* printk("to intro: frame_num %d daddr %x phyaddr %x\n", frame_num, daddr, phy_addr); */
 		/* printk("cos: found a frame %d\n", frame_num); */
 		ret = frame_num;

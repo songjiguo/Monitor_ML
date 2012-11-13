@@ -1243,10 +1243,13 @@ unsigned long
 __pgtbl_lookup_address(paddr_t pgtbl, unsigned long addr)
 {
 	pte_t *pte;
+	unsigned long paddr = 0;
 
 	pte = pgtbl_lookup_address(pgtbl, addr);
 	if (!pte) return 0;
-	return pte->pte_low;
+	
+	paddr = (pte->pte_low >> PAGE_SHIFT) << PAGE_SHIFT; /* zero out all flags */
+	return paddr;
 }
 
 /* returns the page table entry */

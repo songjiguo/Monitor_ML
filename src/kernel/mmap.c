@@ -80,7 +80,7 @@ paddr_t cos_access_page(unsigned long cap_no)
 void
 cos_add_root_info(int spdid, vaddr_t vaddr, unsigned long frame_id)
 {	
-	/* printk("cos: root info added spd %d addr %p at frame %lu\n", spdid, vaddr, frame_id); */
+	/* if (spdid != 5) printk("cos: root info added spd %d addr %p at frame %lu\n", spdid, vaddr, frame_id); */
 	cos_pages[frame_id].rt_spdid = spdid;
 	cos_pages[frame_id].rt_vaddr = vaddr;
 }

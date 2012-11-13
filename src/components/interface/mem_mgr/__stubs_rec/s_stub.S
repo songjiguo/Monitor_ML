@@ -22,9 +22,8 @@
 
 cos_asm_server_fn_stub_spdid(mman_get_page, __sg_mman_get_page)
 cos_asm_server_fn_stub_spdid(mman_alias_page, __sg_mman_alias_page)
+cos_asm_server_fn_stub_spdid(__mman_alias_page, __sg_mman_alias_page2)
 cos_asm_server_fn_stub_spdid(mman_revoke_page, __sg_mman_revoke_page)
 	
 cos_asm_server_stub(mman_release_page)
 cos_asm_server_stub(mman_print_stats)
-
-

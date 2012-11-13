@@ -1,0 +1,412 @@
+/**
+ * Copyright 2011 by Gabriel Parmer, gparmer@gwu.edu
+ *
+ * Redistribution of this file is permitted under the GNU General
+ * Public License v2.
+ */
+
+#include <cos_component.h>
+#include <torrent.h>
+#include <torlib.h>
+
+#include <cbuf.h>
+#include <print.h>
+#include <cos_synchronization.h>
+#include <evt.h>
+#include <cos_alloc.h>
+#include <cos_map.h>
+#include <fs.h>
+
+#include <uniq_map.h>
+#include <pgfault.h>
+
+#include <ramfs_recovery.h>
+
+static cos_lock_t fs_lock;
+struct fsobj root;
+#define LOCK() if (lock_take(&fs_lock)) BUG();
+#define UNLOCK() if (lock_release(&fs_lock)) BUG();
+
+#define MIN_DATA_SZ 256
+
+static int aaa = 0;
+
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
+	      tor_flags_t tflags, long evtid, int flag)
+{
+	td_t ret;
+	int fid = 0;
+	int sz = 0;
+	cbuf_t cb_p;
+	char *path, *d;
+
+	if (flag == -10) aaa = 1;	/* control the fault, test purpose only */
+	ret =  tsplit(spdid, tid, param, len, tflags, evtid);
+
+	LOCK();
+
+	/* want to use foo/bar/who as a whole*/
+	path = find_fullpath(ret);
+	sz = strlen(path);
+	/* printc("unique path (ret tid %d from c_tid %d) ---> %s with size %d\n", ret, tid, path, sz); */
+
+	d = cbuf_alloc(sz, &cb_p);
+	if (!d) return -1;
+	memcpy(d, path, sz);
+	
+	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz);
+	if (fid == -1) {
+		/* printc("can not find the file\n"); */
+		fid = uniq_map_get(cos_spd_id(), cb_p, sz);
+		assert(fid >= 0);
+	}
+	cbuf_free(d);
+
+	/* printc("fid %d flag %d\n", fid, flag); */
+	
+	if (unlikely(flag)) { /* recovery */
+		if (!all_tor_list) set_tor_list(); 
+                /* FIXME: we should really use cbuf to introspect these parameter with 1 invocation */
+		restore_tor(fid, ret); 
+		/* printc("rebuild meta done\n"); */
+	}
+
+	if (all_tor_list) find_update(fid, ret);
+
+	UNLOCK();
+
+	return ret;
+}
+
+td_t 
+tsplit(spdid_t spdid, td_t td, char *param, 
+       int len, tor_flags_t tflags, long evtid) 
+{
+	td_t ret = -1;
+	struct torrent *t, *nt;
+	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
+	char *subpath;
+
+	/* printc("... param... %s\n", param); */
+#ifdef TSPLIT_FAULT
+	if (aaa == 1){
+		/* printc("\n\n<< tsplit: Before Assert >> \n"); */
+		printc("\n");
+		assert(0);
+	}
+#endif
+	LOCK();
+	t = tor_lookup(td);
+	if (!t) ERR_THROW(-EINVAL, done);
+	fso = t->data;
+
+	fsc = fsobj_path2obj(param, len, fso, &parent, &subpath);
+	if (!fsc) {
+		assert(parent);
+		if (!(parent->flags & TOR_SPLIT)) ERR_THROW(-EACCES, done);
+		fsc = fsobj_alloc(subpath, parent);
+		if (!fsc) ERR_THROW(-EINVAL, done);
+		fsc->flags = tflags;
+	} else {
+		/* File has less permissions than asked for? */
+		if ((~fsc->flags) & tflags) ERR_THROW(-EACCES, done);
+	}
+
+	fsobj_take(fsc);
+	nt = tor_alloc(fsc, tflags);
+	if (!nt) ERR_THROW(-ENOMEM, free);
+	ret = nt->td;
+
+done:
+	UNLOCK();
+	return ret;
+free:  
+	fsobj_release(fsc);
+	goto done;
+}
+
+
+/* The assumption (analogy to Unix)
+ * The fsob can be deleted only if it has no children Otherwise, 
+ * return the error code (simplest way!)
+*/
+
+int 
+tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
+{
+	struct torrent *t;
+	struct fsobj *fso;
+	int ret = 0;
+
+	if (!tor_is_usrdef(td)) return -1;
+
+	/* printc("(tmerge) td %d param  %s  len %d\n", td, param, len); */
+	LOCK();
+	t = tor_lookup(td);
+	if (!t) ERR_THROW(-EINVAL, done);
+	/* currently only allow deletion */
+	if (td_into != td_null) ERR_THROW(-EINVAL, done);
+	
+	fso = t->data;
+	/* ret = fsobj_update(fso); */  // do we need remove the all 'dead' nodes, if they have no children?
+	assert(fso && fso->parent);
+	
+	if (!fso->child) {
+		fsobj_rem(fso, fso->parent); 
+		fsobj_free(fso);
+		if (remove_cbuf_path(td)) BUG();
+	} else {
+		/* fso->zombie = 1; */
+		ERR_THROW(-EINVAL, done);
+	}
+
+	tor_free(t);
+done:   
+	UNLOCK();
+	return ret;
+}
+
+
+static int ddd = 0;
+
+void
+trelease(spdid_t spdid, td_t td)
+{
+	struct torrent *t;
+
+	if (!tor_is_usrdef(td)) return;
+
+#ifdef TRELEASE_FAULT
+	if (ddd++ == 2){
+		/* printc("<< trelease: Before Assert >> \n"); */
+		assert(0);
+	}
+#endif
+
+	LOCK();
+	t = tor_lookup(td);
+	if (!t) goto done;
+	fsobj_release((struct fsobj *)t->data);
+	tor_free(t);
+done:
+	UNLOCK();
+	return;
+}
+
+static int bbb = 0;
+
+int 
+tread(spdid_t spdid, td_t td, int cb, int sz)
+{
+	int ret = -1, left;
+	struct torrent *t;
+	struct fsobj *fso;
+	char *buf;
+	if (tor_isnull(td)) return -EINVAL;
+
+#ifdef TREAD_FAULT
+	if (bbb++ == 2){
+		/* printc("<< tread: Before Assert >> \n"); */
+		assert(0);
+	}
+#endif
+	LOCK();
+
+	if (unlikely(all_tor_list)) { /* has crashed before, need check if the file still presents */
+		/* printc("when tread, tid is %d\n", td); */
+		find_restore(td);
+	}
+
+
+	unsigned long long ttt;
+	for (ttt = 0; ttt < 5000000; ttt++) {;}
+
+	t = tor_lookup(td);
+	if (!t) ERR_THROW(-EINVAL, done);
+	assert(!tor_is_usrdef(td) || t->data);
+	if (!(t->flags & TOR_READ)) ERR_THROW(-EACCES, done);
+
+	fso = t->data;
+	assert(fso->size <= fso->allocated);
+	assert(t->offset <= fso->size);
+	if (!fso->size) ERR_THROW(0, done);
+
+	buf = cbuf2buf(cb, sz);
+	if (!buf) ERR_THROW(-EINVAL, done);
+
+	/* printc("before read: fso->size %d t->offset %d\n", fso->size, t->offset); */
+	left = fso->size - t->offset;
+	ret  = left > sz ? sz : left;
+
+	assert(fso->data);
+	memcpy(buf, fso->data + t->offset, ret);
+	t->offset += ret;
+
+	/* printc("after read: fso->size %d t->offset %d\n", fso->size, t->offset); */
+done:	
+	UNLOCK();
+	return ret;
+}
+
+static int ccc = 0;
+
+int 
+twrite(spdid_t spdid, td_t td, int cb, int sz)
+{
+	int ret = -1, left;
+	struct torrent *t;
+	struct fsobj *fso;
+	char *buf;
+
+	int buf_sz;
+	u32_t id;
+	u32_t offset;
+
+	if (tor_isnull(td)) return -EINVAL;
+
+#ifdef TWRITE_FAULT
+	if (ccc++ == 2){
+		/* printc("<< twrite: Before Assert >> \n"); */
+		assert(0);
+	}
+#endif
+	LOCK();
+
+	if (unlikely(all_tor_list)) { /* has crashed before, need check if the file still presents */
+		/* printc("when write, tid is %d\n", td); */
+		find_restore(td);
+	}
+
+	cbuf_unpack(cb, &id, (u32_t*)&buf_sz);
+
+	t = tor_lookup(td);
+	if (!t) ERR_THROW(-EINVAL, done);
+	assert(t->data);
+	if (!(t->flags & TOR_WRITE)) ERR_THROW(-EACCES, done);
+
+	fso = t->data;
+	assert(fso->size <= fso->allocated);
+	assert(t->offset <= fso->size);
+	offset = t->offset;
+
+	/* printc("unique path should already exist...%s\n", fso->unique_path); */
+	/* printc("before write: fso->size %d, t->offset %d\n", fso->size, t->offset); */
+	buf = cbuf2buf(cb, sz);
+	if (!buf) ERR_THROW(-EINVAL, done);
+
+	left = fso->allocated - t->offset;
+	if (left >= sz) {
+		ret = sz;
+		if (fso->size < (t->offset + sz)) fso->size = t->offset + sz;
+	} else {
+		char *new;
+		int new_sz;
+		new_sz = fso->allocated == 0 ? MIN_DATA_SZ : fso->allocated * 2;
+		new    = malloc(new_sz);
+		if (!new) ERR_THROW(-ENOMEM, done);
+		if (fso->data) {
+			memcpy(new, fso->data, fso->size);
+			free(fso->data);
+		}
+
+		fso->data      = new;
+		fso->allocated = new_sz;
+		left           = new_sz - t->offset;
+		ret            = left > sz ? sz : left;
+		fso->size      = t->offset + ret;
+	}
+	/* printc("1 %s\n", *buf++); */
+	/* printc("fso->allocated %d t->offset %d \n",fso->allocated, t->offset); */
+	memcpy(fso->data + t->offset, buf, ret);
+	t->offset += ret;
+
+	if (preserve_cbuf_path(cb, td, offset, ret)) BUG();
+done:	
+	UNLOCK();
+	return ret;
+}
+
+static int 
+__twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
+{
+	int ret = 0;
+	UNLOCK();
+	ret = twmeta(spdid, td, cbid, sz, offset, flag);
+	LOCK();
+
+	return ret;
+}
+
+int 
+twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
+{
+	struct torrent *t;
+	struct fsobj *fso;
+	char *buf, *test;
+
+	int left;
+	int ret = -1;
+
+	/* printc("META: spdid %d tid %d cbid %d sz %d offset %d flag %d\n", spdid, td, cbid, sz, offset, flag); */
+
+	if (tor_isnull(td)) return -EINVAL;
+
+	LOCK();
+	t = tor_lookup(td);
+	assert(t->data);
+	fso = t->data;
+	assert(fso->size <= fso->allocated);
+	assert(t->offset <= fso->size);
+
+	/* printc("before wmeta: fso->size %d, t->offset %d\n", fso->size, t->offset); */
+
+	if (flag == 1) { 		/* recovery*/
+		left = fso->allocated - t->offset;
+		if (left >= sz) {
+			ret = sz;
+			if (fso->size < (t->offset + sz)) fso->size = t->offset + sz;
+		} else {
+			char *new;
+			int new_sz;
+			new_sz = fso->allocated == 0 ? MIN_DATA_SZ : fso->allocated * 2;
+			new    = malloc(new_sz);
+			if (!new) ERR_THROW(-ENOMEM, done);
+			if (fso->data) {
+				memcpy(new, fso->data, fso->size);
+				free(fso->data);
+			}
+			
+			fso->data      = new;
+			fso->allocated = new_sz;
+			left           = new_sz - t->offset;
+			ret            = left > sz ? sz : left;
+			fso->size      = t->offset + ret;
+		}
+
+		buf = (char *)cbuf_c_introspect(cos_spd_id(), cbid, 0, CBUF_INTRO_PAGE);
+		if (!buf) BUG();
+		/* printc("introspect buf @%p\n", buf); */
+		/* printc("str in buf is %s size %d (offset %d)\n", buf, sz, offset); */
+		memcpy(fso->data + offset, buf, sz);
+		t->offset += sz;
+		/* assert(ret == sz); */
+		/* printc("mem cp done and current offset is %d\n", t->offset); */
+	}
+	/* printc("after wmeta: fso->size %d, t->offset %d\n", fso->size, t->offset); */
+
+done:	
+	UNLOCK();
+	return ret;
+}
+
+int cos_init(void)
+{
+	lock_static_init(&fs_lock);
+	torlib_init();
+
+	fs_init_root(&root);
+	root_torrent.data = &root;
+	root.flags = TOR_READ | TOR_SPLIT;
+
+	return 0;
+}

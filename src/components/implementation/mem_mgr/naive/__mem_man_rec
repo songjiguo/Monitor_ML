@@ -44,11 +44,6 @@
 #include <mem_mgr.h>
 #include <recovery_upcall.h>
 
-/* #define MEA_GET */
-/* #define MEA_ALIAS */
-/* #define MEA_REVOKE */
-/* #define MEA_ADD_ROOT */
-
 /***************************************************/
 /*** Data-structure for tracking physical memory ***/
 /***************************************************/
@@ -92,8 +87,6 @@ frame_alloc()
 	if (!f) return NULL;
 again:
 	freelist = f->c.free;
-	f->nmaps = 0;
-	f->c.m   = NULL;
 
 	root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTROSPECT_SPD, 0, 0, 0, frame_index(f));
 	if (unlikely(root_spd)){
@@ -151,27 +144,32 @@ __page_get(void)
 	spdid_t root_spd;
 	vaddr_t root_addr;
 
-	void *hp = cos_get_vas_page(); /* use lib function if USE_VALLOC is not defined */
+	void *hp;
 	struct frame *f;
-
+	/* printc("elephant\n"); */
 again:
+	hp = cos_get_vas_page(); /* use lib function if USE_VALLOC is not defined */
 	f = frame_alloc();
 
 	assert(hp && f);
 	frame_ref(f);
-	f->nmaps  = -1; 	 /* belongs to us... */
-	f->c.addr = (vaddr_t)hp; /* ...at this address */
-
+	
 	root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTROSPECT_SPD, 0, 0, 0, frame_index(f));
 	if (unlikely(root_spd == cos_spd_id())){ /* reuse the same page for ourself */
 		root_addr = (vaddr_t)cos_mmap_introspect(COS_MMAP_INTROSPECT_ADDR, 0, 0, 0, frame_index(f));
 		if (root_addr != (vaddr_t)hp) {
-			cos_release_vas_page(hp);
-			frame_deref(f);
+			f->nmaps  = -1; 	 
+			f->c.addr = root_addr; 
+			/* cos_release_vas_page(hp); */
+			/* frame_deref(f); */
+			/* printc("found an used one, goto again\n"); */
 			goto again;
 		}
 	}
-
+	/* this should only be set when the frame is actually picked */
+	f->nmaps  = -1; 	 /* belongs to us... */
+	f->c.addr = (vaddr_t)hp; /* ...at this address */
+ 	
 	int ret;
 	ret =  cos_mmap_cntl(COS_MMAP_GRANT, COS_MMAP_SET_ROOT, cos_spd_id(), (vaddr_t)hp, frame_index(f));
 	if (unlikely(ret)) memset(hp, 0, PAGE_SIZE);
@@ -217,7 +215,6 @@ cvas_alloc(spdid_t spdid)
 	if (!cv->pages) goto free;
 	cvect_init(cv->pages);
 	cvect_add(&comps, cv, spdid);
-
 	cv->nmaps = 0;
 	cv->spdid = spdid;
 done:
@@ -284,6 +281,9 @@ mapping_lookup(spdid_t spdid, vaddr_t addr)
 /* IMPORTANT: do not make assumption that virtual addresses are all different */
 /*            Across components, vaddr could be same in the future */
 
+/* m = mapping_crt(NULL, f, spd, addr, 1);     get */
+/* n = mapping_crt(m, m->f, d_spd, d_addr, 0); alias*/
+
 /* Make a child mapping */
 static struct mapping *
 mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int root_page)
@@ -296,7 +296,6 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	ret = mm_flag = 0;
 	assert(!p || p->f == f);
 	assert(dest && to);
-
 	/* no vas structure for this spd yet... */
 	if (!cv) {
 		cv = cvas_alloc(dest);
@@ -314,7 +313,6 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	/* 	printc("exist m : m->spd %d m->addr %x idx %ld\n", mm->spdid, (unsigned int)mm->addr, idx+i); */
 	/* } */
 	/* 	goto exist; */
-
 
 	cvas_ref(cv);
 	m = cslab_alloc_mapping();
@@ -360,9 +358,10 @@ collision:
 	m = NULL;
 	goto done;
 exist:
-	assert(m->addr  == to);
-	assert(m->spdid == dest);
-	m->p = p;   		/* connect two tree or root exists */
+	mapping_init(m, dest, to, p, f);
+	assert(!p || frame_nrefs(f) > 0);
+	frame_ref(f);
+	assert(frame_nrefs(f) > 0);
 	goto done;
 }
 
@@ -393,7 +392,7 @@ __mapping_destroy(struct mapping *m)
 {
 	struct comp_vas *cv;
 	int idx;
-	/* printc("mapping_destroy: m->spd %d m->addr %x\n", m->spdid, (unsigned int)m->addr); */
+	/* printc("mapping_destroy: m->spd %d m->addr %x\n\n", m->spdid, (unsigned int)m->addr); */
 	assert(m);
 	assert(EMPTY_LIST(m, _s, s_));
 	assert(m->p == NULL);
@@ -418,14 +417,13 @@ mapping_del_children(struct mapping *m)
 
 	assert(m);
 	d = __mapping_linearize_decendents(m);
-
 	while (d) {
+		printc(" (del) d->addr %p d->spdid %d  d->p %p\n",d->addr, d->spdid, d->p);
 		n = FIRST_LIST(d, _s, s_);
 		REM_LIST(d, _s, s_);
 		__mapping_destroy(d);
 		d = (n == d) ? NULL : n;
 	}
-
 	assert(!m->c);
 }
 
@@ -448,7 +446,7 @@ mapping_del(struct mapping *m)
 /*** Public interface functions ***/
 /**********************************/
 
-static void recovery_upcalls_helper(spdid_t spd, vaddr_t addr);
+static void recovery_upcalls_helper(spdid_t spd, vaddr_t addr, int flags);
 static struct mapping *recovery_rebuild_mapping(spdid_t s_spd, vaddr_t s_addr);
 
 static int get_test = 0;
@@ -470,17 +468,20 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m = NULL;
 	vaddr_t ret = -1;
 
-/* 	if (spd == 7) printc("mman_get_page....addr %x\n", (unsigned int)addr); */
-/* 	if (spd == 7 && get_test < 99) get_test++; */
+	/* if (spd == 7) printc("mman_get_page....addr %x\n", (unsigned int)addr); */
+	if (spd == 7 && get_test < 99) get_test++;
 
-/* #ifdef MEA_GET	 */
-/* 	if (spd == 7 && get_test == 5) assert(0); */
-/* #endif */
+#ifdef MEA_GET
+	if (spd == 7 && get_test == 8) assert(0);
+#endif
 
 	LOCK();
 
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
+	f->nmaps = 0;
+	f->c.m   = NULL;
+
 	assert(frame_nrefs(f) == 0);
 	frame_ref(f);
 
@@ -504,23 +505,6 @@ dealloc:
 	goto done;		/* -EINVAL */
 }
 
-/* ///////////////////////////////////////////////////////// */
-/* vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr) */
-/* { */
-/* 	struct mapping *m, *n; */
-/* 	vaddr_t ret = 0; */
-
-/* 	if (s_spd == 7 && alias_test < 99) alias_test++; */
-/* 	if (s_spd == 7 || s_spd == 8) { */
-/* 		/\* printc("mman_alias_page.... k %d\n", alias_test); *\/ */
-/* 		printc("s_spd %d @ s_addr %x to d_spd %d @ %p (thd %d)\n", s_spd, (unsigned int)s_addr, d_spd, (void *)d_addr, cos_get_thd_id()); */
-/* 	} */
-
-/* #ifdef MEA_ALIAS */
-/* 	if (s_spd == 7 && alias_test == 5) assert(0); */
-/* #else */
-/* 	/\* if (s_spd == 7 && alias_test == 5) assert(0); *\/ */
-/* #endif */
 
 /////////////////////////////////////
 /*         ,--.,--.                */
@@ -535,10 +519,19 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	struct mapping *m, *n;
 	vaddr_t ret = 0;
 
+	/* if (s_spd == 8) printc("in alias function\n"); */
+	
+	if (s_spd == 7 && alias_test < 99) alias_test++;
+	
+#ifdef MEA_ALIAS
+	if (s_spd == 7 && alias_test == 8) assert(0);
+#endif
+
 	LOCK();
 	m = mapping_lookup(s_spd, s_addr);
 	if (unlikely(!m)) {
-		printc("crashed --> rebuild s_addr mapping (thd %d)\n", cos_get_thd_id());
+		/* printc("crashed 1 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id()); */
+		alias_test = 50; /* stop the fault from happening */
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
 		assert(EMPTY_LIST(m, next, prev));
@@ -546,6 +539,44 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	assert(m == mapping_lookup(s_spd,s_addr));
 	n = mapping_crt(m, m->f, d_spd, d_addr, 0);
 	if (!n) goto done;
+
+	/* printc("thread %d get n!! n->addr %p n->spdid %d  n->p %p\n",cos_get_thd_id(), n->addr, n->spdid, n->p); */
+
+	assert(EMPTY_LIST(n, next, prev));
+	assert(n->addr  == d_addr);
+	assert(n->spdid == d_spd);
+	assert(n->p == m || n->p == NULL);
+
+	ret = d_addr;
+done:
+	UNLOCK();
+	return ret;
+}
+
+vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
+{
+	/* printc("alias helper\n"); */
+	struct mapping *m, *n;
+	vaddr_t ret = 0;
+
+	LOCK();
+	m = mapping_lookup(s_spd, s_addr);
+	if (unlikely(!m)) {
+		/* printc("crashed 2 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id()); */
+		alias_test = 50; /* stop the fault from happening */
+		m = recovery_rebuild_mapping(s_spd, s_addr);
+		assert(m);
+		assert(EMPTY_LIST(m, next, prev));
+	}
+	assert(m == mapping_lookup(s_spd,s_addr));
+	/* printc("try to get mapping for n\n"); */
+	/* printc(" m: m->addr %p m->spdid %d  m->p %p\n",m->addr, m->spdid, m->p); */
+	/* printc("d_spd %d d_addr %p\n", d_spd, d_addr); */
+
+	n = mapping_crt(m, m->f, d_spd, d_addr, 0);
+	if (!n) goto done;
+
+	/* printc("thread %d get n!! n->addr %p n->spdid %d  n->p %p\n",cos_get_thd_id(), n->addr, n->spdid, n->p); */
 
 	assert(EMPTY_LIST(n, next, prev));
 	assert(n->addr  == d_addr);
@@ -557,38 +588,24 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
         /* recovery thread only */
 	/* assume recovery thread won't fail */
 	static int max_upcalls = 0;
-	if (unlikely(2 == cos_get_thd_id())) {
-		/* create the sub upcall_list from n, first head node is m */
-		ADD_LIST(m, n, next, prev); /* should insert between 2 nodes here, not the head */
-		max_upcalls++;
+	/* create the sub upcall_list from n, first head node is m */
+	ADD_LIST(m, n, next, prev); /* should insert between 2 nodes here, not the head */
+	/* max_upcalls++; */
+	/* assert(max_upcalls < MAX_UPCALL_LIST_DEPTH); /\* upcall depths *\/ */
+	
+	/* /\* printc("upcall spd %d record is added to m->spd %d\n", n->spdid, m->spdid); *\/ */
+	/* struct mapping *a; */
+	/* for(a = FIRST_LIST(m, next, prev); */
+	/*     a != m; */
+	/*     a = FIRST_LIST(a, next, prev)) { */
+	/* 	printc("on list @addr %x\n", (unsigned int)a->addr); */
+	/* } */
 
-		/* printc("upcall spd %d record is added to m->spd %d\n", n->spdid, m->spdid); */
-		/* struct mapping *a; */
-		/* for(a = FIRST_LIST(m, next, prev); */
-		/*     a != m; */
-		/*     a = FIRST_LIST(a, next, prev)) { */
-		/* 	printc("on list @addr %x\n", (unsigned int)a->addr); */
-		/* } */
-
-		/* assert(max_upcalls < MAX_UPCALL_LIST_DEPTH); */
-	}
-
-	/* if (s_spd != 5) */
-	/* 	printc("ALI %d from s_spd %d @ s_addr %x to d_spd %d @ %p\n",  */
-	/* 	       frame_index(n->f), s_spd, (unsigned int)s_addr, d_spd, (void *)d_addr); */
 done:
 	UNLOCK();
 	return ret;
 }
 
-/* ------- test only ------- */
-vaddr_t mman_alias_page2(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
-{
-	get_test = 100;
-	alias_test = 100;
-	revoke_test = 100;
-	return mman_alias_page(s_spd, s_addr, d_spd, d_addr);
-}
 
 /////////////////////////////////////////////////
 /*                              ,--.           */
@@ -603,31 +620,38 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m;
 	int ret = 0;
 
-	if (spd == 7) printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id());
+	/* if (spd == 7) printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id()); */
 	if (spd == 7 && revoke_test < 99) revoke_test++;
 
 #ifdef MEA_REVOKE
-	if (spd == 7) assert(0);
-#else
-	if (spd == 7 && revoke_test == 1 && flags == 0) assert(0);
+	if (spd == 7 && revoke_test == 5 && flags == 0) assert(0);
 #endif
-
 	LOCK();
 
 	m = mapping_lookup(spd, addr);
-	/* a crash happened before */
-	if (unlikely(!m)) {
-		printc("find a crash happened before\n");
-	again:
-		UNLOCK();  /* race condition */
-		recovery_upcalls_helper(spd, addr);
-		m = mapping_lookup(spd, addr);
-		if (!m) goto again;
-		LOCK();
-		printc("READY thd %d\n", cos_get_thd_id());
-	}
+	assert(m);
 	mapping_del_children(m);
 	UNLOCK();
+	return ret;
+}
+
+/* a crash happened before */
+int __mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
+{
+	struct mapping *m;
+	int ret = 0;
+
+	/* if (spd == 7) printc("MM: __mman_revoke_page....thd %d\n", cos_get_thd_id()); */
+	if (spd == 7 && revoke_test < 99) revoke_test++;
+
+#ifdef MEA_REVOKE
+	if (spd == 7 && revoke_test == 5 && flags == 0) assert(0);
+#endif
+
+	recovery_upcalls_helper(spd, addr, flags);
+	mman_revoke_page(spd, addr, flags);
+
+	/* revoke_page should have release the lock */
 	return ret;
 }
 
@@ -696,6 +720,8 @@ recovery_rebuild_mapping(spdid_t s_spd, vaddr_t s_addr)
 	fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME,
 					  0, s_spd, s_addr, 0);
 
+	/* printc("fr_idx is %d\n", fr_idx); */
+
 	assert(fr_idx);
 	m = mapping_crt(NULL, &frames[fr_idx], s_spd, s_addr, 0);
 	if (!m) goto err;
@@ -710,31 +736,35 @@ err:
 	goto done;
 }
 
+/* FIXME: Let recovery thread come to here and do everything */
 static void
-recovery_upcalls_helper(spdid_t spd, vaddr_t addr)
+recovery_upcalls_helper(spdid_t spd, vaddr_t addr, int flags)
 {
 	struct mapping *m, *n, *p;
 	int thd;
+	/* volatile unsigned long long start, end; */
 
-	printc("\n[.....entering upcall helper........] thd %d\n", cos_get_thd_id());
+	/* LOCK(); */
+	/* printc("[.....entering upcall helper........] thd %d\n", cos_get_thd_id()); */
+
 	thd = cos_get_thd_id();
-	recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, spd, addr);
-	assert(thd == cos_get_thd_id());
-
-	/* a upcall list that facilitates upcall should have been
-	 * created by above replay alias */
-	m = mapping_lookup(spd, addr); /* m should exist now  */
+	/* rdtscll(start); */
+	m = mapping_lookup(spd, addr); /* m should exist */
 	assert(m);
 
 	n = FIRST_LIST(m, next, prev);
-	while (n != m) {
-		/* printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id()); */
+	while (n && n != m) {
+		printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id());
 		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, n->spdid, n->addr);
 		p = FIRST_LIST(n, next, prev);
 		REM_LIST(n, next, prev);
 		n = p;
 	}
-	printc("leaving upcall helper......... thd %d\n", cos_get_thd_id());
+
+	/* rdtscll(end); */
+	/* printc("cost %llu\n", end - start); */
+	/* UNLOCK(); */
+	/* printc("leaving upcall helper......... thd %d\n", cos_get_thd_id()); */
 }
 
 /*******************************/

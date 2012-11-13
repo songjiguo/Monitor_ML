@@ -162,6 +162,7 @@ llboot_thd_done(void)
 #endif
 			assert(pthd);
 			recover_spd = 0;
+
 			cos_upcall_args(op, rspd, arg); /* This will escape from the loop */
 			assert(0);
 		} else {		/* ...done reinitializing...resume */
@@ -172,6 +173,7 @@ llboot_thd_done(void)
 			assert(pthd && pthd != tid);
 			prev_thd = 0;   /* FIXME: atomic action required... */
 			/* cos_switch_thread(cos_timer_thd, 0); */
+			/* printc("switch bactk to thread %d\n", pthd); */
 			cos_switch_thread(pthd, 0);
 		}
 	}
@@ -217,7 +219,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	}
 
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
-	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %d)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
+	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %ld)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
 	/* printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid); */
 
@@ -286,7 +288,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 #endif
 
 	int tid = cos_get_thd_id();
-	printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
+	/* printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid); */
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
@@ -297,6 +299,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* printc("LL: notification cost 2: %llu\n", (end-start)); */
 #endif
 
+		printc(".....\n");
 		return 0;
 	}
 	printc("<< LL fault notification 2>>\n");
