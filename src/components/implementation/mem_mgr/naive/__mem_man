@@ -363,8 +363,11 @@ mapping_del(struct mapping *m)
 /**********************************/
 void some_delay()  		/* only used to compared with FT-version when injection presents */
 {
-	/* int ccc = 0; */
-	/* while(ccc++ < 1000000) {;}; */
+#ifdef SWIFI_ENABLE
+	int ccc = 0;
+	while(ccc++ < 1000000) {;};
+#endif
+	return;
 }
 
 vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)

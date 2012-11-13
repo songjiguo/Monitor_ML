@@ -19,7 +19,8 @@
 //#define TREAD_FAULT
 //#define TRELEASE_FAULT
 
-#define TEST_1   /* single thread fails (T writes to foo/bar/who) */
+#define TEST_0	   /* unit test */
+//#define TEST_1   /* single thread fails (T writes to foo/bar/who) */
 //#define TEST_2   /* 2 threads, operate on the same files, one fails, (Both writes to foo/bar/who) */
 //#define TEST_3   /* 2 threads, operate on the different files(T1 writes foo/bar/who, T2 writes foo/boo/who) */
 #ifdef TEST_3

@@ -12,9 +12,13 @@
 int high;
 unsigned long counter = 0;
 
-#define TARGET_COMPONENT 15  // ramfs
-/* #define TARGET_COMPONENT  2  // sched */
-/* #define TARGET_COMPONENT  3  // mm */
+//#define TARGET_COMPONENT 15   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
+#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
+//#define TARGET_COMPONENT  2   /* sched */
+
+#ifndef TARGET_COMPONENT   
+#define TARGET_COMPONENT 0    	/* no fault injection */
+#endif
 
 int fault_inject()
 {
@@ -22,6 +26,8 @@ int fault_inject()
 	int tid, spdid;
 
 	printc("\nthread %d in fault injector %ld\n\n", cos_get_thd_id(), cos_spd_id());
+
+	if (TARGET_COMPONENT == 0) return 0;
 	
 	struct cos_regs r;
 	for (tid = 1; tid <= MAX_NUM_THREADS; tid++) {
@@ -30,7 +36,7 @@ int fault_inject()
 
 		/* printc("found thd %d and spd %d\n", tid, spdid); */
 		counter++;
-		printc("<<%lu>> flip the register !!!\n", counter);
+		printc("<<%lu>> flip the register in component %d!!!\n", counter, TARGET_COMPONENT);
 		cos_regs_read(tid, spdid, &r);
 		/* cos_regs_print(&r); */
 		flip_all_regs(&r);
@@ -53,6 +59,7 @@ void cos_init(void)
 		sp.c.value = 4;
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
+#ifdef SWIFI_ENABLE
 		if (cos_get_thd_id() == high) {
 			periodic_wake_create(cos_spd_id(), 5);
 			while(1) {
@@ -60,5 +67,6 @@ void cos_init(void)
 				periodic_wake_wait(cos_spd_id());
 			}
 		}
+#endif
 	}
 }
