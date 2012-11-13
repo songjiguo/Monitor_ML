@@ -213,7 +213,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	reboot = (spdid == 2) ? 1:0;
 
 	first++;
-	if(first == 5) {
+	if(first == 30) {
 		printc("has failed %d times\n",first);
 		sched_exit();
 	}
@@ -298,8 +298,6 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		rdtscll(end);
 		/* printc("LL: notification cost 2: %llu\n", (end-start)); */
 #endif
-
-		printc(".....\n");
 		return 0;
 	}
 	printc("<< LL fault notification 2>>\n");

@@ -149,6 +149,10 @@ err:
 	return 0;
 }
 
+vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
+{
+	return 0;
+}
 /*
  * Call to give up a page of memory in an spd at an address.
  */
@@ -168,6 +172,11 @@ int mman_release_page(spdid_t spd, vaddr_t addr, int flags)
 }
 
 int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
+{
+	return 0;
+}
+
+int __mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 {
 	return 0;
 }

@@ -4,6 +4,9 @@
 #include <sched.h>
 #include <mem_mgr.h>
 
+#include <periodic_wake.h>
+#include <timed_blk.h>
+
 #include <unit_mmrec2.h>
 
 #define TOTAL_AMNT 128
@@ -136,14 +139,17 @@ cos_init(void)
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 	} else {
-		for(i = 0; i< 1; i++) {
-			printc("<<< MM RECOVERY TEST START >>>\n");
+		printc("<<< MM RECOVERY TEST START >>>\n");
+		timed_event_block(cos_spd_id(), 1);
+		periodic_wake_create(cos_spd_id(), 1);
+		while(1) {
 			get_test();
 			alias_test();
 			revoke_test();
 			/* all_in_one(); */
-			printc("<<< MM RECOVERY TEST DONE!! >>>.........\n\n\n");
+			periodic_wake_wait(cos_spd_id());
 		}
+		printc("<<< MM RECOVERY TEST DONE!! >>>.........\n\n\n");
 	}
 	
 	return;

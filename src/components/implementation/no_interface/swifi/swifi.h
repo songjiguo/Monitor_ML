@@ -96,7 +96,7 @@ static void flip_all_regs(struct cos_regs *r) {
 	/* printc("ESP's "); */
 	flip_reg_bit(&r->regs.sp); /* esp */
 	/* printc("EBP's "); */
-	/* flip_reg_bit(&r->regs.bp); /\* ebp *\/ */
+	flip_reg_bit(&r->regs.bp); /* ebp */
 	/* printc("EAX's "); */
 	flip_reg_bit(&r->regs.ax); /* eax */
 	/* printc("EBX's "); */

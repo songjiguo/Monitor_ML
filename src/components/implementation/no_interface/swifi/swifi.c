@@ -11,6 +11,10 @@
 
 int high, low;
 
+/* #define TARGET_COMPONENT 15  // ramfs */
+/* #define TARGET_COMPONENT  2  // sched */
+#define TARGET_COMPONENT  3  // mm
+
 int fault_inject()
 {
 	int ret = 0;
@@ -20,10 +24,12 @@ int fault_inject()
 	
 	struct cos_regs r;
 	for (tid = 1; tid <= MAX_NUM_THREADS; tid++) {
-		spdid = cos_thd_cntl(COS_THD_INV_SPD, tid, 15, 0); /* ramfs spd 15 now */
+		spdid = cos_thd_cntl(COS_THD_INV_SPD, tid, TARGET_COMPONENT, 0);
+		/* printc("return spdid %d\n", spdid); */
 		if (spdid == -1) continue;
 
-		printc("found thd %d and spd %d\n", tid, spdid);
+		/* printc("found thd %d and spd %d\n", tid, spdid); */
+		printc("flip the register!!!\n");
 		cos_regs_read(tid, spdid, &r);
 		/* cos_regs_print(&r); */
 		flip_all_regs(&r);
@@ -47,7 +53,7 @@ void cos_init(void)
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
 		if (cos_get_thd_id() == high) {
-			periodic_wake_create(cos_spd_id(), 5);
+			periodic_wake_create(cos_spd_id(), 3);
 			while(1) {
 				fault_inject();
 				periodic_wake_wait(cos_spd_id());

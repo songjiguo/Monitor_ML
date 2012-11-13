@@ -11,7 +11,7 @@
 #define   	MEM_MGR_H
 
 //#define MEA_GET
-#define MEA_ALIAS
+//#define MEA_ALIAS
 //#define MEA_REVOKE
 //#define MEA_ADD_ROOT
 

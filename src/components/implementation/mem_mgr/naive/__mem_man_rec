@@ -336,6 +336,7 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
 #endif
 	if (ret) {
+		/* printc("1\n"); */
 		if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, dest, to, 0) != frame_index(f)) {
 			printc("found mismatch here\n");
 			goto no_mapping;
@@ -418,7 +419,6 @@ mapping_del_children(struct mapping *m)
 	assert(m);
 	d = __mapping_linearize_decendents(m);
 	while (d) {
-		printc(" (del) d->addr %p d->spdid %d  d->p %p\n",d->addr, d->spdid, d->p);
 		n = FIRST_LIST(d, _s, s_);
 		REM_LIST(d, _s, s_);
 		__mapping_destroy(d);
@@ -453,6 +453,11 @@ static int get_test = 0;
 static int alias_test = 0;
 static int revoke_test = 0;
 
+void some_delay()
+{
+	int ccc = 0;
+	while(ccc++ < 1000000) {;};
+}
 ////////////////////////////
 /*                 ,--.   */
 /*  ,---.  ,---. ,-'  '-. */
@@ -469,13 +474,14 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	vaddr_t ret = -1;
 
 	/* if (spd == 7) printc("mman_get_page....addr %x\n", (unsigned int)addr); */
-	if (spd == 7 && get_test < 99) get_test++;
+	if (spd == 7) get_test++;
 
 #ifdef MEA_GET
-	if (spd == 7 && get_test == 8) assert(0);
+	if (spd == 7 && get_test%8 == 0) assert(0);
 #endif
 
 	LOCK();
+	some_delay();
 
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
@@ -521,17 +527,18 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 
 	/* if (s_spd == 8) printc("in alias function\n"); */
 	
-	if (s_spd == 7 && alias_test < 99) alias_test++;
+	if (s_spd == 7) alias_test++;
 	
 #ifdef MEA_ALIAS
-	if (s_spd == 7 && alias_test == 8) assert(0);
+	if (s_spd == 7 && alias_test%8 == 0) assert(0);
 #endif
 
 	LOCK();
+	some_delay();
+
 	m = mapping_lookup(s_spd, s_addr);
 	if (unlikely(!m)) {
-		/* printc("crashed 1 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id()); */
-		alias_test = 50; /* stop the fault from happening */
+		printc("crashed 1 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id());
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
 		assert(EMPTY_LIST(m, next, prev));
@@ -562,8 +569,7 @@ vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t 
 	LOCK();
 	m = mapping_lookup(s_spd, s_addr);
 	if (unlikely(!m)) {
-		/* printc("crashed 2 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id()); */
-		alias_test = 50; /* stop the fault from happening */
+		printc("crashed 2 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id());
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
 		assert(EMPTY_LIST(m, next, prev));
@@ -621,12 +627,13 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	int ret = 0;
 
 	/* if (spd == 7) printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id()); */
-	if (spd == 7 && revoke_test < 99) revoke_test++;
+	if (spd == 7) revoke_test++;
 
 #ifdef MEA_REVOKE
-	if (spd == 7 && revoke_test == 5 && flags == 0) assert(0);
+	if (spd == 7 && revoke_test%5 == 0 && flags == 0) assert(0);
 #endif
 	LOCK();
+	some_delay();
 
 	m = mapping_lookup(spd, addr);
 	assert(m);
@@ -665,6 +672,7 @@ int mman_release_page(spdid_t spd, vaddr_t addr, int flags)
 
 	LOCK();
 
+	printc("2\n");
 	if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, spd, addr, 0) == -1) {
 		printc("The page %p does not exist when release\n", (void *)addr);
 		goto done;
@@ -754,7 +762,7 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr, int flags)
 
 	n = FIRST_LIST(m, next, prev);
 	while (n && n != m) {
-		printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id());
+		/* printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id()); */
 		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, n->spdid, n->addr);
 		p = FIRST_LIST(n, next, prev);
 		REM_LIST(n, next, prev);

@@ -1743,7 +1743,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	default:
 		printc("fp_rr: cos_upcall_fn error - type %x, arg1 %d, arg2 %d\n", 
 		      (unsigned int)t, (unsigned int)arg1, (unsigned int)arg2);
-		BUG();
+		/* BUG(); */
 		return;
 	}
 

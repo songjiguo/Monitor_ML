@@ -3749,7 +3749,7 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 		int frame_num;
 
 		if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) {
-			printk("cos: try find phy frame -- no page table entry found.\n");
+			/* printk("cos: try find phy frame -- no page table entry found.\n"); */
 			return -EINVAL;
 		}
 		frame_num = cos_paddr_to_cap(phy_addr) - this_spd->pfn_base;

@@ -30,7 +30,7 @@ void mm_test2_34()
 		s_addr = addr[i];
 		if (i < PAGE_NUM/2) {
 #ifdef ONE2FIVE
-			s_addr = addr[6];
+			s_addr = addr[0];
 #endif
 			d_addr  = mm_test3();
 			if (!d_addr) BUG();
@@ -38,7 +38,7 @@ void mm_test2_34()
 
 		} else {
 #ifdef ONE2FIVE
-			s_addr = addr[7];
+			s_addr = addr[1];
 #endif
 			d_addr  = mm_test4();
 			if (!d_addr) BUG();

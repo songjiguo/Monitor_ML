@@ -319,7 +319,7 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
 
-        if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("s_addr %p -- d_addr %p\n", s_addr, d_addr);
+        /* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("s_addr %p -- d_addr %p\n", s_addr, d_addr); */
         volatile unsigned long long start, end;
         struct rec_data_mm_list *rdmm_list;
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
