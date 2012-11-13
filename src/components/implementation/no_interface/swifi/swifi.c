@@ -9,13 +9,12 @@
 
 #include <swifi.h>
 
-int high, low;
-
+int high;
 unsigned long counter = 0;
 
-/* #define TARGET_COMPONENT 15  // ramfs */
+#define TARGET_COMPONENT 15  // ramfs
 /* #define TARGET_COMPONENT  2  // sched */
-#define TARGET_COMPONENT  3  // mm
+/* #define TARGET_COMPONENT  3  // mm */
 
 int fault_inject()
 {
@@ -55,11 +54,11 @@ void cos_init(void)
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
 		if (cos_get_thd_id() == high) {
-			periodic_wake_create(cos_spd_id(), 3);
+			periodic_wake_create(cos_spd_id(), 5);
 			while(1) {
 				fault_inject();
 				periodic_wake_wait(cos_spd_id());
 			}
-		} 
+		}
 	}
 }
