@@ -11,6 +11,8 @@
 
 int high, low;
 
+unsigned long counter = 0;
+
 /* #define TARGET_COMPONENT 15  // ramfs */
 /* #define TARGET_COMPONENT  2  // sched */
 #define TARGET_COMPONENT  3  // mm
@@ -20,16 +22,16 @@ int fault_inject()
 	int ret = 0;
 	int tid, spdid;
 
-	/* printc("\nthread %d in fault injector %ld\n\n", cos_get_thd_id(), cos_spd_id()); */
+	printc("\nthread %d in fault injector %ld\n\n", cos_get_thd_id(), cos_spd_id());
 	
 	struct cos_regs r;
 	for (tid = 1; tid <= MAX_NUM_THREADS; tid++) {
 		spdid = cos_thd_cntl(COS_THD_INV_SPD, tid, TARGET_COMPONENT, 0);
-		/* printc("return spdid %d\n", spdid); */
 		if (spdid == -1) continue;
 
 		/* printc("found thd %d and spd %d\n", tid, spdid); */
-		printc("flip the register!!!\n");
+		counter++;
+		printc("<<%lu>> flip the register !!!\n", counter);
 		cos_regs_read(tid, spdid, &r);
 		/* cos_regs_print(&r); */
 		flip_all_regs(&r);

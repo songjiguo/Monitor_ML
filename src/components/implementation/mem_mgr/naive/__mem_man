@@ -361,6 +361,11 @@ mapping_del(struct mapping *m)
 /**********************************/
 /*** Public interface functions ***/
 /**********************************/
+void some_delay()  		/* only used to compared with FT-version when injection presents */
+{
+	int ccc = 0;
+	while(ccc++ < 1000000) {;};
+}
 
 vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 {
@@ -369,6 +374,7 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	vaddr_t ret = -1;
 
 	LOCK();
+	some_delay();
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
 	assert(frame_nrefs(f) == 0);
@@ -394,6 +400,7 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	vaddr_t ret = 0;
 
 	LOCK();
+	some_delay();
 	m = mapping_lookup(s_spd, s_addr);
 	if (!m) goto done; 	/* -EINVAL */
 	n = mapping_crt(m, m->f, d_spd, d_addr);
@@ -414,6 +421,7 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	int ret = 0;
 
 	LOCK();
+	some_delay();
 	m = mapping_lookup(spd, addr);
 	if (!m) {
 		ret = -1;	/* -EINVAL */

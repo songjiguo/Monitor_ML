@@ -453,6 +453,11 @@ static int get_test = 0;
 static int alias_test = 0;
 static int revoke_test = 0;
 
+/* 
+   this function is used only for the fault injection purpose: without
+   delay, it is hard to inject the fault while the thread is running
+   in MM
+*/
 void some_delay()
 {
 	int ccc = 0;
