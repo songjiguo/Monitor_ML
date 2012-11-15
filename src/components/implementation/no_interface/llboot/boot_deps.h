@@ -173,7 +173,7 @@ llboot_thd_done(void)
 			assert(pthd && pthd != tid);
 			prev_thd = 0;   /* FIXME: atomic action required... */
 			/* cos_switch_thread(cos_timer_thd, 0); */
-			/* printc("switch bactk to thread %d\n", pthd); */
+			printc("\nswitch bactk to thread %d\n\n", pthd);
 			cos_switch_thread(pthd, 0);
 		}
 	}
@@ -183,7 +183,7 @@ llboot_thd_done(void)
 int
 recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 {
-	/* printc("LL: llbooter upcall to spd %d, arg %x thd %d\n", dest, (unsigned int)arg, cos_get_thd_id()); */
+	/* printc("LL: llbooter upcall to spd %d, arg %x thd %d op %d\n", dest, (unsigned int)arg, cos_get_thd_id(), op); */
 
 	prev_thd     = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread */
 	recover_spd  = dest;
@@ -213,15 +213,15 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	reboot = (spdid == 2) ? 1:0;
 
 	first++;
-	if(first == 30) {
+	if(first == 5) {
 		printc("has failed %d times\n",first);
 		sched_exit();
 	}
 
-	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
-	/* printc("LL: <<0>> thd %d : failed spd %d (this spd %ld)\n", cos_get_thd_id(), spdid, cos_spd_id()); */
+	printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd);
+	printc("LL: <<0>> thd %d : failed spd %d (this spd %ld)\n", cos_get_thd_id(), spdid, cos_spd_id());
 
-	/* printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid); */
+	printc("LL: <<0>> thd %d failed in spd %d\n", cos_get_thd_id(), spdid);
 
 #ifdef MEAS_REBOOT
 	volatile unsigned long long start, end;
@@ -288,7 +288,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 #endif
 
 	int tid = cos_get_thd_id();
-	/* printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid); */
+	printc("<< LL fault notification handler >> :: thd %d saw that spd %d has failed before\n", cos_get_thd_id(), spdid);
 
 	if(!cos_thd_cntl(COS_THD_INV_FRAME_REM, tid, 1, 0)) {
 		assert(r_ip = cos_thd_cntl(COS_THD_INVFRM_IP, tid, 1, 0));
@@ -298,9 +298,10 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		rdtscll(end);
 		/* printc("LL: notification cost 2: %llu\n", (end-start)); */
 #endif
+		printc("pop the frame and return\n");
 		return 0;
 	}
-	printc("<< LL fault notification 2>>\n");
+	printc("<< LL fault notification 2 (tid %d)>>\n", tid);
 
 	if (tid == cos_timer_thd) cos_upcall_args(COS_UPCALL_BRAND_EXEC, spdid, 0);
 	if (tid == cos_idle_thd)  cos_upcall_args(COS_UPCALL_IDLE, spdid, 0);

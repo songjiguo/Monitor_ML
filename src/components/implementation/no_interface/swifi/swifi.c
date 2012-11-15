@@ -52,9 +52,9 @@ void cos_init(void)
 	union sched_param sp;
 	int rand;
 
+	printc("\nfault injector %ld\n\n", cos_spd_id());
 	if(first == 0){
 		first = 1;
-
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 4;
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);

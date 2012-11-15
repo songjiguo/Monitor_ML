@@ -328,9 +328,12 @@ static int
 boot_spd_thd(spdid_t spdid)
 {
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
-
-	/* Create a thread IF the component requested one */
+	
+	/* /\* Create a thread IF the component requested one *\/ */
 	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
+
+	/* if ((sched_create_thread_default(spdid, sp.v, 0, 99)) < 0) return -1; /\* test only *\/ */
+
 	return 0;
 }
 
@@ -527,7 +530,12 @@ void cos_init(void)
 
 	/* Assumes that hs have been setup with boot_find_cobjs */
 	boot_create_system();
+
+	/* printc("<<<UNLOCK?>>>\n"); */
+
 	UNLOCK();
+
+	/* printc("<<<UNLOCK? yes>>>\n"); */
 	boot_deps_run();
 
 	return;

@@ -214,7 +214,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 
 	/* printk("----cap %d cap flt %d dest_flt %d---\n",capability, cap_entry->fault.cnt, dest_spd->fault.cnt); */
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
-		/* printk("invocation....from %d to %d\n", spd_get_index(curr_spd), spd_get_index(dest_spd)); */
+		printk("invocation....from %d to %d\n", spd_get_index(curr_spd), spd_get_index(dest_spd));
 		/* s = virtual_namespace_query(cap_entry->dest_entry_instruction); */
 		/* printk("cos: s spd %d\n", spd_get_index(s)); */
 
@@ -322,7 +322,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	unsigned int fault_cap;
 	struct pt_regs *nregs;
 
-	/* printk("deskt spd %d \n", spd_get_index(dest_spd)); */
+	printk("deskt spd %d \n", spd_get_index(dest_spd));
 	if (unlikely(dest_spd)) s = dest_spd;
 	else {
 		s = virtual_namespace_query(regs->ip);
@@ -356,7 +356,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	memcpy(&thd->fault_regs, regs, sizeof(struct pt_regs));
 	a = ipc_walk_static_cap(thd, fault_cap<<20, regs->sp, regs->ip, &r);
 	
-	/* printk("r.spd_id %d a %p\n", r.spd_id, a); */
+	printk("r.spd_id %d a %p\n", r.spd_id, a);
 
 	/* setup the registers for the fault handler invocation */
 	regs->ax = r.thd_id;
@@ -391,7 +391,7 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd)
 {
-	/* printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
 
 	return __fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, dest_spd);
 }
@@ -399,7 +399,7 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd)
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
-	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
+	printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n");
 	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
 	return &thd->regs;
 }
@@ -407,7 +407,7 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd)); */
+	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd));
 	struct thd_invocation_frame *thd_frame;
 	thd_frame = thd_invstk_top(thd);
 
@@ -419,7 +419,7 @@ thd_switch_fault_notif(struct thread *thd)
 void
 fault_int_notif(struct thread *thd, struct spd *notif_spd, unsigned int cap_num, struct pt_regs *regs, int fault_num)
 {
-	/* printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n"); */
+	printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n");
 
 	struct inv_ret_struct r;
 	vaddr_t addr;
@@ -1186,7 +1186,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
         /* ANDY detect fault when switch thread */
 	if(unlikely(fault_ret = switch_thd_fault_detect(thd))){
 		switch_thd_fault_update(thd);
-		printk("cos: current thread %d\n", thd_get_id(curr));
+		/* printk("cos switch : current thread %d\n", thd_get_id(curr)); */
 		thd_switch_fault_notif(thd);
 #ifdef MEAS_TCS_FAULT_DETECT
 		rdtscll(end);
@@ -2878,14 +2878,14 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 			id = thd_get_id(ret_thd);
 			/* timer thread, set THD_STATE_ACTIVE_UPCALL so it can be
 			 * scheduled */
-			if (ret_thd->sched_info[spd->sched_depth].thread_user_prio == 0) {
+			if ( thd_id == 0 && ret_thd->sched_info[spd->sched_depth].thread_user_prio == 0) {
 				ret_thd->flags |= THD_STATE_ACTIVE_UPCALL;
 				ret_thd->flags &= ~THD_STATE_READY_UPCALL;
 			}
 			ret = ((id << 16) | (ret_thd->sched_info[spd->sched_depth].thread_user_prio & 0xFFFF));
 		}		
 		break;
-	}	
+	}
 	case COS_SCHED_THD_PRIO:
 	{
 		assert(spd_is_scheduler(spd));

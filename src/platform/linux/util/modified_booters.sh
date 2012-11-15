@@ -7,6 +7,7 @@ c0.o-llboot.o;\
 fprr.o-print.o|[parent_]mm.o|[faulthndlr_]llboot.o;\
 mm.o-[parent_]llboot.o|print.o;\
 boot.o-print.o|fprr.o|mm.o|llboot.o;\
+\
 cpu.o-print.o|fprr.o|mm.o\
 " ./gen_client_stub
 

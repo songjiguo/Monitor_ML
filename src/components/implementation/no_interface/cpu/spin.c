@@ -14,6 +14,10 @@
 #include <print.h>
 
 #include <sched.h>
+#include <mem_mgr.h>
+
+#include <periodic_wake.h>
+#include <timed_blk.h>
 
 #define SCHEDULER_TEST  		/* test purpose only */
 
@@ -27,7 +31,6 @@ volatile unsigned long long start, end;
 
 void cos_init(void *arg)
 {
-	/* printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id()); */
 	int i = 4;
 	static int first = 0;
 	union sched_param sp;
@@ -36,30 +39,53 @@ void cos_init(void *arg)
 		first = 1;
 		num = 1;
 
+		printc("call create \n");
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 9;
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 10;
+		/* low = sched_create_thd(cos_spd_id(), sp.v, 99, 0); /\* man, I failed here 3 times!!! 99 *\/ */
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+
+		/* sp.c.type = SCHEDP_PRIO; */
+		/* sp.c.value = 11; */
+		/* sched_create_thd(cos_spd_id(), sp.v, 99, 0); */
+
+		/* sp.c.type = SCHEDP_PRIO; */
+		/* sp.c.value = 12; */
+		/* sched_create_thd(cos_spd_id(), sp.v, 0, 0); */
+
+		/* sp.c.type = SCHEDP_PRIO; */
+		/* sp.c.value = 13; */
+		/* sched_create_thd(cos_spd_id(), sp.v, 99, 0); */
+
 	} else {
-		while (num < 10) {
-			if (cos_get_thd_id() == high){
-				sched_block(cos_spd_id(), 0);
-				/* sched_component_take(cos_spd_id()); */
-				/* sched_component_release(cos_spd_id()); */
+		if (cos_get_thd_id() == high || cos_get_thd_id() == low){
+			printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id());
+			/* timed_event_block(cos_spd_id(), 1); */
+			/* periodic_wake_create(cos_spd_id(), 1); */
+			while (num < 10) {
+				if (cos_get_thd_id() == high){
+					printc("call block num %d\n", num);
+					sched_block(cos_spd_id(), 0);
+					sched_component_take(cos_spd_id());
+					sched_component_release(cos_spd_id());
+				}
+			
+				if (cos_get_thd_id() == low){
+					num++;
+					sched_component_take(cos_spd_id());
+					printc("call wakeup num %d\n", num);
+					sched_wakeup(cos_spd_id(), high);
+					sched_component_release(cos_spd_id());
+				}
+				/* periodic_wake_wait(cos_spd_id()); */
 			}
 			
-			if (cos_get_thd_id() == low){
-				num++;
-				/* sched_component_take(cos_spd_id()); */
-				sched_wakeup(cos_spd_id(), high);
-				/* sched_component_release(cos_spd_id()); */
-			}
+			printc("THE ending......thd %d\n", cos_get_thd_id());
 		}
-		
-		printc("THE ending......thd %d\n", cos_get_thd_id());
 	}
 	
 	return;

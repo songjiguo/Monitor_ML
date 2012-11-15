@@ -3,6 +3,7 @@
 
 #include <res_spec.h>
 
+int sched_wakeup_hepler(spdid_t spdid, unsigned short int thd_id);
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id);
 int sched_block(spdid_t spdid, unsigned short int dependency_thd);
 

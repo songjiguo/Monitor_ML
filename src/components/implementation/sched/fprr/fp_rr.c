@@ -71,6 +71,7 @@ static inline void fp_add_thd(struct sched_thd *t, unsigned short int prio)
 
 	sched_get_metric(t)->priority = prio;
 	sched_set_thd_urgency(t, prio);
+	/* printc("add thd %d (prio %d) onto runqueue!!!\n", t->id, prio); */
 	fp_move_end_runnable(t);
 
 	return;
@@ -79,7 +80,7 @@ static inline void fp_add_thd(struct sched_thd *t, unsigned short int prio)
 static inline void fp_rem_thd(struct sched_thd *t)
 {
 	u16_t p = sched_get_metric(t)->priority;
-
+	/* printc("fp_REM.....prio %d\n",p); */
 	/* if on a list _and_ no other thread at this priority? */
 	if (EMPTY_LIST(t, prio_next, prio_prev)) return;
 
@@ -406,8 +407,9 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 			break;
 #endif
 		default:
-			printc("unknown priority option\n");
+			/* printc("unknown priority option\n"); */
 			prio = PRIO_LOW;
+			break;
 		}
 		//break; 		/* test purpose, so we can use sched_param1 to stop the fault from happenning */
 		ps++;

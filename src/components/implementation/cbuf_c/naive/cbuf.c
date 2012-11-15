@@ -669,9 +669,9 @@ cbuf_c_remrecord(int fid)
 done:
 	RELEASE();
 	return ret;
-err:
-	ret = -1;
-	goto done;
+/* err: */
+/* 	ret = -1; */
+/* 	goto done; */
 }
 
 

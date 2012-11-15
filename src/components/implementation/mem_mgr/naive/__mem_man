@@ -363,10 +363,10 @@ mapping_del(struct mapping *m)
 /**********************************/
 void some_delay()  		/* only used to compared with FT-version when injection presents */
 {
-#ifdef SWIFI_ENABLE
-	int ccc = 0;
-	while(ccc++ < 1000000) {;};
-#endif
+/* #ifdef SWIFI_ENABLE */
+/* 	int ccc = 0; */
+/* 	while(ccc++ < 1000000) {;}; */
+/* #endif */
 	return;
 }
 
@@ -508,6 +508,7 @@ int
 sched_child_cntl_thd(spdid_t spdid) 
 { 
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
+	if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0;
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 

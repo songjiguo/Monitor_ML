@@ -103,7 +103,7 @@ static inline int
 ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
 	if (cap_entry->fault.cnt != dest_spd->fault.cnt) {
-		/* printk("dest spd %d fault cnt %d\n", spd_get_index(dest_spd), dest_spd->fault.cnt); */
+		printk("dest spd %d fault cnt %d\n", spd_get_index(dest_spd), dest_spd->fault.cnt);
 		return 1;
 	}
 	else return 0;
@@ -124,10 +124,10 @@ switch_thd_fault_detect(struct thread *next)
 
 	tif    = thd_invstk_top(next);
 	n_spd  = tif->spd;
-	
+
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
+		printk("thread %d curr_fault cnt %d\n", thd_get_id(next), tif->curr_fault.cnt);
 		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
 		return 1;
 	}
@@ -145,8 +145,8 @@ interrupt_fault_detect(struct thread *next) /* for now, this is the timer thread
 	
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		/* printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt); */
-		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
+		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
+		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
 		return 1;
 	}
 	else return 0;

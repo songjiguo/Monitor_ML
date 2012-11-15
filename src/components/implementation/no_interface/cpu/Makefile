@@ -2,7 +2,7 @@ C_OBJS=spin.o
 ASM_OBJS=
 COMPONENT=cpu.o
 INTERFACES=
-DEPENDENCIES=sched printc
+DEPENDENCIES=periodic_wake sched printc mem_mgr timed_blk
 IF_LIB=
 
 include ../../Makefile.subsubdir

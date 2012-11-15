@@ -24,7 +24,7 @@ static void
 revoke_test()
 {
 	int i;
-	vaddr_t addr;
+	vaddr_t addr = 0;
 	printc("\n<<< REVOKE TEST BEGIN! >>>\n");
 
 #ifdef ONE2TEN
@@ -52,7 +52,7 @@ static void
 alias_test()
 {
 	int i;
-	vaddr_t addr;
+	vaddr_t addr = 0;
 	printc("\n<<< ALIAS TEST BEGIN! >>>\n");
 	for (i = 0; i<PAGE_NUM; i++) {
 		d_addr[i] = mm_test2();
