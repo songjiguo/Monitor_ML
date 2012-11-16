@@ -300,6 +300,12 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		rdtscll(end);
 		/* printc("LL: notification cost 2: %llu\n", (end-start)); */
 #endif
+		/* all hard coded now, should be passed in */
+		if (cos_get_thd_id() == 9) {
+			printc("\n[[ Hello, I am timer thread]]\n\n");
+			/* cos_upcall_args(COS_UPCALL_RESET_TE, 8, 0); */
+		}
+
 		printc("pop the frame and return\n");
 		return 0;
 	}

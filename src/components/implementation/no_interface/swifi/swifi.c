@@ -66,7 +66,7 @@ void cos_init(void)
 #ifdef SWIFI_ENABLE
 		printc("\nfault injector %ld\n\n", cos_spd_id());
 		if (cos_get_thd_id() == high) {
-			timed_event_block(cos_spd_id(), 3);
+			timed_event_block(cos_spd_id(), 5);
 			periodic_wake_create(cos_spd_id(), 1);
 			while(1) {
 				fault_inject();

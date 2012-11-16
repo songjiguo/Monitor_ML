@@ -543,7 +543,7 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 
 	m = mapping_lookup(s_spd, s_addr);
 	if (unlikely(!m)) {
-		printc("crashed 1 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id());
+		printc("crashed 1 --> rebuild s_addr %p mapping (thd %d)\n", (void *)s_addr, cos_get_thd_id());
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
 		assert(EMPTY_LIST(m, next, prev));
@@ -574,7 +574,7 @@ vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t 
 	LOCK();
 	m = mapping_lookup(s_spd, s_addr);
 	if (unlikely(!m)) {
-		printc("crashed 2 --> rebuild s_addr %p mapping (thd %d)\n", s_addr, cos_get_thd_id());
+		printc("crashed 2 --> rebuild s_addr %p mapping (thd %d)\n", (void *)s_addr, cos_get_thd_id());
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
 		assert(EMPTY_LIST(m, next, prev));

@@ -383,7 +383,6 @@ CSTUB_FN_ARGS_3(int, mman_revoke_page, spdid_t, spdid, vaddr_t, addr, int, flags
        measure_first = 0;
        rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT);
        assert(rdmm_list);
-       /* if (!rdmm_list) goto done; */
 
 redo:
        if (unlikely(rdmm_list->fcnt != fcounter)) flags = 1;
@@ -411,8 +410,6 @@ CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
        }
 
        record_rem(rdmm_list);
-
-done:
 
 CSTUB_POST
 

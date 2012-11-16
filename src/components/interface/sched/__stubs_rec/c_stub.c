@@ -175,6 +175,7 @@ CSTUB_ASM_3(sched_wakeup, spdid, dep_thd, crash_flag)
 		       sched_component_take(cos_spd_id());
 	       }
 
+	       /* test time event spd */
 	       printc("thd %d wakeup failed and redo!!\n", cos_get_thd_id());
 	       crash_flag = 1;
        	       goto redo;

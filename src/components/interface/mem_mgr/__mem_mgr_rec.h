@@ -31,6 +31,7 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags);
 int mman_release_page(spdid_t spd, vaddr_t addr, int flags);
 /* remove all descendent mappings of this one (but not this one). */ 
 int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags); 
+int __mman_revoke_page(spdid_t spd, vaddr_t addr, int flags);
 /* The invoking component (s_spd) must own the mapping. */
 vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr);
 vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr);

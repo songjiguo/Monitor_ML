@@ -35,11 +35,12 @@ ramfs_rec_c = '__ramfs_rec'
 ramfs_nor_c = '__ramfs'
 ramfs_c = 'ramfs.c'
 
-def query(name, default = "n"):
+def query(name, default = "0"):
 
     valid = {"n":"normal","r":"recovery"}
 
     prompt = " [n/r] "
+    print 
     sys.stdout.write(name + prompt)
 
     choice = raw_input().lower()
@@ -54,11 +55,11 @@ def query(name, default = "n"):
 def main():
 
     global p_rec, p_nor, p_dst
-
-    print "n:normal, r:recovery"
-
     path = os.path.dirname(os.getcwd())
 
+    print
+    print "setting normal version or fault tolerance version"
+    print "(n:normal, r:recovery, nothing: current version)"
     for i in range(0,len(names)):
         prefix = path + interface_path + names[i]
         os.chdir(prefix)
@@ -67,22 +68,25 @@ def main():
         p_nor = normal_stubs
         p_dst = using_stubs
 
+        ret = query(names[i], '0')
+
+        if (ret == '0'):
+            os.system("ls -alF | grep '>' | awk '{print $8 $9 $10}'")
+            continue
+
         if os.path.exists(p_dst):
             os.unlink(p_dst)
 
         if os.path.exists(mm_header):
             os.unlink(mm_header)
 
-        ret = query(names[i], 'normal')
-
         # interface
-        if (ret == 'normal') or (ret == 'n'):
-            os.system("ln -s " + p_nor + " " + p_dst)
+        if (ret == 'normal') or (ret == 'n'):  
+          os.system("ln -s " + p_nor + " " + p_dst)
         elif (ret == 'recovery') or (ret == 'r'):
             os.system("ln -s " + p_rec + " " + p_dst)
         else:
             os.system("ln -s " + p_nor + " " + p_dst)
-
 
         # component
         if (names[i] == 'mem_mgr'):

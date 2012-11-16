@@ -64,7 +64,7 @@ alias_test()
 		/* printc("cost %llu\n", end - start); */
 		
 	}
-	mm_test2_34();
+	/* mm_test2_34(); */
 	
 	printc("<<< ALIAS TEST END! >>>\n\n");
 	return;

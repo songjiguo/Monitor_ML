@@ -35,8 +35,7 @@ void mm_test2_34()
 #endif
 			d_addr  = mm_test3();
 			if (!d_addr) BUG();
-			mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+1, d_addr);
-
+			if (d_addr != mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+1, d_addr)) BUG();
 		} else {
 #ifdef ONE2FIVE
 			s_addr = addr[1];
@@ -46,7 +45,7 @@ void mm_test2_34()
 
 			d_addr  = mm_test4();
 			if (!d_addr) BUG();
-			mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+2, d_addr);
+			if (d_addr != mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+2, d_addr)) BUG();
 		}
 	}
 	return;
