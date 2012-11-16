@@ -62,11 +62,13 @@ void cos_init(void *arg)
 		/* sched_create_thd(cos_spd_id(), sp.v, 99, 0); */
 
 	} else {
+		printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id());
 		if (cos_get_thd_id() == high || cos_get_thd_id() == low){
-			printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id());
+			/* printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id()); */
 			timed_event_block(cos_spd_id(), 1);
 			/* periodic_wake_create(cos_spd_id(), 1); */
-			while (num < 200) {
+			i = 0;
+			while (i++ < 600) {
 				if (cos_get_thd_id() == high){
 					printc("thd %d call block num %d\n", cos_get_thd_id(), num);
 					sched_block(cos_spd_id(), 0);

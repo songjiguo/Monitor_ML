@@ -715,8 +715,8 @@ static void flip_reg_bit(long *reg)
 static void cos_flip_all_regs(struct pt_regs *r) {
 	/* printk("flip all registers for the next instruction, except eip\n"); */
 
-	flip_reg_bit(&r->sp); /* esp */
-	flip_reg_bit(&r->bp); /* ebp */
+	/* flip_reg_bit(&r->sp); /\* esp *\/ */
+	/* flip_reg_bit(&r->bp); /\* ebp *\/ */
 	flip_reg_bit(&r->ax); /* eax */
 	flip_reg_bit(&r->bx); /* ebx */
 	flip_reg_bit(&r->cx); /* ecx */
@@ -794,17 +794,19 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 		}
 		return -1;
 	}
-	case COS_THD_CURR_SPD:
+	case COS_THD_FIND_SPD_TO_FLIP:
 	{
 		struct thd_invocation_frame *tif;
 		int i;
-		/* try to inject fault into scheduler */
-		if (arg1 == 2) {
-			cos_flip_all_regs(&(thd->regs));
-		} else {
-			tif = thd_invstk_top(thd);
-			if (arg1 == spd_get_index(tif->spd)) return arg1;
-		}
+		tif = thd_invstk_top(thd);
+		if (arg1 == spd_get_index(tif->spd)) return arg1;
+		
+		return -1;
+	}
+	case COS_THD_FLIP_SPD:  /* for SWIFI: scheduler only */
+	{
+		struct thd_invocation_frame *tif;
+		cos_flip_all_regs(&(thd->regs));
 		
 		return -1;
 	}

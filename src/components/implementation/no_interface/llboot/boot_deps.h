@@ -215,12 +215,12 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd);
 	printc("LL: <<0>> thd %d : failed spd %d (this spd %ld)\n", cos_get_thd_id(), spdid, cos_spd_id());
 
-	/* only use  for comparison, like mm failure */
-	printc("there is no mechanism to handle the fault in this case, exit\n");
-	sched_exit();
+	/* /\* only use  for comparison, like mm failure *\/ */
+	/* printc("there is no mechanism to handle the fault in this case, exit\n"); */
+	/* sched_exit(); */
 
 	first++;
-	if(first == 5) {
+	if(first == 20) {
 		printc("has failed %d times\n",first);
 		sched_exit();
 	}
