@@ -43,7 +43,7 @@
 
 //#define TEST_CREATE_THD       /* change spin.c */
 //#define TEST_CREATE_THREAD_DEFAULT   /* has tested, by change booter.c thread_default fn */
-#define TEST_WAKEUP
+//#define TEST_WAKEUP
 //#define TEST_BLOCK
 //#define TEST_TAKE_COMPONENT
 //#define TEST_RELEASE_COMPONENT
@@ -777,6 +777,8 @@ int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id)
 	}
 	printc("ok, %d wakeup %d now\n", cos_get_thd_id(), thd_id);
 	cos_sched_lock_release();
+	
+	return 0;
 }
 static int aaa = 0;
 /* 

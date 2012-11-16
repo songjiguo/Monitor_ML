@@ -22,27 +22,31 @@ vaddr_t mm_test2(void)
 
 void mm_test2_34()
 {
-	vaddr_t d_addr;
+	vaddr_t d_addr, test;
 	vaddr_t s_addr;
 	int i;
 
 	for (i = 0; i< PAGE_NUM; i++) {
-		s_addr = addr[i];
 		if (i < PAGE_NUM/2) {
 #ifdef ONE2FIVE
 			s_addr = addr[0];
+#else
+			s_addr = addr[i];
 #endif
 			d_addr  = mm_test3();
 			if (!d_addr) BUG();
-			if (d_addr!= mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+1, d_addr)) BUG();
+			mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+1, d_addr);
 
 		} else {
 #ifdef ONE2FIVE
 			s_addr = addr[1];
+#else
+			s_addr = addr[i];
 #endif
+
 			d_addr  = mm_test4();
 			if (!d_addr) BUG();
-			if (d_addr!= mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+2, d_addr)) BUG();
+			mman_alias_page(cos_spd_id(), s_addr, cos_spd_id()+2, d_addr);
 		}
 	}
 	return;

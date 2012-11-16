@@ -115,5 +115,4 @@ static void flip_all_regs(struct cos_regs *r) {
 	return;
 }
 
-
 #endif	/* SWIFI_REGS_H */

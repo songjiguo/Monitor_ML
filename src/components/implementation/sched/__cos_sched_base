@@ -741,6 +741,7 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 	report_event(THD_WAKE);
 }
 
+
 /* 
  * FIXME: should verify that the blocks and wakes come from the same
  * component.  This is the external interface.
@@ -750,6 +751,9 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 	struct sched_thd *thd;
 	
 	cos_sched_lock_take();
+
+	unsigned long ll = 0;
+	while(ll++ < 1000000);
 		
 	/* printc("thread %d waking up thread %d. %d\n", cos_get_thd_id(), thd_id, 0); */
 	thd = sched_get_mapping(thd_id);
@@ -860,6 +864,10 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	thd = sched_get_current();
 	assert(thd);
 	assert(spdid);
+
+
+	unsigned long ll = 0;
+	while(ll++ < 1000000);
 
 	/* we shouldn't block while holding a component lock */
 	if (unlikely(0 != thd->ncs_held)) goto warn;

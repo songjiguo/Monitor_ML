@@ -321,7 +321,7 @@ __mapping_destroy(struct mapping *m)
 	cvas_deref(cv);
 
 	idx = cos_mmap_cntl(COS_MMAP_REVOKE, 0, m->spdid, m->addr, 0);
-	if (!idx) return; 	/* FIXME: fault makes the pte not presented in pgtbl, but mm still can see it */
+//	if (!idx) return; 	/* FIXME: fault makes the pte not presented in pgtbl, but mm still can see it */
 	assert(idx == frame_index(m->f));
 	frame_deref(m->f);
 	cslab_free_mapping(m);
@@ -365,7 +365,7 @@ void some_delay()  		/* only used to compared with FT-version when injection pre
 {
 /* #ifdef SWIFI_ENABLE */
 /* 	int ccc = 0; */
-/* 	while(ccc++ < 1000000) {;}; */
+/* 	while(ccc++ < 100000) {;}; */
 /* #endif */
 	return;
 }
@@ -508,7 +508,7 @@ int
 sched_child_cntl_thd(spdid_t spdid) 
 { 
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
-	if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0;
+	/* if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0; */
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 

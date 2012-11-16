@@ -64,22 +64,22 @@ void cos_init(void *arg)
 	} else {
 		if (cos_get_thd_id() == high || cos_get_thd_id() == low){
 			printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id());
-			/* timed_event_block(cos_spd_id(), 1); */
+			timed_event_block(cos_spd_id(), 1);
 			/* periodic_wake_create(cos_spd_id(), 1); */
-			while (num < 10) {
+			while (num < 200) {
 				if (cos_get_thd_id() == high){
-					printc("call block num %d\n", num);
+					printc("thd %d call block num %d\n", cos_get_thd_id(), num);
 					sched_block(cos_spd_id(), 0);
-					sched_component_take(cos_spd_id());
-					sched_component_release(cos_spd_id());
+					/* sched_component_take(cos_spd_id()); */
+					/* sched_component_release(cos_spd_id()); */
 				}
 			
 				if (cos_get_thd_id() == low){
 					num++;
-					sched_component_take(cos_spd_id());
-					printc("call wakeup num %d\n", num);
+					/* sched_component_take(cos_spd_id()); */
+					printc("thd %d call wakeup num %d\n", cos_get_thd_id(), num);
 					sched_wakeup(cos_spd_id(), high);
-					sched_component_release(cos_spd_id());
+					/* sched_component_release(cos_spd_id()); */
 				}
 				/* periodic_wake_wait(cos_spd_id()); */
 			}

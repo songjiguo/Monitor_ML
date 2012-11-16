@@ -678,6 +678,55 @@ done:
 	return thd_get_id(thd);
 }
 
+
+unsigned long
+random()
+{
+	unsigned long x, hi, lo, t;
+
+	/*
+	 * Compute x[n + 1] = (7^5 * x[n]) mod (2^31 - 1).
+	 * From "Random number generators: good ones are hard to find",
+	 * Park and Miller, Communications of the ACM, vol. 31, no. 10,
+	 * October 1988, p. 1195.
+	 */
+	rdtscll(x);
+	hi = x / 127773;
+	lo = x % 127773;
+	t = 16807 * lo - 2836 * hi;
+	if (t <= 0) t += 0x7fffffff;
+	return t;
+}
+
+static void flip_reg_bit(long *reg)
+{
+	int flip_bit = 0;
+
+	flip_bit = random() & 0x1f;
+	/* printk("%2dth bit is going to be flipped ==> \n", flip_bit + 1); */
+	flip_bit = 1 << flip_bit;
+	
+	*reg = (*reg) ^ flip_bit;
+	return;
+}
+
+
+/* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
+static void cos_flip_all_regs(struct pt_regs *r) {
+	/* printk("flip all registers for the next instruction, except eip\n"); */
+
+	flip_reg_bit(&r->sp); /* esp */
+	flip_reg_bit(&r->bp); /* ebp */
+	flip_reg_bit(&r->ax); /* eax */
+	flip_reg_bit(&r->bx); /* ebx */
+	flip_reg_bit(&r->cx); /* ecx */
+	flip_reg_bit(&r->dx); /* edx */
+	flip_reg_bit(&r->di); /* edi */
+	flip_reg_bit(&r->si); /* esi */
+
+	return;
+}
+
 COS_SYSCALL int 
 cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 {
@@ -743,6 +792,20 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 		for (i = 0 ; (tif = thd_invstk_nth(thd, i)) ; i++) {
 			if (arg1 == spd_get_index(tif->spd)) return arg1;
 		}
+		return -1;
+	}
+	case COS_THD_CURR_SPD:
+	{
+		struct thd_invocation_frame *tif;
+		int i;
+		/* try to inject fault into scheduler */
+		if (arg1 == 2) {
+			cos_flip_all_regs(&(thd->regs));
+		} else {
+			tif = thd_invstk_top(thd);
+			if (arg1 == spd_get_index(tif->spd)) return arg1;
+		}
+		
 		return -1;
 	}
 	case COS_THD_INVFRM_IP:
@@ -1150,7 +1213,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 		thd = switch_thread_get_target(next_thd, curr, curr_spd, &ret_code);
 		if (unlikely(NULL == thd)) goto_err(ret_err, "get target");
 	}
-	/* print something here */
+	/* /\* print something here *\/ */
 	/* printk("<<<<<"); */
 	/* printk("cos_switch: curr %d in spd %d -> thread %d", thd_get_id(curr), spd_get_index(curr_spd), thd_get_id(thd)); */
 	/* printk(">>>>>\n"); */

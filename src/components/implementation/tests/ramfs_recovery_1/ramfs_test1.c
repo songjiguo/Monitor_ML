@@ -407,6 +407,7 @@ void cos_init(void)
 {
 	static int first = 0;
 	union sched_param sp;
+	int i;
 	
 	if(first == 0){
 		first = 1;
@@ -436,6 +437,7 @@ void cos_init(void)
 	if (cos_get_thd_id() == high) {
 		timed_event_block(cos_spd_id(), 1);
 		periodic_wake_create(cos_spd_id(), 2);
+		printc("ram fs test...\n");
 		while(1) {
 			test1();
 			periodic_wake_wait(cos_spd_id());
