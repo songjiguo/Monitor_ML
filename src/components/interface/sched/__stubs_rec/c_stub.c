@@ -35,17 +35,18 @@ static unsigned long fcounter;
 int crt_sec_taken = 0;   	/* flag that indicates the critical section for the spd has been taken */
 int crt_sec_owner = 0;         /* which thread has actually taken the critical section  */
 
+unsigned int timer_thd = 0;
+unsigned long wakeup_time = 0;
+
 /************************************/
 /******interface tracking data ******/
 /************************************/
 /* 
    recovery data structure, mainly for block/wakeup for created
    threads, they should be already taken cared from the booter
-   interface and kernel introspection 
- 
-   In case of the scheduler failure, the state of blocked thread
-   needs be restored 
-*/
+   interface and kernel introspection (not used. since thread
+   block/wakeup is taken care already by the priority)
+ */
 
 struct blked_thd {
 	unsigned int thd_id;
@@ -79,8 +80,6 @@ blked_thd_lookup()
 	return NULL;
 }
 
-
-
 /************************************/
 /******  client stub functions ******/
 /************************************/
@@ -110,6 +109,13 @@ CSTUB_ASM_4(sched_create_thd, spdid, sched_param0, sched_param1, desired_thd)
 		       printc("take component crt_thd\n");
 		       sched_component_take(cos_spd_id());
 	       }
+
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("1\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
+
        	       goto redo;
        }
 
@@ -143,6 +149,12 @@ CSTUB_ASM_4(sched_create_thread_default, spdid, sched_param0, sched_param1, desi
 	       }
 
 	       desired_thd = 0;
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("2\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
+
        	       goto redo;
        }
 
@@ -178,6 +190,12 @@ CSTUB_ASM_3(sched_wakeup, spdid, dep_thd, crash_flag)
 	       /* test time event spd */
 	       printc("thd %d wakeup failed and redo!!\n", cos_get_thd_id());
 	       crash_flag = 1;
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("3\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
+
        	       goto redo;
        }
 
@@ -186,6 +204,7 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_2(int, sched_block, spdid_t, spdid, unsigned short int, thd_id)
         unsigned long long start, end;
+        struct period_thd *item;
 redo:
 	/* printc("thread %d calls << sched_block >>\n",cos_get_thd_id()); */
 #ifdef MEASU_SCHED_INTERFACE_BLOCK
@@ -209,6 +228,11 @@ CSTUB_ASM_2(sched_block, spdid, thd_id)
 	       }
 
 	       printc("thd %d block failed and redo!!\n", cos_get_thd_id());
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("4\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
        	       goto redo;
        }
 
@@ -244,6 +268,12 @@ CSTUB_ASM_1(sched_component_take, spdid)
 		       sched_block(cos_spd_id(), crt_sec_owner);
 		       /* printc("now thread %d goto redo\n", cos_get_thd_id()); */
 	       }
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("5\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
+
        	       goto redo;
        }
 
@@ -280,11 +310,73 @@ CSTUB_ASM_1(sched_component_release, spdid)
 	       /* thread that calls to release should have called the
 	       	* component_take and had the critical section */
 
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("6\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
+
 	       goto redo;
        }
 
        crt_sec_owner = 0;
        crt_sec_taken = 0;
        /* printc("thread %d calls << sched_component_release >>done!!!\n",cos_get_thd_id()); */
+
+CSTUB_POST
+
+
+CSTUB_FN_ARGS_1(int, sched_timeout_thd, spdid_t, spdid)
+redo:
+
+CSTUB_ASM_1(sched_timeout_thd, spdid)
+
+       if (unlikely (fault)){
+	       /* printc("spd_ update cap %d \n", uc->cap_no); */
+	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+		       printc("set cap_fault_cnt failed\n");
+		       BUG();
+	       }
+       	       fcounter++;
+
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("7\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
+
+	       goto redo;
+       }
+
+       if(!ret) timer_thd = cos_get_thd_id(); /* record the wakeup thread over the interface */
+       printc("interface: wakeup thread is %d\n",timer_thd);
+
+CSTUB_POST
+
+
+CSTUB_FN_ARGS_2(int, sched_timeout, spdid_t, spdid, unsigned long, amnt)
+	struct period_thd *item;
+redo:
+CSTUB_ASM_2(sched_timeout, spdid, amnt)
+
+       if (unlikely (fault)){
+	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
+		       printc("set cap_fault_cnt failed\n");
+		       BUG();
+	       }
+       	       fcounter++;
+
+	       if (unlikely(cos_get_thd_id() == timer_thd)) {
+		       printc("8\n");
+		       sched_timeout_thd(cos_spd_id());
+		       sched_timeout(cos_spd_id(), wakeup_time);
+	       }
+       	       goto redo;
+       }
+       printc("cli: thd %d amnt %lu for the sched_timeout \n", cos_get_thd_id(), amnt);
+       if (cos_get_thd_id() == timer_thd) {
+	       wakeup_time = amnt; 
+	       printc("wakeup time is set to  %lu \n", wakeup_time);
+       }
 
 CSTUB_POST

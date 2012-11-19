@@ -39,14 +39,14 @@ void cos_init(void *arg)
 		first = 1;
 		num = 1;
 
-		printc("call create \n");
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 9;
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 10;
-		/* low = sched_create_thd(cos_spd_id(), sp.v, 99, 0); /\* man, I failed here 3 times!!! 99 *\/ */
+		/* man, I failed here 3 times!!! 99, manually */
+		/* low = sched_create_thd(cos_spd_id(), sp.v, 99, 0); */
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		/* sp.c.type = SCHEDP_PRIO; */

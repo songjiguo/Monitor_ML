@@ -40,7 +40,7 @@ int fault_inject()
 
 		/* printc("found thd %d and spd %d\n", tid, spdid); */
 		counter++;
-		printc("<<%lu>> flip the register in component %d (tid %d)!!!\n", counter, TARGET_COMPONENT, tid);
+		/* printc("<<%lu>> flip the register in component %d (tid %d)!!!\n", counter, TARGET_COMPONENT, tid); */
 		cos_regs_read(tid, spdid, &r);
 		/* cos_regs_print(&r); */
 		if (TARGET_COMPONENT == 2) cos_thd_cntl(COS_THD_FLIP_SPD, tid, TARGET_COMPONENT, 0);
@@ -53,7 +53,7 @@ int fault_inject()
 
 void cos_init(void)
 {
-	static int first = 0;
+	static int first = 0, flag = 0;
 	union sched_param sp;
 	int rand;
 
@@ -67,10 +67,11 @@ void cos_init(void)
 		printc("\nfault injector %ld\n\n", cos_spd_id());
 		if (cos_get_thd_id() == high) {
 			timed_event_block(cos_spd_id(), 5);
-			periodic_wake_create(cos_spd_id(), 1);
+			periodic_wake_create(cos_spd_id(), 5);
 			while(1) {
-				fault_inject();
-				periodic_wake_wait(cos_spd_id());
+				periodic_wake_wait(cos_spd_id()); /*  run this first to update the wakeup time */
+				if (flag == 1) fault_inject();
+				flag = 1;
 			}
 		}
 #endif

@@ -281,7 +281,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 int
 fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
-	/* printc("parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip); */
+	printc("parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip);
 	unsigned long r_ip;
 
 #ifdef MEAS_NOTIF_COST_2
@@ -303,7 +303,6 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* all hard coded now, should be passed in */
 		if (cos_get_thd_id() == 9) {
 			printc("\n[[ Hello, I am timer thread]]\n\n");
-			/* cos_upcall_args(COS_UPCALL_RESET_TE, 8, 0); */
 		}
 
 		printc("pop the frame and return\n");

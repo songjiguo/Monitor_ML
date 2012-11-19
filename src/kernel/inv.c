@@ -713,16 +713,15 @@ static void flip_reg_bit(long *reg)
 
 /* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
 static void cos_flip_all_regs(struct pt_regs *r) {
-	/* printk("flip all registers for the next instruction, except eip\n"); */
 
 	/* flip_reg_bit(&r->sp); /\* esp *\/ */
 	/* flip_reg_bit(&r->bp); /\* ebp *\/ */
-	flip_reg_bit(&r->ax); /* eax */
-	flip_reg_bit(&r->bx); /* ebx */
-	flip_reg_bit(&r->cx); /* ecx */
+	/* flip_reg_bit(&r->ax); /\* eax *\/ */
+	/* flip_reg_bit(&r->bx); /\* ebx *\/ */
+	/* flip_reg_bit(&r->cx); /\* ecx *\/ */
 	flip_reg_bit(&r->dx); /* edx */
-	flip_reg_bit(&r->di); /* edi */
-	flip_reg_bit(&r->si); /* esi */
+	/* flip_reg_bit(&r->di); /\* edi *\/ */
+	/* flip_reg_bit(&r->si); /\* esi *\/ */
 
 	return;
 }
@@ -806,6 +805,7 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 	case COS_THD_FLIP_SPD:  /* for SWIFI: scheduler only */
 	{
 		struct thd_invocation_frame *tif;
+		/* printk("cos:thd %d flip registers!\n", thd_get_id(curr)); */
 		cos_flip_all_regs(&(thd->regs));
 		
 		return -1;

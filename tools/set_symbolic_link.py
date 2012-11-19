@@ -71,7 +71,7 @@ def main():
         ret = query(names[i], '0')
 
         if (ret == '0'):
-            os.system("ls -alF | grep '>' | awk '{print $8 $9 $10}'")
+            os.system("ls -alF | grep '>' | grep 'stub'| awk '{print $8 $9 $10}'")
             continue
 
         if os.path.exists(p_dst):
