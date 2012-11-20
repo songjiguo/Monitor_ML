@@ -485,7 +485,7 @@ int periodic_wake_get_period(unsigned short int tid)
 
 int periodic_wake_create(spdid_t spdinv, unsigned int period)
 {
-	printc("thd %d calling period_wake_create\n", cos_get_thd_id());
+	/* printc("thd %d calling period_wake_create\n", cos_get_thd_id()); */
 
 	struct thread_event *te;
 	unsigned short int tid = cos_get_thd_id();
@@ -516,7 +516,7 @@ int periodic_wake_create(spdid_t spdinv, unsigned int period)
 
 	RELEASE(spdid);
 
-	printc("leaving the periodic wake create\n");
+	/* printc("leaving the periodic wake create\n"); */
 	return 0;
 }
 
@@ -548,7 +548,7 @@ int periodic_wake_wait(spdid_t spdinv)
 	struct thread_event *te;
 	u16_t tid = cos_get_thd_id();
 	long long t;
-	printc("thd %d calling period_wake_wait\n", cos_get_thd_id());
+	/* printc("thd %d calling period_wake_wait\n", cos_get_thd_id()); */
 
 	TAKE(spdid);
 	te = te_pget(tid);
@@ -587,11 +587,11 @@ int periodic_wake_wait(spdid_t spdinv)
 	te->flags |= TE_BLOCKED;
 	RELEASE(spdid);
 
-	printc("period wake wait calling block..\n");
+	/* printc("period wake wait calling block..\n"); */
 	if (-1 == sched_block(spdid, 0)) {
 		prints("fprr: sched block failed in timed_event_periodic_wait.");	}
 
-	printc("leaving the periodic wake wait\n");
+	/* printc("leaving the periodic wake wait\n"); */
 
 	return 0;
 err:
@@ -604,7 +604,7 @@ static void start_timer_thread(void)
 	spdid_t spdid = cos_spd_id();
 	unsigned int tick_freq;
 
-	printc("start timer thread\n");
+	/* printc("start timer thread\n"); */
 	sched_timeout_thd(spdid);
 	tick_freq = sched_tick_freq();
 	assert(tick_freq == 100);
@@ -619,7 +619,6 @@ static void start_timer_thread(void)
 	sched_block(spdid, 0);
 	/* Wait for events, then act on expired events.  Loop. */
 	while (1) {
-		printc("(1) te %d\n", cos_get_thd_id());
 		event_time_t next_wakeup;
 
 		cos_mpd_update(); /* update mpd config given this
@@ -634,16 +633,13 @@ static void start_timer_thread(void)
 		}
 		event_expiration(ticks);
 		next_wakeup = next_event_time();
-		printc("(2) te %d\n", cos_get_thd_id());
 		/* Are there no pending events??? */
 		if (TIMER_NO_EVENTS == next_wakeup) {
 			if (sched_component_release(spdid)) {
 				prints("fprr: scheduler lock release failed!!!");
 				BUG();
 			}
-			printc("(3) te %d ---> sched_block\n", cos_get_thd_id());
 			sched_block(spdid, 0);
-			printc("<---- (3.1) te %d unblock\n", cos_get_thd_id());
 		} else {
 			unsigned int wakeup;
 #ifdef LINUX_HIGHEST_PRIORITY
@@ -655,9 +651,7 @@ static void start_timer_thread(void)
 				prints("fprr: scheduler lock release failed!!!");
 				BUG();
 			}
-			printc("(4) te %d  ---> sched_timeout\n", cos_get_thd_id());
 			sched_timeout(spdid, wakeup);
-			printc("<-----sched_timeout\n");
 		}
 	}
 }
@@ -689,8 +683,6 @@ void cos_init()
 	union sched_param sp;
 	int thdid;
 	static int first = 1;
-
-	printc("thd %d I Am In TE SPD\n", cos_get_thd_id());
 
 	if (first) {
 		first = 0;

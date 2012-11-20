@@ -67,7 +67,7 @@ void cos_init(void)
 		printc("\nfault injector %ld\n\n", cos_spd_id());
 		if (cos_get_thd_id() == high) {
 			timed_event_block(cos_spd_id(), 5);
-			periodic_wake_create(cos_spd_id(), 5);
+			periodic_wake_create(cos_spd_id(), 20);
 			while(1) {
 				periodic_wake_wait(cos_spd_id()); /*  run this first to update the wakeup time */
 				if (flag == 1) fault_inject();

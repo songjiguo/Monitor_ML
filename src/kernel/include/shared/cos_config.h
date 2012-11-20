@@ -4,7 +4,7 @@
 #include "cpu_ghz.h"
 #define CPU_TIMER_FREQ 100 // set in your linux .config
 
-#define RUNTIME                3 // seconds
+#define RUNTIME                10 // seconds
 
 // After how many seconds should schedulers print out their information?
 #define SCHED_PRINTOUT_PERIOD  9
@@ -54,6 +54,6 @@
  * use it, run python set_symbolic_link.py under composite/tools */
 
 #define RECOVERY_ENABLE 1               // 1 will enable the fault notification in Composite kernel
-#define SWIFI_ENABLE    1		// 1 will enable the fault injection (swifi component), for now always on
+//#define SWIFI_ENABLE    1		// 1 will enable the fault injection (swifi component), for now always on
 
 #endif /* COS_CONFIG_H */

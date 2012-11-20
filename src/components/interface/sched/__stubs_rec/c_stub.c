@@ -236,8 +236,6 @@ CSTUB_ASM_2(sched_block, spdid, thd_id)
        	       goto redo;
        }
 
-
-
 CSTUB_POST
 
 

@@ -1513,6 +1513,8 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
+	printc("cos_net twrite >>>\n");
+
 	buf = cbuf2buf(cbid, sz);
 	if (!buf)           return -EINVAL;
 	if (tor_isnull(td)) return -EINVAL;
@@ -1579,6 +1581,7 @@ static void init_lwip(void)
 	/* setting the IP address */
 	IP4_ADDR(&ip, 10,0,2,8);
 	IP4_ADDR(&gw, 10,0,1,1);
+
 	/* IP4_ADDR(&ip, 192,168,1,128); */
 	/* IP4_ADDR(&gw, 192,168,1,1); */
 	IP4_ADDR(&mask, 255,255,255,0);

@@ -714,14 +714,14 @@ static void flip_reg_bit(long *reg)
 /* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
 static void cos_flip_all_regs(struct pt_regs *r) {
 
-	/* flip_reg_bit(&r->sp); /\* esp *\/ */
-	/* flip_reg_bit(&r->bp); /\* ebp *\/ */
-	/* flip_reg_bit(&r->ax); /\* eax *\/ */
-	/* flip_reg_bit(&r->bx); /\* ebx *\/ */
-	/* flip_reg_bit(&r->cx); /\* ecx *\/ */
+	flip_reg_bit(&r->sp); /* esp */
+	flip_reg_bit(&r->bp); /* ebp */
+	flip_reg_bit(&r->ax); /* eax */
+	flip_reg_bit(&r->bx); /* ebx */
+	flip_reg_bit(&r->cx); /* ecx */
 	flip_reg_bit(&r->dx); /* edx */
-	/* flip_reg_bit(&r->di); /\* edi *\/ */
-	/* flip_reg_bit(&r->si); /\* esi *\/ */
+	flip_reg_bit(&r->di); /* edi */
+	flip_reg_bit(&r->si); /* esi */
 
 	return;
 }

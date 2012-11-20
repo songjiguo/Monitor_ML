@@ -68,7 +68,7 @@ void cos_init(void *arg)
 			timed_event_block(cos_spd_id(), 1);
 			/* periodic_wake_create(cos_spd_id(), 1); */
 			i = 0;
-			while (i++ < 600) {
+			while (1) {
 				if (cos_get_thd_id() == high){
 					printc("thd %d call block num %d\n", cos_get_thd_id(), num);
 					sched_block(cos_spd_id(), 0);

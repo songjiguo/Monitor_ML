@@ -51,6 +51,8 @@ mpd_report(void)
 	struct edge *e;
 	struct protection_domain *pd;
 
+	return;  		/* ignore this for now SWIFI */
+
 	printc("Capability Invocations:\t");
 	for (e = FIRST_LIST(&es, next, prev) ; 
 	     e != &es ;
