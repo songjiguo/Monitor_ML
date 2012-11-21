@@ -12,9 +12,9 @@
 int high;
 unsigned long counter = 0;
 
-//#define TARGET_COMPONENT 15   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
+#define TARGET_COMPONENT 15   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
 //#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
-#define TARGET_COMPONENT  2   /* sched */
+//#define TARGET_COMPONENT  2   /* sched */
 
 #ifndef TARGET_COMPONENT   
 #define TARGET_COMPONENT 0    	/* no fault injection */

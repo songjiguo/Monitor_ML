@@ -541,17 +541,17 @@ int netif_event_xmit(spdid_t spdid, char *mem, int sz)
 td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
 	      tor_flags_t tflags, long evtid, int flag)
 {
-	return 0;
+	/* printc("cos_if: __tsplit\n"); */
+	return tsplit(spdid, tid, param, len, tflags, evtid);
 }
 
 td_t 
 tsplit(spdid_t spdid, td_t tid, char *param, int len, 
        tor_flags_t tflags, long evtid)
 {
-	printc("netif tsplit\n");
 	td_t ret = -ENOMEM;
 	struct torrent *t;
-
+	/* printc("cos_if: tsplit\n"); */
 	if (tid != td_root) return -EINVAL;
 	netif_event_create(spdid);
 	t = tor_alloc((void*)1, tflags);
@@ -614,11 +614,11 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
+	/* printc("netif: tread\n"); */
 	if (tor_isnull(td)) return -EINVAL;
 	t = tor_lookup(td);
 	if (!t)                      ERR_THROW(-EINVAL, done);
 	if (!(t->flags & TOR_WRITE)) ERR_THROW(-EACCES, done);
-
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
 	ret = netif_event_wait(spdid, buf, sz);

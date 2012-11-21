@@ -21,6 +21,7 @@
 #include <cbuf.h>
 
 extern td_t parent_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
+extern td_t parent___tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, int flag);
 extern void parent_trelease(spdid_t spdid, td_t tid);
 extern int parent_tread(spdid_t spdid, td_t td, int cbid, int sz);
 extern int parent_twrite(spdid_t spdid, td_t td, int cbid, int sz);
@@ -48,12 +49,6 @@ const char *name = "cos_ip";
 /* 	return netif_event_create(cos_spd_id()); */
 /* } */
 
-td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, int flag)
-{
-	return 0;
-}
-
 td_t 
 tsplit(spdid_t spdid, td_t tid, char *param, int len, 
        tor_flags_t tflags, long evtid)
@@ -61,8 +56,10 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	td_t ret = -ENOMEM, ntd;
 	struct torrent *t;
 
+	printc("cos_ip: tsplit\n");
+
 	if (tid != td_root) return -EINVAL;
-	ntd = parent_tsplit(cos_spd_id(), tid, param, len, tflags, evtid);
+	ntd = parent___tsplit(cos_spd_id(), tid, param, len, tflags, evtid, 0);
 	if (ntd <= 0) ERR_THROW(ntd, err);
 
 	t = tor_alloc((void*)ntd, tflags);
@@ -70,6 +67,15 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	ret = t->td;
 err:
 	return ret;
+}
+
+
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
+	      tor_flags_t tflags, long evtid, int flag)
+{
+	printc("cos_ip: __tsplit\n");
+	return tsplit(spdid, tid, param, len, tflags, evtid);
+	/* return parent___tsplit(spdid, tid, param, len, tflags, evtid, flag); */
 }
 
 void
@@ -138,17 +144,18 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	int ret = -1;
 	cbuf_t ncbid;
 
+	/* printc("cos_ip: tread\n"); */
 	if (tor_isnull(td)) return -EINVAL;
 	t = tor_lookup(td);
 	if (!t)                      ERR_THROW(-EINVAL, done);
 	if (!(t->flags & TOR_WRITE)) ERR_THROW(-EACCES, done);
 
+	/* printc("cos_ip: tread <<<2>>\n"); */
 	assert(t->data);
 	ntd = (td_t)t->data;
 
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
-
 	nbuf = cbuf_alloc(sz, &ncbid);
 	assert(nbuf);
 	ret = parent_tread(cos_spd_id(), ntd, ncbid, sz);

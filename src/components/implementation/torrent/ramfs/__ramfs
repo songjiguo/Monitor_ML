@@ -41,7 +41,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	fso = t->data;
 
 	fsc = fsobj_path2obj(param, len, fso, &parent, &subpath);
-	printc("find fsc or not\n");
 	if (!fsc) {
 		assert(parent);
 		if (!(parent->flags & TOR_SPLIT)) ERR_THROW(-EACCES, done);

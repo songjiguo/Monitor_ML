@@ -24,13 +24,15 @@ void pop_cgi(void)
 	assert(evt1 > 0 && evt2 > 0);
 
 	t1 = tsplit(cos_spd_id(), td_root, params1, strlen(params1), TOR_ALL, evt1);
+
+	printc("pop done!!\n");
 	/* t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1); */
 	/* t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2); */
 	/* if (t1 < 1 || t2 < 1) { */
 	/* 	printc("UNIT TEST FAILED: later splits failed\n"); */
 	/* 	return; */
 	/* } */
-	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
+	/* ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1)); */
 	/* ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2)); */
 	return;
 }
@@ -44,7 +46,7 @@ void cos_init(void)
 		first = 1;
 
 		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 11;
+		sp.c.value = 8;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
 		timed_event_block(cos_spd_id(), 1);

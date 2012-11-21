@@ -173,6 +173,9 @@ static char*
 param_save(char *param, int param_len)
 {
 	char *l_param;
+	
+	if (param_len == 0) return param;
+
 	l_param = malloc(param_len);
 	if (!l_param) {
 		printc("cannot malloc \n");
@@ -204,7 +207,7 @@ static int aaa = 0;
 CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid)
 
 /* printc("\ncli interface... param... %s\n", param); */
-        /* printc("<<< In: call tsplit  (thread %d) >>>\n", cos_get_thd_id()); */
+printc("<<< In: call tsplit  (thread %d spd %ld) >>>\n", cos_get_thd_id(), cos_spd_id());
         if (cos_get_thd_id() == 13) aaa++;   		/* test only */
 /* printc("thread %d aaa is %d\n", cos_get_thd_id(), aaa); */
         ret = __tsplit(spdid, tid, param, len, tflags, evtid, 0);
@@ -224,8 +227,9 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
         tor_flags_t	flags	   = tflags;
         td_t		parent_tid = tid;
 
+printc("len %d param %s\n", len, param);
 	unsigned long long start, end;
-        assert(param && len > 0);
+        assert(param && len >= 0);
         assert(param[len] == '\0'); 
 
         sz = len + sizeof(struct __sg_tsplit_data);
@@ -237,14 +241,14 @@ redo:
         d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
 
-        /* printc("parent_tid: %d\n", parent_tid); */
+        printc("parent_tid: %d\n", parent_tid);
         d->tid	       = parent_tid;
         d->flag = flag;
         d->tflags      = flags;
 	d->evtid       = evtid;
 	d->len[0]      = 0;
 	d->len[1]      = len;
-        /* printc("c: subpath name %s len %d\n", param, len); */
+        printc("c: subpath name %s len %d\n", param, len);
 	memcpy(&d->data[0], param, len);
 
 #ifdef TEST_3
@@ -276,7 +280,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 		goto redo;
 	}
 
-        /* printc("ret from ramfs: %d\n",ret); */
+        printc("ret from ramfs: %d\n",ret);
         memset(&d->data[0], 0, len);
         cbuf_free(d);
 
@@ -300,7 +304,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 	cvect_add(&rec_vect, rd, cli_tid);
 
         ret = cli_tid;
-
+	printc("tsplit done!!!\n\n");
 CSTUB_POST
 
 struct __sg_twmeta_data {
@@ -425,7 +429,7 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
-        /* printc("<<< In: call tread (thread %d) >>>\n", cos_get_thd_id()); */
+        /* printc("<<< In: call tread (thread %d, spd %ld) >>>\n", cos_get_thd_id(), cos_spd_id()); */
         struct rec_data_tor *rd;
 
 redo:

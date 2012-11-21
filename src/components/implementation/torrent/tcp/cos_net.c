@@ -1251,6 +1251,7 @@ done:
 #include <torlib.h>
 
 extern td_t parent_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
+extern td_t parent___tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, int flag);
 extern int parent_twrite(spdid_t spdid, td_t td, int cbid, int sz);
 extern int parent_tread(spdid_t spdid, td_t td, int cbid, int sz);
 
@@ -1264,6 +1265,7 @@ static int cos_net_evt_loop(void)
 	cbuf_t cb;
 
 	assert(event_thd > 0);
+	printc("cos_net: calling tsplit\n");
 	ip_td = parent_tsplit(cos_spd_id(), td_root, "", 0, TOR_ALL, -1);
 	assert(ip_td > 0);
 	printc("network uc %d starting...\n", cos_get_thd_id());
@@ -1273,6 +1275,7 @@ static int cos_net_evt_loop(void)
 
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
+		/* printc("cos_net: calling tread\n"); */
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
 		assert(sz > 0);
 		cos_net_interrupt(data, sz);
@@ -1409,10 +1412,12 @@ release:
 	goto done;
 }
 
-td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
+
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	      tor_flags_t tflags, long evtid, int flag)
 {
-	return 0;
+	printc("cos_net: __tsplit\n");
+	return parent___tsplit(spdid, tid, param, len, tflags, evtid, flag);
 }
 
 td_t
@@ -1423,7 +1428,7 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	struct torrent *t;
 	net_connection_t nc = 0;
 	int accept = 0;
-
+	printc("cos_net: tsplit\n");
 	if (tor_isnull(tid)) return -EINVAL;
 
 	NET_LOCK_TAKE();
@@ -1540,6 +1545,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret;
+	printc("cos_net: in tread\n");
 	
 	buf = cbuf2buf(cbid, sz);
 	if (!buf)           return -EINVAL;
