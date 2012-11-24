@@ -79,7 +79,9 @@ int ncached = 0;
 long evt_all[MAX_NUM_THREADS] = {0,};
 
 static inline long
-evt_wait_all(void) { return evt_wait(cos_spd_id(), evt_all[cos_get_thd_id()]); }
+evt_wait_all(void) { 
+/* printc("evt wait all --  spd %ld thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+return evt_wait(cos_spd_id(), evt_all[cos_get_thd_id()]); }
 
 /* 
  * tor > 0 == event is "from"
@@ -102,7 +104,7 @@ evt_get_thdid(int thdid)
 }
 
 static inline long
-evt_get(void) { return evt_get_thdid(cos_get_thd_id()); }
+evt_get(void) {return evt_get_thdid(cos_get_thd_id()); }
 
 static inline void
 evt_put(long evtid)
@@ -157,12 +159,13 @@ accept_new(int accept_fd)
 	int from, to, feid, teid;
 
 	while (1) {
+		/* printc("tcp evt_get\n"); */
 		feid = evt_get();
 		assert(feid > 0);
 		from = from_tsplit(cos_spd_id(), accept_fd, "", 0, TOR_RW, feid);
 		assert(from != accept_fd);
 		if (-EAGAIN == from) {
-			printc("in accept new...1\n");
+			/* printc("in accept new...1\n"); */
 			evt_put(feid);
 			return;
 		} else if (from < 0) {
@@ -170,9 +173,10 @@ accept_new(int accept_fd)
 			BUG();
 			return;
 		}
+		/* printc("https evt_get\n"); */
 		teid = evt_get();
 		assert(teid > 0);
-		printc("in accept new...2\n");
+		/* printc("in accept new...2\n"); */
 		to = tsplit(cos_spd_id(), td_root, "", 0, TOR_RW, teid);
 		if (to < 0) {
 			printc("torrent split returned %d", to);
@@ -239,6 +243,7 @@ to_data_new(struct tor_conn *tc)
 		cbuf_t cb;
 
 		if (!(buf = cbuf_alloc(BUFF_SZ, &cb))) BUG();
+		/* printc("conn_mgr: tread\n"); */
 		amnt = tread(cos_spd_id(), to, cb, BUFF_SZ-1);
 		if (0 == amnt) break;
 		else if (-EPIPE == amnt) {
@@ -333,6 +338,7 @@ cos_init(void *arg)
 	printc("Thread %d, port %d\n", cos_get_thd_id(), __port+off);
 	port = off++;
 	port += __port;
+	/* printc("init Network: evt_get\n"); */
 	eid = evt_get();
 	if (snprintf(__create_str, 128, create_str, port) < 0) BUG();
 	ret = c = from_tsplit(cos_spd_id(), td_root, __create_str, strlen(__create_str), TOR_ALL, eid);
@@ -347,35 +353,37 @@ cos_init(void *arg)
 		int t;
 		long evt;
 
-		printc("conn_mgr: 1\n");
+		/* printc("conn_mgr: 1\n"); */
 		memset(&tc, 0, sizeof(struct tor_conn));
 		rdtscll(end);
 		meas_record(end-start);
+		/* printc("conn: wait event1\n"); */
 		evt = evt_wait_all();
+		/* printc("conn: wait event2\n"); */
 		rdtscll(start);
 		t   = evt_torrent(evt);
-		printc("conn_mgr: 2\n");
+		/* printc("conn_mgr: 2\n"); */
 		if (t > 0) {
 			tc.feid = evt;
 			tc.from = t;
 			if (t == accept_fd) {
 				tc.to = 0;
 				accept_new(accept_fd);
-				printc("conn_mgr: 3\n");
+				/* printc("conn_mgr: 3\n"); */
 			} else {
 				tc.to = tor_get_to(t, &tc.teid);
 				assert(tc.to > 0);
 				from_data_new(&tc);
-				printc("conn_mgr: 4\n");
+				/* printc("conn_mgr: 4\n"); */
 			}
 		} else {
 			t *= -1;
 			tc.teid = evt;
 			tc.to   = t;
-			printc("conn_mgr: 5\n");
+			/* printc("conn_mgr: 5\n"); */
 			tc.from = tor_get_from(t, &tc.feid);
 			assert(tc.from > 0);
-			printc("conn_mgr: 6\n");
+			/* printc("conn_mgr: 6\n"); */
 			to_data_new(&tc);
 		}
 

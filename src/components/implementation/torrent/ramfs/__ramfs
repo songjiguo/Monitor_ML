@@ -33,7 +33,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
 	char *subpath;
 	
-	printc("ramfs tsplit\n");
+	printc("ramfs tsplit param %s\n", param);
 
 	LOCK();
 	t = tor_lookup(td);
@@ -48,6 +48,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 		if (!fsc) ERR_THROW(-EINVAL, done);
 		fsc->flags = tflags;
 	} else {
+		printc("already exist!!!\n");
 		/* File has less permissions than asked for? */
 		if ((~fsc->flags) & tflags) ERR_THROW(-EACCES, done);
 	}

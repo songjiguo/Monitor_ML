@@ -321,7 +321,9 @@ __mapping_destroy(struct mapping *m)
 	cvas_deref(cv);
 
 	idx = cos_mmap_cntl(COS_MMAP_REVOKE, 0, m->spdid, m->addr, 0);
-//	if (!idx) return; 	/* FIXME: fault makes the pte not presented in pgtbl, but mm still can see it */
+	/* if (!idx) return; 	/\* FIXME: fault makes the pte not presented in pgtbl, but mm still can see it *\/ */
+	/* printc("thread %d idx %d frame_idx %d\n", cos_get_thd_id(), idx, frame_index(m->f)); */
+	if (idx != frame_index(m->f)) printc("thread %d idx %d frame_idx %d m->spdid %d m->addr %p\n", cos_get_thd_id(), idx, frame_index(m->f), m->spdid,  m->addr);
 	assert(idx == frame_index(m->f));
 	frame_deref(m->f);
 	cslab_free_mapping(m);
@@ -337,7 +339,9 @@ mapping_del_children(struct mapping *m)
 	while (d) {
 		n = FIRST_LIST(d, _s, s_);
 		REM_LIST(d, _s, s_);
+		if (frame_index(m->f) == 1626) printc("kevin trying mapping destroy 1626...\n");
 		__mapping_destroy(d);
+		if (frame_index(m->f) == 1626) printc("kevin done mapping destroy 1626...\n");
 		d = (n == d) ? NULL : n;
 	}
 	assert(!m->c);
@@ -347,7 +351,9 @@ static void
 mapping_del(struct mapping *m)
 {
 	assert(m);
+	if (frame_index(m->f) == 1626) printc("before kevin calling del_children 1626...\n");
 	mapping_del_children(m);
+	if (frame_index(m->f) == 1626) printc("after kevin calling del_children 1626...\n");
 	assert(!m->c);
 	if (m->p && m->p->c == m) {
 		if (EMPTY_LIST(m, _s, s_)) m->p->c = NULL;
@@ -430,6 +436,7 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 		ret = -1;	/* -EINVAL */
 		goto done;
 	}
+	if (frame_index(m->f) == 1626) printc("revoke: mapping del 1626\n");
 	mapping_del_children(m);
 done:
 	UNLOCK();
@@ -447,6 +454,7 @@ int mman_release_page(spdid_t spd, vaddr_t addr, int flags)
 		ret = -1;	/* -EINVAL */
 		goto done;
 	}
+	if (frame_index(m->f) == 1626) printc("release: mapping del 1626\n");
 	mapping_del(m);
 done:
 	UNLOCK();
@@ -468,6 +476,7 @@ void mman_release_all(void)
 		if (frame_nrefs(f) <= 0) continue;
 		m = f->c.m;
 		assert(m);
+		if (frame_index(m->f) == 1626) printc("release_all: mapping del 1626\n");		
 		mapping_del(m);
 	}
 	/* kill local mappings */

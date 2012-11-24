@@ -574,7 +574,6 @@ cbuf_c_record(int cbid, int len, int offset, int fid)
 	d = cos_map_lookup(&cb_ids, cbid); /* ramFS should have claimed the ownership  */
 	if (!d) goto err;
 	
-	assert(d->owner.spd == 15); /* test purpose only, should pass spdid into here */
 	/* assert(d->cfi.fid == -1);   /\* initialized to -1 *\/ */
 	id  = d->cfi.fid;
 
@@ -913,12 +912,13 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 	}
 
 	o_spdid =  d->owner.spd;
-	/* printc("o_spd %d r_spd %d\n", o_spdid, r_spdid); */
+	printc("o_spd %d r_spd %d addr %p\n", o_spdid, r_spdid, (vaddr_t)d->addr);
 	if (o_spdid == r_spdid) goto done;
 
 	ret = mgr_update_owner(r_spdid, cbid); // -1 fail, 0 success
 
 	/* FIXME: when does this need to be changed to RW again? */
+
 	if (cos_mmap_cntl(COS_MMAP_RW, COS_MMAP_PFN_RO, cos_spd_id(), (vaddr_t)d->addr, 0)) {
 		printc("set page to be read only failed\n");
 		BUG();

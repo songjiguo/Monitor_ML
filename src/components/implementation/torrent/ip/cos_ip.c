@@ -21,7 +21,7 @@
 #include <cbuf.h>
 
 extern td_t parent_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
-extern td_t parent___tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, int flag);
+/* extern td_t parent___tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, int flag); */
 extern void parent_trelease(spdid_t spdid, td_t tid);
 extern int parent_tread(spdid_t spdid, td_t td, int cbid, int sz);
 extern int parent_twrite(spdid_t spdid, td_t td, int cbid, int sz);
@@ -56,10 +56,11 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	td_t ret = -ENOMEM, ntd;
 	struct torrent *t;
 
-	printc("cos_ip: tsplit\n");
-
+	/* printc("cos_ip: tsplit\n"); */
+	/* printc("spdid %d tid, %d param %s len %d tflags %d evtid %d\n", spdid, tid, param, len, tflags, evtid); */
 	if (tid != td_root) return -EINVAL;
-	ntd = parent___tsplit(cos_spd_id(), tid, param, len, tflags, evtid, 0);
+	/* ntd = parent___tsplit(cos_spd_id(), tid, param, len, tflags, evtid, 0); */
+	ntd = parent_tsplit(cos_spd_id(), tid, param, len, tflags, evtid);
 	if (ntd <= 0) ERR_THROW(ntd, err);
 
 	t = tor_alloc((void*)ntd, tflags);
@@ -69,14 +70,13 @@ err:
 	return ret;
 }
 
-
-td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
-	      tor_flags_t tflags, long evtid, int flag)
-{
-	printc("cos_ip: __tsplit\n");
-	return tsplit(spdid, tid, param, len, tflags, evtid);
-	/* return parent___tsplit(spdid, tid, param, len, tflags, evtid, flag); */
-}
+/* td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, */
+/* 	      tor_flags_t tflags, long evtid, int flag) */
+/* { */
+/* 	printc("cos_ip: __tsplit\n"); */
+/* 	return tsplit(spdid, tid, param, len, tflags, evtid); */
+/* 	/\* return parent___tsplit(spdid, tid, param, len, tflags, evtid, flag); *\/ */
+/* } */
 
 void
 trelease(spdid_t spdid, td_t td)
@@ -114,7 +114,7 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf, *nbuf;
 	int ret = -1;
 	cbuf_t ncbid;
-
+	/* printc("cos_ip: twrite\n"); */
 	if (tor_isnull(td)) return -EINVAL;
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
@@ -160,6 +160,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	assert(nbuf);
 	ret = parent_tread(cos_spd_id(), ntd, ncbid, sz);
 	if (ret < 0) goto free;
+	/* printc("cos_ip: tread 2\n"); */
 	memcpy(buf, nbuf, ret);
 free:
 	cbuf_free(nbuf);

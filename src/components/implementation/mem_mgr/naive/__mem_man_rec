@@ -146,7 +146,7 @@ __page_get(void)
 
 	void *hp;
 	struct frame *f;
-	/* printc("elephant\n"); */
+	printc("elephant\n");
 again:
 	hp = cos_get_vas_page(); /* use lib function if USE_VALLOC is not defined */
 	f = frame_alloc();
@@ -162,7 +162,7 @@ again:
 			f->c.addr = root_addr; 
 			/* cos_release_vas_page(hp); */
 			/* frame_deref(f); */
-			/* printc("found an used one, goto again\n"); */
+			printc("found an used one, goto again\n");
 			goto again;
 		}
 	}
@@ -336,7 +336,7 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
 #endif
 	if (ret) {
-		/* printc("1\n"); */
+		printc("1\n");
 		if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, dest, to, 0) != frame_index(f)) {
 			printc("found mismatch here\n");
 			goto no_mapping;
@@ -478,6 +478,7 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m = NULL;
 	vaddr_t ret = -1;
 
+	printc("mman_get_page....addr %x\n", (unsigned int)addr);
 	/* if (spd == 7) printc("mman_get_page....addr %x\n", (unsigned int)addr); */
 	if (spd == 7) get_test++;
 
@@ -530,6 +531,7 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	struct mapping *m, *n;
 	vaddr_t ret = 0;
 
+	printc("in alias function\n");
 	/* if (s_spd == 8) printc("in alias function\n"); */
 	
 	if (s_spd == 7) alias_test++;
@@ -631,6 +633,7 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m;
 	int ret = 0;
 
+	printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id());
 	/* if (spd == 7) printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id()); */
 	if (spd == 7) revoke_test++;
 

@@ -2,7 +2,7 @@ C_OBJS=ramfs_ft_test2.o
 ASM_OBJS=
 COMPONENT=ramfs_rec_test2.o
 INTERFACES=ramfs_test2
-DEPENDENCIES=printc torrent sched cbuf_c evt mem_mgr_large valloc lock
+DEPENDENCIES=printc rtorrent sched cbuf_c evt mem_mgr_large valloc lock
 IF_LIB=
 
 include ../../Makefile.subsubdir

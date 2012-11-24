@@ -2742,7 +2742,7 @@ brand_higher_urgency(struct thread *upcall, struct thread *prev)
 				  prev, COS_SCHED_EVT_NIL);
 		return 1;
 	} else {
-		printk("brand_higher_urgency: update_thd_evt_state()\n");
+		/* printk("brand_higher_urgency: update_thd_evt_state()\n"); */
 		update_thd_evt_state(upcall, COS_SCHED_EVT_BRAND_ACTIVE, 1);
 		return 0;
 	}
@@ -3766,6 +3766,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		paddr_t pa;
 
 		if (!(pa = pgtbl_rem_ret(spd->spd_info.pg_tbl, daddr))) {
+			printk("SPD is %d\n", dspd_id);
 			ret = 0;
 			break;
 		}

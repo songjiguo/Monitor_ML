@@ -8,7 +8,7 @@
  *  3) re-write the most recent meta data back to the correct file
  */
 
-#include <torrent.h>
+#include <rtorrent.h>
 #include <uniq_map.h>
 #include <cbuf.h>
 

@@ -6,8 +6,8 @@
  */
 
 #include <cos_component.h>
-#include <torrent.h>
-#include <torlib.h>
+#include <rtorrent.h>
+#include <rtorlib.h>
 
 #include <cbuf.h>
 #include <print.h>
@@ -62,7 +62,7 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	}
 	cbuf_free(d);
 
-	printc("fid %d flag %d\n", fid, flag);
+	/* printc("fid %d flag %d\n", fid, flag); */
 	
 	if (unlikely(flag)) { /* recovery */
 		if (!all_tor_list) set_tor_list(); 
@@ -87,12 +87,11 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
 	char *subpath;
 
-	printc("ramfs tsplit\n");
-	printc("... param... %s\n", param);
+	/* printc("ramfs tsplit (evtid %ld)\n", evtid); */
+	/* printc("... param... %s\n", param); */
 #ifdef TSPLIT_FAULT
 	if (aaa == 1){
 		/* printc("\n\n<< tsplit: Before Assert >> \n"); */
-		printc("\n");
 		assert(0);
 	}
 #endif
@@ -102,7 +101,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	fso = t->data;
 
 	fsc = fsobj_path2obj(param, len, fso, &parent, &subpath);
-	printc("find fsc or not, andy\n");
 	if (!fsc) {
 		assert(parent);
 		if (!(parent->flags & TOR_SPLIT)) ERR_THROW(-EACCES, done);
@@ -118,7 +116,10 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	nt = tor_alloc(fsc, tflags);
 	if (!nt) ERR_THROW(-ENOMEM, free);
 	ret = nt->td;
-	printc("split file succesffuly\n\n");
+
+	evt_trigger(cos_spd_id(), evtid);
+
+	/* printc("split file succesffuly\n\n"); */
 done:
 	UNLOCK();
 	return ret;
@@ -204,6 +205,8 @@ tread(spdid_t spdid, td_t td, int cb, int sz)
 	struct torrent *t;
 	struct fsobj *fso;
 	char *buf;
+
+	/* printc("ramfs: tread\n"); */
 	if (tor_isnull(td)) return -EINVAL;
 
 #ifdef TREAD_FAULT

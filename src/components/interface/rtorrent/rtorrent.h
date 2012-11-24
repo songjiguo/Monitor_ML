@@ -40,6 +40,7 @@ typedef enum {
 } tor_flags_t;
 
 td_t tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
+td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, int flag);
 
 void trelease(spdid_t spdid, td_t tid);
 int tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len);

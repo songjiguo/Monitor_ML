@@ -294,7 +294,7 @@ unsigned long long end = 0;
 CSTUB_FN_ARGS_3(vaddr_t, mman_get_page, spdid_t, spdid, vaddr_t, addr, int, flags)
        volatile unsigned long long start, end;
 redo:
-/* if (cos_get_thd_id() != 5) printc("<< thd %d call get_page  >>\n", cos_get_thd_id()); */
+if (cos_get_thd_id() != 5) printc("<< thd %d call get_page  >>\n", cos_get_thd_id());
 #ifdef TEST_GET
        rdtscll(start);
 #endif
@@ -330,7 +330,7 @@ CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid
 
 	assert(rdmm_list);
 redo:
-/* if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id()); */
+if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id());
 #ifdef TEST_ALIAS
         rdtscll(start);
 #endif
@@ -361,7 +361,7 @@ CSTUB_FN_ARGS_4(vaddr_t, __mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spd
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
 	assert(rdmm_list);
 redo:
-/* if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id()); */
+if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id());
 CSTUB_ASM_4(__mman_alias_page, s_spd, s_addr, d_spd, d_addr)
 
        if (unlikely (fault)){

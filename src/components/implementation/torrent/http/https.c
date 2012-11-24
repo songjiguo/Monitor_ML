@@ -29,7 +29,7 @@
 #include <cos_map.h>
 #include <errno.h>
 
-#include <torrent.h>
+#include <rtorrent.h>
 #include <torlib.h>
 #include <cbuf.h>
 #include <periodic_wake.h>
@@ -243,11 +243,11 @@ static int http_get_request(struct http_request *r)
 	int ret = -1;
 	assert(r && r->c);
 
-	printc("http_get_request...\n");
+	/* printc("http_get_request...\n"); */
 	if (0 > r->content_id) {
 		r->content_id = server_tsplit(cos_spd_id(), td_root, r->path, 
 					      r->path_len, TOR_READ, r->c->evt_id);
-		printc("after ramfs tsplit id %d\n", r->content_id);
+		/* printc("after ramfs tsplit id %ld\n", r->content_id); */
 		if (r->content_id < 0) return r->content_id;
 		ret = 0;
 	}
@@ -530,7 +530,7 @@ static int connection_parse_requests(struct connection *c, char *req, int req_sz
 	if (NULL == r) return 0;
 	do {
 		if (!(r->flags & (HTTP_REQ_PENDING | HTTP_REQ_PROCESSED))) {
-			printc("before make request\n");
+			/* printc("before make request\n"); */
 			if (http_make_request(r)) {
 				printc("https: Could not process response.\n");
 				return -1;
@@ -704,13 +704,6 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 /* 	return connection_process_requests(c, reqs, req_sz, resp, resp_sz); */
 /* } */
 
-td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, int flag)
-{
-	printc("https: __tsplit\n");
-	return tsplit(spdid, tid, param, len, tflags, evtid);
-}
-
 td_t 
 tsplit(spdid_t spdid, td_t tid, char *param, int len, 
        tor_flags_t tflags, long evtid)
@@ -719,7 +712,8 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	struct torrent *t;
 	struct connection *c;
 
-	printc("https tsplit\n");
+	/* printc("https tsplit\n"); */
+	/* printc("spdid %d tid, %d param %s len %d tflags %d evtid %d\n", spdid, tid, param, len, tflags, evtid); */
 	if (tor_isnull(tid)) return -EINVAL;
 	
 	LOCK();
@@ -736,6 +730,13 @@ free:
 	http_free_connection(c);
 	goto err;
 }
+
+/* td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, */
+/* 	      tor_flags_t tflags, long evtid, int flag) */
+/* { */
+/* 	printc("https: __tsplit\n"); */
+/* 	return tsplit(spdid, tid, param, len, tflags, evtid); */
+/* } */
 
 void
 trelease(spdid_t spdid, td_t td)
@@ -789,7 +790,7 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
-	printc("https twrite >>>\n");
+	/* printc("https twrite >>>\n"); */
 
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
@@ -824,7 +825,8 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret;
-	
+
+	/* printc("http: tread\n"); */
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);

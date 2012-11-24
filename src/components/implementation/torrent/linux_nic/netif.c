@@ -415,6 +415,7 @@ static int __netif_xmit(char *d, unsigned int sz)
 /* 	goto done; */
 }
 
+static int aaa = 0;
 static int interrupt_process(void *d, int sz, int *recv_len)
 {
 	unsigned short int ucid = cos_get_thd_id();
@@ -424,6 +425,9 @@ static int interrupt_process(void *d, int sz, int *recv_len)
 	unsigned int len;
 
 	assert(d);
+
+	/* printc("Processing interrupt aaa %d (thd %d)\n", aaa, cos_get_thd_id()); */
+	/* if (aaa++ >= 20) assert(0); */
 
 	tm = get_thd_map(ucid);
 	assert(tm);
@@ -443,7 +447,6 @@ static int interrupt_process(void *d, int sz, int *recv_len)
 	if (rb_add_buff(tm->uc_rb, buff, MTU)) {
 		prints("net: could not add buffer to ring.");
 	}
-
 	return 0;
 
 err_replace_buff:
@@ -516,7 +519,6 @@ int netif_event_wait(spdid_t spdid, char *mem, int sz)
 
 	if (sz < MTU) return -EINVAL;
 
-//	printc("%d: I\n", cos_get_thd_id());
 	interrupt_wait();
 	NET_LOCK_TAKE();
 	if (interrupt_process(mem, sz, &ret_sz)) BUG();
@@ -538,13 +540,6 @@ int netif_event_xmit(spdid_t spdid, char *mem, int sz)
 	return ret;
 }
 
-td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, int flag)
-{
-	/* printc("cos_if: __tsplit\n"); */
-	return tsplit(spdid, tid, param, len, tflags, evtid);
-}
-
 td_t 
 tsplit(spdid_t spdid, td_t tid, char *param, int len, 
        tor_flags_t tflags, long evtid)
@@ -552,6 +547,7 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	td_t ret = -ENOMEM;
 	struct torrent *t;
 	/* printc("cos_if: tsplit\n"); */
+	/* printc("spdid %d tid, %d param %s len %d tflags %d evtid %d\n", spdid, tid, param, len, tflags, evtid); */
 	if (tid != td_root) return -EINVAL;
 	netif_event_create(spdid);
 	t = tor_alloc((void*)1, tflags);
@@ -560,6 +556,13 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 err:
 	return ret;
 }
+
+/* td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, */
+/* 	      tor_flags_t tflags, long evtid, int flag) */
+/* { */
+/* 	printc("cos_if: __tsplit\n"); */
+/* 	return tsplit(spdid, tid, param, len, tflags, evtid); */
+/* } */
 
 void
 trelease(spdid_t spdid, td_t td)
