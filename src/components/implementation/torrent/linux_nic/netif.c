@@ -497,7 +497,7 @@ int netif_event_create(spdid_t spdid)
 	if (sched_add_thd_to_brand(cos_spd_id(), wildcard_brand_id, ucid)) BUG();
 	add_thd_map(ucid, /*0 wildcard port ,*/ &rb1_md_wildcard);
 	NET_LOCK_RELEASE();
-	printc("created net uc %d associated with brand %d\n", ucid, wildcard_brand_id);
+	/* printc("created net uc %d associated with brand %d\n", ucid, wildcard_brand_id); */
 
 	return 0;
 }
@@ -521,7 +521,9 @@ int netif_event_wait(spdid_t spdid, char *mem, int sz)
 
 	interrupt_wait();
 	NET_LOCK_TAKE();
-	if (interrupt_process(mem, sz, &ret_sz)) BUG();
+	// just return if nothing is found for SWIFI
+	/* if (interrupt_process(mem, sz, &ret_sz)) BUG(); */   
+	interrupt_process(mem, sz, &ret_sz);
 	NET_LOCK_RELEASE();
 
 	return ret_sz;
@@ -662,7 +664,6 @@ static int init(void)
 			prints("net: could not populate the ring with buffer");
 		}
 	}
-
 	NET_LOCK_RELEASE();
 
 	return 0;

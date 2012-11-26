@@ -305,7 +305,6 @@ int evt_trigger(spdid_t spdid, long extern_evt)
 	struct evt *e;
 	int ret = 0;
 
-	printc("evt_trigger(spdid %d, evtid %ld)\n", spdid, extern_evt);
 	lock_take(&evt_lock);
 
 	e = mapping_find(extern_evt);

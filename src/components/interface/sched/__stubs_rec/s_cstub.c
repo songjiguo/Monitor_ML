@@ -8,10 +8,19 @@
  * replay block  */
 
 extern int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id);
+extern int sched_block_helper(spdid_t spdid, unsigned short int dependency_thd);
 
 int __sg_sched_wakeup(spdid_t spdid, unsigned short int thd_id, int crash_flag)
 {
-	/* printc("in scheduler server interface\n"); */
+	/* printc("in scheduler server wakeup interface\n"); */
 	if (unlikely(crash_flag)) sched_wakeup_helper(spdid, thd_id);
 	return sched_wakeup(spdid, thd_id);
+}
+
+
+int __sg_sched_block(spdid_t spdid, unsigned short int dependency_thd, int crash_flag)
+{
+	/* printc("in scheduler server block interface\n"); */
+	if (unlikely(crash_flag)) sched_block_helper(spdid, dependency_thd);
+	return sched_block(spdid, dependency_thd);
 }

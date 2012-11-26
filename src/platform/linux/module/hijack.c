@@ -1342,10 +1342,6 @@ paddr_t pgtbl_rem_ret(paddr_t pgtbl, vaddr_t va)
 	pte_t *pte = pgtbl_lookup_address(pgtbl, va);
 	paddr_t val;
 
-
-	if (!pte) printk("no pte\n");
-	if (!(pte_val(*pte) & _PAGE_PRESENT)) printk("va %p not presented\n", va);
-
 	if (!pte || !(pte_val(*pte) & _PAGE_PRESENT)) {
 		return 0;
 	}
@@ -1689,6 +1685,9 @@ int host_attempt_brand(struct thread *brand)
 	struct pt_regs *regs = NULL;
 	unsigned long flags;
 
+	/* Recovery use */
+	struct thd_invocation_frame *thd_frame;
+
 	local_irq_save(flags);
 	if (likely(composite_thread)/* == current*/) {
 		struct thread *cos_current;
@@ -1743,6 +1742,10 @@ int host_attempt_brand(struct thread *brand)
 			 */
 			next = brand_next_thread(brand, cos_current, 0);
 			if (next != cos_current) {
+				/* update the fault counter (recovery) */
+				thd_frame = thd_invstk_top(cos_current);
+				thd_frame->curr_fault.cnt = thd_frame->spd->fault.cnt;
+
 				assert(thd_get_current() == next);
 				/* the following call isn't
 				 * necessary: if we are in a syscall,
@@ -1800,6 +1803,7 @@ int host_attempt_brand(struct thread *brand)
 			next = brand_next_thread(brand, cos_current, 1);
 			/* printk("\nhijack: current thd(%d)\n", thd_get_id(cos_current)); */
 			/* printk("hijack: next thd(%d)\n", thd_get_id(next)); */
+
 			if (next != cos_current) {
 				thd_save_preempted_state(cos_current, regs);
 				if (!(next->flags & THD_STATE_ACTIVE_UPCALL)) {

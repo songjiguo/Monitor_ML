@@ -127,8 +127,8 @@ switch_thd_fault_detect(struct thread *next)
 
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d curr_fault cnt %d\n", thd_get_id(next), tif->curr_fault.cnt);
-		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
+		/* printk("thread %d curr_fault cnt %d\n", thd_get_id(next), tif->curr_fault.cnt); */
+		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
 		return 1;
 	}
 	else return 0;
@@ -145,8 +145,8 @@ interrupt_fault_detect(struct thread *next) /* for now, this is the timer thread
 	
 	if (tif->curr_fault.cnt != n_spd->fault.cnt) 
 	{
-		printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt);
-		printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt);
+		/* printk("thread %d fault cnt %d\n", thd_get_id(next), tif->fault.cnt); */
+		/* printk("spd %d fault cnt %d\n", spd_get_index(n_spd), n_spd->fault.cnt); */
 		return 1;
 	}
 	else return 0;
@@ -158,6 +158,8 @@ inv_frame_fault_cnt_update(struct thread *thd, struct spd *spd)
 	struct thd_invocation_frame *inv_frame;
 	inv_frame = thd_invstk_top(thd);
 	inv_frame->fault.cnt = spd->fault.cnt;
+
+	/* inv_frame->curr_fault.cnt = spd->fault.cnt;*/  // right? done in hijack or inv (brand_next_thread)
 	return 0;
 }
 
@@ -185,7 +187,7 @@ switch_thd_fault_update(struct thread *thd)
 	n_spd  = tif->spd;
 	
 	tif->curr_fault.cnt = n_spd->fault.cnt;
-	/* printk("switch_flt_update: n_spd %d\n", spd_get_index(n_spd)); */
+	/* printk("switch_flt_update: thd %d n_spd %d\n", thd_get_id(thd), spd_get_index(n_spd)); */
 	return 0;
 }
 

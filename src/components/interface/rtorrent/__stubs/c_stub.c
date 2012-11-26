@@ -1,4 +1,4 @@
-#include <torrent.h>
+#include <rtorrent.h>
 #include <cstub.h>
 #include <print.h>
 
@@ -14,7 +14,6 @@ CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len
 	cbuf_t cb;
 	int sz = len + sizeof(struct __sg_tsplit_data);
 
-printc("thd %d call tsplit (spd %ld)\n", cos_get_thd_id(), cos_spd_id());
         assert(param && len >= 0);
         assert(param[len] == '\0');
 

@@ -100,6 +100,10 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 static void
 llboot_ret_thd(void) { return; }
 
+
+void sched_exit(void);
+static int first = 0;
+
 /* 
  * When a created thread finishes, here we decide what to do with it.
  * If the system's initialization thread finishes, we know to reboot.
@@ -198,10 +202,6 @@ recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed);
 
-
-void sched_exit(void);
-
-static int first = 0;
 int 
 fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
@@ -214,6 +214,8 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd);
 	printc("LL: <<0>> thd %d : failed spd %d (this spd %ld)\n", cos_get_thd_id(), spdid, cos_spd_id());
+
+	cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); /* remove the brand */
 
 	/* /\* only use  for comparison, like mm failure *\/ */
 	/* printc("there is no mechanism to handle the fault in this case, exit\n"); */
@@ -259,6 +261,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* printc("Try to recover the spd\n"); */
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
 		else recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
+
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */
 		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */
@@ -278,6 +281,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	return 0;
 }
 
+static int second = 0;
 int
 fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
@@ -301,6 +305,7 @@ fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* printc("LL: notification cost 2: %llu\n", (end-start)); */
 #endif
 		/* printc("pop the frame and return\n"); */
+		/* if (second++ >= 1) sched_exit(); */
 		return 0;
 	}
 	printc("<< LL fault notification 2 (tid %d)>>\n", tid);

@@ -91,7 +91,7 @@ static void flip_reg_bit(long *reg)
 
 /* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
 static void flip_all_regs(struct cos_regs *r) {
-	/* printc("flip all registers for the next instruction, except eip\n"); */
+	printc("flip all registers for the next instruction, except eip\n");
 
 	/* printc("ESP's "); */
 	flip_reg_bit(&r->regs.sp); /* esp */

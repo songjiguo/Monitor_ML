@@ -114,7 +114,7 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf, *nbuf;
 	int ret = -1;
 	cbuf_t ncbid;
-	/* printc("cos_ip: twrite\n"); */
+	/* printc("cos_ip: twrite (thd %d)\n", cos_get_thd_id()); */
 	if (tor_isnull(td)) return -EINVAL;
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);

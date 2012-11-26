@@ -165,21 +165,17 @@ accept_new(int accept_fd)
 		from = from_tsplit(cos_spd_id(), accept_fd, "", 0, TOR_RW, feid);
 		assert(from != accept_fd);
 		if (-EAGAIN == from) {
-			/* printc("in accept new...1\n"); */
 			evt_put(feid);
 			return;
 		} else if (from < 0) {
-			printc("from torrent returned %d\n", from);
 			BUG();
 			return;
 		}
 		/* printc("https evt_get\n"); */
 		teid = evt_get();
 		assert(teid > 0);
-		/* printc("in accept new...2\n"); */
 		to = tsplit(cos_spd_id(), td_root, "", 0, TOR_RW, teid);
 		if (to < 0) {
-			printc("torrent split returned %d", to);
 			BUG();
 		}
 
@@ -369,12 +365,12 @@ cos_init(void *arg)
 			if (t == accept_fd) {
 				tc.to = 0;
 				accept_new(accept_fd);
-				/* printc("conn_mgr: 3\n"); */
+				/* printc("conn_mgr: 3 (thd %d)\n", cos_get_thd_id()); */
 			} else {
 				tc.to = tor_get_to(t, &tc.teid);
 				assert(tc.to > 0);
 				from_data_new(&tc);
-				/* printc("conn_mgr: 4\n"); */
+				/* printc("conn_mgr: 4 (thd %d)\n", cos_get_thd_id()); */
 			}
 		} else {
 			t *= -1;

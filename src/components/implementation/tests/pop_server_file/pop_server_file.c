@@ -4,6 +4,7 @@
 #include <cbuf.h>
 #include <evt.h>
 #include <rtorrent.h>
+/* #include <torrent.h> */
 
 #include <timed_blk.h>
 
@@ -40,7 +41,7 @@ void pop_cgi(void)
 
 void cos_init(void)
 {
-	static int first = 0;
+	static int first = 0, second = 0;
 	union sched_param sp;
 	
 	if(first == 0){
@@ -50,9 +51,11 @@ void cos_init(void)
 		sp.c.value = 8;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
-		timed_event_block(cos_spd_id(), 1);
-		pop_cgi();
-	}
-	
+		if (second == 0) {
+			second = 1;
+			timed_event_block(cos_spd_id(), 1);
+			pop_cgi();			
+		}
+	}	
 	return;
 }

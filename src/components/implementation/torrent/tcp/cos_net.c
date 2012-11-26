@@ -1266,6 +1266,7 @@ static int cos_net_evt_loop(void)
 
 	assert(event_thd > 0);
 	/* printc("cos_net: calling tsplit\n"); */
+	printc("cos_net_evt_loop thd %d init\n", cos_get_thd_id());
 	ip_td = parent_tsplit(cos_spd_id(), td_root, "", 0, TOR_ALL, -1);
 	assert(ip_td > 0);
 	printc("network uc %d starting...\n", cos_get_thd_id());
@@ -1277,9 +1278,11 @@ static int cos_net_evt_loop(void)
 		assert(data);
 		/* printc("cos_net: calling tread\n"); */
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
-		assert(sz > 0);
-		cos_net_interrupt(data, sz);
-		assert(lock_contested(&net_lock) != cos_get_thd_id());
+		if (likely(sz > 0)) {
+		/* assert(sz > 0); */
+			cos_net_interrupt(data, sz);
+			assert(lock_contested(&net_lock) != cos_get_thd_id());
+		}
 		cbuf_free(data);
 		/* printc("ready to for the next coming package\n"); */
 	}
@@ -1547,7 +1550,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret;
-	/* printc("cos_net: in tread\n"); */
+	/* printc("cos_net: in tread (thd %d)\n", cos_get_thd_id()); */
 	
 	buf = cbuf2buf(cbid, sz);
 	if (!buf)           return -EINVAL;
@@ -1586,6 +1589,10 @@ static void init_lwip(void)
 	lwip_init();
 	tcp_mem_free(lwip_free_payload);
 
+	/* IP4_ADDR(&ip, 128,164,157,179); */
+	/* IP4_ADDR(&gw, 128,164,159,254); */
+	/* IP4_ADDR(&mask, 255,255,255,0); */
+
 	/* setting the IP address */
 	IP4_ADDR(&ip, 10,0,2,8);
 	IP4_ADDR(&gw, 10,0,1,1);
@@ -1614,12 +1621,12 @@ static int init(void)
 #ifdef LWIP_STATS
 	int stats_cnt = 0;
 #endif
-
 	lock_static_init(&net_lock);
 	NET_LOCK_TAKE();
 
 	torlib_init();
 	net_conn_init();
+	printc("cos_net thd %d init\n", cos_get_thd_id());
 	cos_net_create_netif_thd();
 	init_lwip();
 

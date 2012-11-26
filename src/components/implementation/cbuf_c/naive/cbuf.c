@@ -912,7 +912,7 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 	}
 
 	o_spdid =  d->owner.spd;
-	printc("o_spd %d r_spd %d addr %p\n", o_spdid, r_spdid, (vaddr_t)d->addr);
+	/* printc("o_spd %d r_spd %d addr %p\n", o_spdid, r_spdid, (vaddr_t)d->addr); */
 	if (o_spdid == r_spdid) goto done;
 
 	ret = mgr_update_owner(r_spdid, cbid); // -1 fail, 0 success

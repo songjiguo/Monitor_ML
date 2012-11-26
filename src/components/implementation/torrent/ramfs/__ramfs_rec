@@ -9,6 +9,9 @@
 #include <rtorrent.h>
 #include <rtorlib.h>
 
+/* #include <torrent.h> */
+/* #include <torlib.h> */
+
 #include <cbuf.h>
 #include <print.h>
 #include <cos_synchronization.h>

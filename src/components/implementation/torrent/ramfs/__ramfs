@@ -6,8 +6,8 @@
  */
 
 #include <cos_component.h>
-#include <torrent.h>
-#include <torlib.h>
+#include <rtorrent.h>
+#include <rtorlib.h>
 
 #include <cbuf.h>
 #include <print.h>
@@ -24,6 +24,8 @@ struct fsobj root;
 
 #define MIN_DATA_SZ 256
 
+static unsigned long i = 0;
+
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
        int len, tor_flags_t tflags, long evtid) 
@@ -33,8 +35,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
 	char *subpath;
 	
-	printc("ramfs tsplit param %s\n", param);
-
 	LOCK();
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
@@ -48,7 +48,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 		if (!fsc) ERR_THROW(-EINVAL, done);
 		fsc->flags = tflags;
 	} else {
-		printc("already exist!!!\n");
+		while(i++ < 100000000);	/* SWIFI test only */
 		/* File has less permissions than asked for? */
 		if ((~fsc->flags) & tflags) ERR_THROW(-EACCES, done);
 	}
@@ -57,7 +57,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	nt = tor_alloc(fsc, tflags);
 	if (!nt) ERR_THROW(-ENOMEM, free);
 	ret = nt->td;
-	printc("split file succesffuly\n");
+	evt_trigger(cos_spd_id(), evtid);
 done:
 	UNLOCK();
 	return ret;

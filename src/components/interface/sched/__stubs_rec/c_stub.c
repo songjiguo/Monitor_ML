@@ -37,6 +37,7 @@ int crt_sec_owner = 0;         /* which thread has actually taken the critical s
 
 unsigned int timer_thd = 0;
 unsigned long wakeup_time = 0;
+unsigned long long ticks = 0;   /* track the current ticks, need? */
 
 /************************************/
 /******interface tracking data ******/
@@ -80,6 +81,26 @@ blked_thd_lookup()
 	return NULL;
 }
 
+static void rebuild_net_brand() {
+	unsigned short int net_bid = 0;
+	unsigned short int net_tid = 0;
+
+	net_tid = cos_brand_cntl(COS_BRAND_INTRO_TID, 0, 0, 0);
+	if (likely(net_tid)){
+		printc("net_tid %d\n", net_tid);
+		if (cos_brand_cntl(COS_BRAND_INTRO_STATUS, 0, 0, 0)) {
+			net_bid = cos_brand_cntl(COS_BRAND_INTRO_BID, 0, 0, 0);
+			assert(net_bid && net_tid);
+			printc("net_bid %d\n", net_bid);
+			printc("rebuild the net brand\n");
+			if (sched_add_thd_to_brand(cos_spd_id(), net_bid, net_tid)) BUG();
+			/* cos_switch_thread(net_tid, 0); */
+		}
+	}
+
+	return;
+}
+
 /************************************/
 /******  client stub functions ******/
 /************************************/
@@ -87,7 +108,7 @@ blked_thd_lookup()
 CSTUB_FN_ARGS_4(int, sched_create_thd, spdid_t, spdid, u32_t, sched_param0, u32_t, sched_param1, unsigned int, desired_thd)
        unsigned long long start, end;
 redo:
-       printc("thread %d calls << sched_create_thd >>\n", cos_get_thd_id());
+       /* printc("thread %d calls << sched_create_thd >>\n", cos_get_thd_id()); */
 #ifdef MEASU_SCHED_INTERFACE_CREATE
 rdtscll(start);
 #endif
@@ -95,6 +116,8 @@ rdtscll(start);
 CSTUB_ASM_4(sched_create_thd, spdid, sched_param0, sched_param1, desired_thd)
 
        if (unlikely (fault)){
+	       /* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); */
+
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
 		       BUG();
@@ -111,11 +134,12 @@ CSTUB_ASM_4(sched_create_thd, spdid, sched_param0, sched_param1, desired_thd)
 	       }
 
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("1\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
+		       printc("replay the sched_timeout_thd\n");
 	       }
 
+	       rebuild_net_brand();
        	       goto redo;
        }
 
@@ -133,6 +157,8 @@ redo:
 CSTUB_ASM_4(sched_create_thread_default, spdid, sched_param0, sched_param1, desired_thd)
 
        if (unlikely (fault)){
+	       /* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); */
+
 	       /* printc("Inter:crt_default update cap %d \n", uc->cap_no); */
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
@@ -150,11 +176,12 @@ CSTUB_ASM_4(sched_create_thread_default, spdid, sched_param0, sched_param1, desi
 
 	       desired_thd = 0;
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("2\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
+		       printc("replay the sched_timeout_thd\n");
 	       }
 
+	       rebuild_net_brand();
        	       goto redo;
        }
 
@@ -173,6 +200,8 @@ redo:
 CSTUB_ASM_3(sched_wakeup, spdid, dep_thd, crash_flag)
 
        if (unlikely (fault)){
+	       /* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); */
+
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
 		       BUG();
@@ -191,11 +220,12 @@ CSTUB_ASM_3(sched_wakeup, spdid, dep_thd, crash_flag)
 	       printc("thd %d wakeup failed and redo!!\n", cos_get_thd_id());
 	       crash_flag = 1;
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("3\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
+		       printc("replay the sched_timeout_thd\n");
 	       }
 
+	       rebuild_net_brand();
        	       goto redo;
        }
 
@@ -205,14 +235,17 @@ CSTUB_POST
 CSTUB_FN_ARGS_2(int, sched_block, spdid_t, spdid, unsigned short int, thd_id)
         unsigned long long start, end;
         struct period_thd *item;
+        int crash_flag = 0;
 redo:
-	/* printc("thread %d calls << sched_block >>\n",cos_get_thd_id()); */
+/* printc("thread %d calls << sched_block -- thd_id %d >>\n",cos_get_thd_id(), thd_id); */
 #ifdef MEASU_SCHED_INTERFACE_BLOCK
               rdtscll(start);
 #endif
-CSTUB_ASM_2(sched_block, spdid, thd_id)
+CSTUB_ASM_3(sched_block, spdid, thd_id, crash_flag)
 
        if (unlikely (fault)){
+	       /* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); */
+
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
 		       BUG();
@@ -228,11 +261,14 @@ CSTUB_ASM_2(sched_block, spdid, thd_id)
 	       }
 
 	       printc("thd %d block failed and redo!!\n", cos_get_thd_id());
+	       crash_flag = 1;
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("4\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
+		       printc("replay the sched_timeout_thd\n");
 	       }
+
+	       rebuild_net_brand();
        	       goto redo;
        }
 
@@ -250,6 +286,8 @@ redo:
 CSTUB_ASM_1(sched_component_take, spdid)
 
        if (unlikely (fault)){
+	       /* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); */
+
 	       /* printc("failed!! when component take\n"); */
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
@@ -267,11 +305,12 @@ CSTUB_ASM_1(sched_component_take, spdid)
 		       /* printc("now thread %d goto redo\n", cos_get_thd_id()); */
 	       }
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("5\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
+		       printc("replay the sched_timeout_thd\n");
 	       }
 
+	       rebuild_net_brand();
        	       goto redo;
        }
 
@@ -292,6 +331,8 @@ redo:
 CSTUB_ASM_1(sched_component_release, spdid)
 
        if (unlikely (fault)){
+	       /* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); */
+
 	       /* printc("spd_release update cap %d \n", uc->cap_no); */
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
@@ -309,11 +350,12 @@ CSTUB_ASM_1(sched_component_release, spdid)
 	       	* component_take and had the critical section */
 
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("6\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
+		       printc("replay the sched_timeout_thd\n");
 	       }
 
+	       rebuild_net_brand();
 	       goto redo;
        }
 
@@ -325,11 +367,15 @@ CSTUB_POST
 
 
 CSTUB_FN_ARGS_1(int, sched_timeout_thd, spdid_t, spdid)
+
+       /* printc("<< cli: sched_timeout_thd >>>\n"); */
 redo:
 
 CSTUB_ASM_1(sched_timeout_thd, spdid)
 
        if (unlikely (fault)){
+	       /* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); */
+
 	       /* printc("spd_ update cap %d \n", uc->cap_no); */
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
 		       printc("set cap_fault_cnt failed\n");
@@ -338,22 +384,24 @@ CSTUB_ASM_1(sched_timeout_thd, spdid)
        	       fcounter++;
 
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("7\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
+		       printc("replay the sched_timeout_thd\n");
 	       }
 
+	       rebuild_net_brand();
 	       goto redo;
        }
 
        if(!ret) timer_thd = cos_get_thd_id(); /* record the wakeup thread over the interface */
-       printc("interface: wakeup thread is %d\n",timer_thd);
+       printc("interface: time event  thread is %d\n",timer_thd);
 
 CSTUB_POST
 
 
 CSTUB_FN_ARGS_2(int, sched_timeout, spdid_t, spdid, unsigned long, amnt)
 	struct period_thd *item;
+       /* printc("<< cli: sched_timeout >>>\n"); */
 redo:
 CSTUB_ASM_2(sched_timeout, spdid, amnt)
 
@@ -365,16 +413,71 @@ CSTUB_ASM_2(sched_timeout, spdid, amnt)
        	       fcounter++;
 
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
-		       printc("8\n");
 		       sched_timeout_thd(cos_spd_id());
 		       sched_timeout(cos_spd_id(), wakeup_time);
 	       }
+
+	       rebuild_net_brand();
        	       goto redo;
        }
-       printc("cli: thd %d amnt %lu for the sched_timeout \n", cos_get_thd_id(), amnt);
-       if (cos_get_thd_id() == timer_thd) {
-	       wakeup_time = amnt; 
-	       printc("wakeup time is set to  %lu \n", wakeup_time);
-       }
+       /* printc("cli: thd %d amnt %lu for the sched_timeout \n", cos_get_thd_id(), amnt); */
+       if (cos_get_thd_id() == timer_thd) wakeup_time = amnt; 
+       /* printc("wakeup time is set to  %lu \n", wakeup_time); */
 
 CSTUB_POST
+
+
+/* CSTUB_FN_ARGS_2(int, sched_create_net_brand, spdid_t, spdid, unsigned short int, port) */
+
+/* 	printc("<< cli: thd %d sched_create_net_brand >>>\n", cos_get_thd_id()); */
+/* redo: */
+
+/* CSTUB_ASM_2(sched_create_net_brand, spdid, port) */
+
+/*        if (unlikely (fault)){ */
+/* 	       if (unlikely(net_tid && net_bid)) { /\* remove the brand *\/ */
+/* 	       	       cos_brand_cntl(COS_BRAND_REMOVE_THD, net_bid, net_tid, 0); */
+/* 	       } */
+
+/* 	       /\* printc("spd_ update cap %d \n", uc->cap_no); *\/ */
+/* 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) { */
+/* 		       printc("set cap_fault_cnt failed\n"); */
+/* 		       BUG(); */
+/* 	       } */
+/*        	       fcounter++; */
+
+
+/* 	       goto redo; */
+/*        } */
+
+/*        /\* if(!ret) port = port; *\/ */
+/*        printc("interface: create_net_brand is %d\n",ret); */
+
+/* CSTUB_POST */
+
+/* CSTUB_FN_ARGS_3(int, sched_add_thd_to_brand, spdid_t, spdid, unsigned short int, bid, unsigned short int, tid) */
+
+/* 	printc("<< cli: thd %d sched_add_thd_to_brand >>>\n", cos_get_thd_id()); */
+/* redo: */
+
+/* CSTUB_ASM_3(sched_add_thd_to_brand, spdid, bid, tid) */
+
+/*        if (unlikely (fault)){ */
+/* 	       if (unlikely(net_tid && net_bid)) { /\* remove the brand *\/ */
+/* 	       	       cos_brand_cntl(COS_BRAND_REMOVE_THD, net_bid, net_tid, 0); */
+/* 	       } */
+
+/* 	       /\* printc("spd_ update cap %d \n", uc->cap_no); *\/ */
+/* 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) { */
+/* 		       printc("set cap_fault_cnt failed\n"); */
+/* 		       BUG(); */
+/* 	       } */
+/*        	       fcounter++; */
+/* 	       goto redo; */
+/*        } */
+
+/*        printc("add: bid %d tid %d\n", bid, tid); */
+/*        net_bid = bid; */
+/*        net_tid = tid; */
+
+/* CSTUB_POST */

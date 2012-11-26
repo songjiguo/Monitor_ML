@@ -295,6 +295,13 @@ enum {
 	COS_BRAND_CREATE,
 	COS_BRAND_ADD_THD,
 	COS_BRAND_REMOVE_THD,
+	/* 
+	   SWIFI related
+	 */
+	COS_BRAND_INTRO_BID,
+	COS_BRAND_INTRO_TID,
+	COS_BRAND_INTRO_STATUS,
+
 	COS_BRAND_CREATE_HW,
 /* cos_brand_upcall -> */
 	COS_BRAND_TAILCALL,  /* tailcall brand to upstream spd
@@ -318,7 +325,7 @@ enum {
 	/* 
 	 * For SWIFI only
 	 */
-	COS_THD_FLIP_SPD,        
+	COS_THD_FLIP_SPD,
 	COS_THD_FIND_SPD_TO_FLIP,        
 	/* 
 	 * For the following GET methods, the argument is 0 to get the

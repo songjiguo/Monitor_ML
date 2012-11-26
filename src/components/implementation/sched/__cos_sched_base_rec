@@ -510,8 +510,10 @@ static void sched_process_wakeups(void)
 {
 	struct sched_thd *t, *next;
 	u64_t lowest_child = 0;
-	printc("in sched_process_wakeups...\n");
-	printc("wakeup_time %llu ticks %llu \n",wakeup_time, ticks);
+
+	/* printc("in sched_process_wakeups...\n"); */
+	/* printc("wakeup_time %llu ticks %llu \n",wakeup_time, ticks); */
+
 	/* Wakeup the event thread? */
 	if (wakeup_time && ticks >= wakeup_time && likely(wakeup_thd)) {
 		if (wakeup_thd->wake_cnt < 2) {
@@ -583,6 +585,7 @@ static void sched_timer_tick(void)
 		}
 		
 		ticks++;
+		/* printc("ticks %llu end %d\n", ticks, RUNTIME_SEC*TIMER_FREQ); */
 		sched_process_wakeups();
 		
 		timer_tick(1);
@@ -676,8 +679,6 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 	unsigned long long abs_timeout;
 	struct sched_thd *thd;
 
-	printc("In sched_timeout thd %d\n", cos_get_thd_id());
-
 	cos_sched_lock_take();
 	
 	if (0 == amnt) {
@@ -685,17 +686,16 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 		return;
 	}
 
-	printc("1 sched: thd %d\n", cos_get_thd_id());
 	thd = sched_get_mapping(cos_get_thd_id());
 	assert(thd);
 
 	abs_timeout = ticks + amnt;
 
 	if (0 == wakeup_time || abs_timeout < wakeup_time) {
-		printc("wake up thread is %d\n", wakeup_thd->id);
-		printc("before thd %d set up the wakeup time %llu\n", cos_get_thd_id(), wakeup_time);
+		/* printc("wake up thread is %d\n", wakeup_thd->id); */
+		/* printc("before thd %d set up the wakeup time %llu\n", cos_get_thd_id(), wakeup_time); */
 		wakeup_time = abs_timeout;
-		printc("after thd %d set up the wakeup time %llu\n", cos_get_thd_id(), wakeup_time);
+		/* printc("after thd %d set up the wakeup time %llu\n", cos_get_thd_id(), wakeup_time); */
 	}
 	/* If we're the timer thread, lets block, otherwise return */
 	if (thd != wakeup_thd) {
@@ -703,7 +703,6 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 		return;
 	}
 
-	printc("2 sched: thd %d\n", cos_get_thd_id());
 	fp_pre_block(thd);
 	/* If we've already been woken up, so be it! */
 	if (thd->wake_cnt) {
@@ -712,12 +711,9 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 		return;
 	}
 
-	printc("3 sched: thd %d\n", cos_get_thd_id());
 	fp_block(thd, cos_spd_id());
-	printc("4 sched: thd %d --->switching...\n", cos_get_thd_id());
 	/* printc("sched_timeout calls sst\n"); */
 	sched_switch_thread(0, TIMEOUT_LOOP);	
-	printc("<---- 5 sched: thd %d --->switching..back\n", cos_get_thd_id());
 	return;
 }
 
@@ -734,7 +730,7 @@ int sched_timeout_thd(spdid_t spdid)
 		cos_sched_lock_release();
 		return -1;
 	}
-	printc("set the wakeup thread to be thd %d\n", thd->id);
+	/* printc("set the wakeup thread to be thd %d\n", thd->id); */
 	wakeup_thd = thd;
 
 	cos_sched_lock_release();
@@ -774,6 +770,14 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 	report_event(THD_WAKE);
 }
 
+static void some_delay()  		/* only used for SWIFI */
+{
+/* #ifdef SWIFI_ENABLE */
+/* 	unsigned int ccc = 0; */
+/* 	while(ccc++ < 1000000) {;}; */
+/* #endif */
+	return;
+}
 
 int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id)
 {
@@ -794,16 +798,6 @@ int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id)
 	return 0;
 }
 
-static void some_delay()  		/* only used for SWIFI */
-{
-#ifdef SWIFI_ENABLE
-	unsigned int ccc = 0;
-	while(ccc++ < 500000) {;};
-#endif
-	return;
-}
-
-
 static int aaa = 0;
 /* 
  * FIXME: should verify that the blocks and wakes come from the same
@@ -813,6 +807,9 @@ static int aaa = 0;
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
+
+	/* printc("%d in wakeup call\n", cos_get_thd_id()); */
+	/* if (cos_get_thd_id() == 11) return 0; */
 
 #ifdef TEST_WAKEUP
 	if (aaa++>=6) {
@@ -919,11 +916,24 @@ static void fp_block(struct sched_thd *thd, spdid_t spdid)
 }
 
 
+int sched_block_helper(spdid_t spdid, unsigned short int dependency_thd)
+{
+	struct sched_thd *thd;
+	cos_sched_lock_take();
+
+	sched_switch_thread(0, WAKE_LOOP);
+
+	cos_sched_lock_take();
+	cos_sched_lock_release();
+	
+	return 0;
+}
+
 /* 
  * FIXME: should verify that the blocks and wakes come from the same
  * component.  This is the externally visible function.
  */
-static int bbb;
+static int bbb = 0;
 int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 {
 	struct sched_thd *thd, *dep = NULL;
@@ -931,6 +941,11 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	int first = 1;
 
 	/* printc("%d in block call\n", cos_get_thd_id()); */
+	if (dependency_thd == 99) {
+		/* printc("99 %d in block call\n", cos_get_thd_id()); */
+		return 0;
+	}
+
 #ifdef TEST_BLOCK
 	if (bbb++>=6) {
 		printc("\n<<<block Before ASSERT!!!>>>\n");
@@ -938,7 +953,6 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 		printc("\n<<<block After ASSERT!!!>>>\n");
 	}
 #endif
-
 	// Added by Gabe 08/19
 	if (unlikely(dependency_thd == cos_get_thd_id())) return -EINVAL;
 
@@ -1732,10 +1746,10 @@ int sched_create_net_brand(spdid_t spdid, unsigned short int port)
 {
 	int b_id;
 
+	printc("creating net brand: spdid %d port %d\n", spdid, port);
 	b_id = sched_setup_brand(spdid);
 	assert(b_id >= 0);
 	if (0 > cos_brand_wire(b_id, COS_HW_NET, port)) BUG();
-
 	return b_id;
 }
 
@@ -1749,6 +1763,7 @@ int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short
 	ret = cos_brand_cntl(COS_BRAND_ADD_THD, bid, tid, 0);
 	if (0 > ret) return -1;
 
+	printc("thd added to the brand\n");
 	return 0;
 }
 
@@ -1778,7 +1793,7 @@ static struct sched_thd *fp_create_timer(void)
 	timer = sched_setup_thread_arg(&sp, fp_timer, (void*)bid, 0, 1);
 	if (NULL == timer) BUG();
 	if (0 > sched_add_thd_to_brand(cos_spd_id(), bid, timer->id)) BUG();
-	/* printc("Timer thread has id %d with priority %s.(bid %d)\n", timer->id, "t", bid); */
+	printc("Timer thread has id %d with priority %s.(bid %d)\n", timer->id, "t", bid);
 	cos_brand_wire(bid, COS_HW_TIMER, 0); /* syscall, but initialize in hijack?? need deregister?? */
 
 	return timer;
@@ -1799,7 +1814,7 @@ sched_init_create_threads(int boot_threads)
 	/* printc("create idle thread\n"); */
 	idle = sched_setup_thread_arg(&sp, fp_idle_loop, NULL, 0, 1);
 	assert(idle);
-	/* printc("Idle thread has id %d with priority %s.\n", idle->id, "i"); */
+	printc("Idle thread has id %d with priority %s.\n", idle->id, "i");
 
 	if (!boot_threads) return;
 
@@ -1976,6 +1991,7 @@ sched_init(int reboot)
 	else                       sched_child_init(reboot);
 	return 0;
 }
+
 
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {

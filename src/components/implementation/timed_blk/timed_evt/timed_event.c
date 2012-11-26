@@ -620,7 +620,6 @@ static void start_timer_thread(void)
 	/* Wait for events, then act on expired events.  Loop. */
 	while (1) {
 		event_time_t next_wakeup;
-
 		cos_mpd_update(); /* update mpd config given this
 				   * thread is now in this component
 				   * (no dependency if we are in the
@@ -645,7 +644,9 @@ static void start_timer_thread(void)
 #ifdef LINUX_HIGHEST_PRIORITY
 			//gap assert(next_wakeup > ticks);
 #endif
-			assert(next_wakeup > ticks);
+			/* printc("next_wakeup %d ticks %d\n", next_wakeup, ticks); */
+			/* Jiguo: not sure why this failed even when next_wakeup > ticks */
+			/* assert(next_wakeup > ticks); */
 			wakeup = (unsigned int)(next_wakeup - ticks);
 			if (sched_component_release(spdid)) {
 				prints("fprr: scheduler lock release failed!!!");

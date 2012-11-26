@@ -214,7 +214,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 
 	/* printk("----cap %d cap flt %d dest_flt %d---\n",capability, cap_entry->fault.cnt, dest_spd->fault.cnt); */
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
-		printk("invocation....from %d to %d\n", spd_get_index(curr_spd), spd_get_index(dest_spd));
+		printk("thd %d invocation....from %d to %d\n", thd_get_id(thd), spd_get_index(curr_spd), spd_get_index(dest_spd));
 		/* s = virtual_namespace_query(cap_entry->dest_entry_instruction); */
 		/* printk("cos: s spd %d\n", spd_get_index(s)); */
 
@@ -714,6 +714,13 @@ static void flip_reg_bit(long *reg)
 /* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
 static void cos_flip_all_regs(struct pt_regs *r) {
 
+	printk("EIP:%10x\tESP:%10x\tEBP:%10x\n"
+	       "EAX:%10x\tEBX:%10x\tECX:%10x\n"
+	       "EDX:%10x\tEDI:%10x\tESI:%10x\n",
+	       (unsigned int)r->ip, (unsigned int)r->sp, (unsigned int)r->bp,
+	       (unsigned int)r->ax, (unsigned int)r->bx, (unsigned int)r->cx,
+	       (unsigned int)r->dx, (unsigned int)r->di, (unsigned int)r->si);
+
 	flip_reg_bit(&r->sp); /* esp */
 	flip_reg_bit(&r->bp); /* ebp */
 	flip_reg_bit(&r->ax); /* eax */
@@ -798,7 +805,12 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 		struct thd_invocation_frame *tif;
 		int i;
 		tif = thd_invstk_top(thd);
-		if (arg1 == spd_get_index(tif->spd)) return arg1;
+		/* if (arg1 == spd_get_index(tif->spd)) return arg1; */
+		if (arg1 == 2) {  		/* scheduler */
+			if (arg1 == spd_get_index(tif->spd) && (thd->flags & THD_STATE_PREEMPTED)) return arg1;
+		} else {
+			if (arg1 == spd_get_index(tif->spd)) return arg1;
+		}
 		
 		return -1;
 	}
@@ -937,6 +949,8 @@ remove_preempted_status(struct thread *thd)
 		thd->interrupted_thread = NULL;
 	}
 
+	/* printk("before unset preempt flags: %p\n", thd->flags); */
+	/* printk("thread %d preempted status is removed\n", thd_get_id(thd)); */
 	thd->flags &= ~THD_STATE_PREEMPTED;
 }
 
@@ -1126,6 +1140,7 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 		printk("READY_UPCALL thd %d\n", thd_get_id(thd));
 		cos_meas_event(COS_MEAS_UPCALL_INACTIVE);
 		*ret_code = COS_SCHED_RET_INVAL;
+		assert(0);
 		goto ret_err;
 	}
 	
@@ -1229,6 +1244,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 
 	if (thd->flags & THD_STATE_PREEMPTED) {
 		cos_meas_event(COS_MEAS_SWITCH_PREEMPT);
+		/* printk("cos_syscall_switch_thread_cont: remove preemption thd %d\n", thd_get_id(thd)); */
 		remove_preempted_status(thd);
 		*preempt = 1;
 	} else {
@@ -1607,6 +1623,7 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 	 * branded by another thread.  That other thread just branded
 	 * us, and wasn't preempted. */
 	if (prev->flags & THD_STATE_PREEMPTED) {
+		/* printk("brand_completion_switch_to: remove preemption thd %d\n", thd_get_id(prev)); */
 		remove_preempted_status(prev);
 	}
 	update_sched_evts(prev, COS_SCHED_EVT_NIL, 
@@ -1856,6 +1873,9 @@ static inline struct thread* verify_brand_thd(unsigned short int thd_id)
 	return brand_thd;
 }
 
+u16_t cos_nbid = 0;
+u16_t cos_ntid = 0;
+
 COS_SYSCALL int 
 cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 {
@@ -1948,16 +1968,17 @@ cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 
 		retid = t->thread_id;
 		//print_thd_sched_structs(new_thd);
+		cos_ntid = tid;
+		cos_nbid = bid;
 		break;
 	}
 	case COS_BRAND_REMOVE_THD:
 	{
-		struct thread *brand_thd = verify_brand_thd(bid);
-		struct thread *t = thd_get_by_id(tid);
-
+		struct thread *brand_thd = verify_brand_thd(cos_nbid);
+		struct thread *t = thd_get_by_id(cos_ntid);
 		if (NULL == t || NULL == brand_thd) return 0;
-		
-		t->flags &= ~(THD_STATE_UPCALL | THD_STATE_ACTIVE_UPCALL); /* not sure about 2nd flag */
+		if (!(t->flags & THD_STATE_UPCALL) && (!t->flags & THD_STATE_ACTIVE_UPCALL)) return 0;
+		t->flags &= ~(THD_STATE_UPCALL | THD_STATE_ACTIVE_UPCALL | THD_STATE_READY_UPCALL);
 		t->thread_brand = NULL;
 		t->upcall_threads = NULL;
 		brand_thd->upcall_threads = NULL;
@@ -1965,6 +1986,25 @@ cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 		t->flags &= ~THD_STATE_CYC_CNT;
 
 		retid = 0;
+		break;
+	}
+	case COS_BRAND_INTRO_BID:
+	{
+		retid = cos_nbid;
+		break;
+	}
+	case COS_BRAND_INTRO_TID:
+	{
+		retid = cos_ntid;
+		break;
+	}
+	case COS_BRAND_INTRO_STATUS:
+	{
+		struct thread *brand_thd = verify_brand_thd(cos_nbid);
+		struct thread *t = thd_get_by_id(cos_ntid);
+		if (NULL == t || NULL == brand_thd) return 0;
+		if (t->thread_brand == NULL) retid = 1;
+		else retid = 0;
 		break;
 	}
 	default:
@@ -2770,7 +2810,6 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	/* Assume here that we only have one upcall thread */
 	struct thread *upcall = brand->upcall_threads;
 
-	/* printk("COS: in brand_next_thread\n"); */
 	assert(brand->flags & (THD_STATE_BRAND|THD_STATE_HW_BRAND));
 	assert(upcall && upcall->thread_brand == brand);
 
@@ -2833,7 +2872,11 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 			 * This dictates how the registers for
 			 * preempted are restored later.
 			 */
-			if (preempt == 1) preempted->flags |= THD_STATE_PREEMPTED;
+			if (preempt == 1) {
+				/* printk("before set preempt flags: %p\n", preempted->flags); */
+				/* printk("thread %d STATE_PREEMPTED is set\n", thd_get_id(preempted)); */
+				preempted->flags |= THD_STATE_PREEMPTED;
+			}
 			preempted->preempter_thread = upcall;
 			upcall->interrupted_thread = preempted;
 		} else {
@@ -2896,7 +2939,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	
 	event_record("upcall not immediately executed (less urgent), continue previous thread", 
 		     thd_get_id(preempted), thd_get_id(upcall));
-//		printk("%d w\n", thd_get_id(upcall));
+	/* printk("%d w\n", thd_get_id(upcall)); */
 
 	report_upcall("d", upcall);
 
@@ -3766,7 +3809,6 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		paddr_t pa;
 
 		if (!(pa = pgtbl_rem_ret(spd->spd_info.pg_tbl, daddr))) {
-			printk("SPD is %d\n", dspd_id);
 			ret = 0;
 			break;
 		}

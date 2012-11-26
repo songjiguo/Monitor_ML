@@ -243,11 +243,11 @@ static int http_get_request(struct http_request *r)
 	int ret = -1;
 	assert(r && r->c);
 
-	/* printc("http_get_request...\n"); */
+	/* printc("http_get_request...(thd %d)\n", cos_get_thd_id()); */
 	if (0 > r->content_id) {
 		r->content_id = server_tsplit(cos_spd_id(), td_root, r->path, 
 					      r->path_len, TOR_READ, r->c->evt_id);
-		/* printc("after ramfs tsplit id %ld\n", r->content_id); */
+		/* printc("after ramfs tsplit id %ld (thd %d)\n", r->content_id, cos_get_thd_id()); */
 		if (r->content_id < 0) return r->content_id;
 		ret = 0;
 	}
@@ -530,7 +530,6 @@ static int connection_parse_requests(struct connection *c, char *req, int req_sz
 	if (NULL == r) return 0;
 	do {
 		if (!(r->flags & (HTTP_REQ_PENDING | HTTP_REQ_PROCESSED))) {
-			/* printc("before make request\n"); */
 			if (http_make_request(r)) {
 				printc("https: Could not process response.\n");
 				return -1;
@@ -790,7 +789,7 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
-	/* printc("https twrite >>>\n"); */
+	/* printc("https twrite (thd %d) >>>\n", cos_get_thd_id()); */
 
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);

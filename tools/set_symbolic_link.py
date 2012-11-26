@@ -7,7 +7,8 @@
 import os
 import sys
 
-names = ['mem_mgr','torrent', 'sched']
+#names = ['mem_mgr','torrent', 'sched']
+names = ['mem_mgr','rtorrent', 'sched']
 
 # interface
 interface_path = '/src/components/interface/'
@@ -127,7 +128,8 @@ def main():
             else:
                 os.system("ln -s " + sched_nor_c + " " + sched_c)
 
-        if (names[i] == 'torrent'):
+#        if (names[i] == 'torrent'):
+        if (names[i] == 'rtorrent'):
             prefix_ramfs = path + ramfs_component_path
 
             os.chdir(prefix_ramfs)

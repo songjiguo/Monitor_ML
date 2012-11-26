@@ -9,6 +9,7 @@
  */
 
 #include <rtorrent.h>
+/* #include <torrent.h> */
 #include <uniq_map.h>
 #include <cbuf.h>
 

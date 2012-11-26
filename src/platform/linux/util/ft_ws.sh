@@ -11,7 +11,7 @@
 \
 !sm.o,a1;!mpool.o, ;!buf.o, ;!va.o,a2;!mpd.o,a5;!tif.o,a5;!tip.o, ;\
 !port.o, ;!l.o,a4;!te.o,a3;!tnet.o, ;!eg.o,a5;!tp.o, ;\
-!stconnmt.o, '10:10:200:/bind:0:%d/listen:255';\
+!stconnmt.o, '1:10:200:/bind:0:%d/listen:255';\
 !pfr.o, ;!httpt.o,a8;!rfs.o, ;!initfs.o,a3;!unique_map.o, ;!popcgi.o, ;!fi.o, :\
 \
 c0.o-llboot.o;\
