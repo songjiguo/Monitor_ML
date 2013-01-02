@@ -58,9 +58,9 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	memcpy(d, path, sz);
 	
 	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz);
+	/* can not find the file */
 	if (fid == -1) {
-		/* printc("can not find the file\n"); */
-		fid = uniq_map_get(cos_spd_id(), cb_p, sz);
+		fid = uniq_map_set(cos_spd_id(), cb_p, sz);
 		assert(fid >= 0);
 	}
 	cbuf_free(d);
@@ -68,14 +68,14 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	/* printc("fid %d flag %d\n", fid, flag); */
 	
 	if (unlikely(flag)) { /* recovery */
-		if (!all_tor_list) set_tor_list(); 
+		if (!all_tor_list || EMPTY_LIST(all_tor_list, next, prev)) build_tor_list(); 
                 /* FIXME: we should really use cbuf to introspect these parameter with 1 invocation */
+
+		/* need check if the file(tor) has been rebuilt already. If so, we do not need rebuild again */ 
 		restore_tor(fid, ret); 
 		/* printc("rebuild meta done\n"); */
 	}
-
-	if (all_tor_list) find_update(fid, ret);
-
+	/* if (all_tor_list && !EMPTY_LIST(all_tor_list, next, prev)) find_update(fid, ret); */
 	UNLOCK();
 
 	return ret;
@@ -167,6 +167,12 @@ tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
 	}
 
 	tor_free(t);
+
+	/* we really need remove the record, not only from the client
+	 * side stub, but also server all_tor_list that was built
+	 * during the recovery */
+
+	
 done:   
 	UNLOCK();
 	return ret;
@@ -220,11 +226,10 @@ tread(spdid_t spdid, td_t td, int cb, int sz)
 #endif
 	LOCK();
 
-	if (unlikely(all_tor_list)) { /* has crashed before, need check if the file still presents */
-		/* printc("when tread, tid is %d\n", td); */
+	if (unlikely(all_tor_list && !EMPTY_LIST(all_tor_list, next, prev))) { /* has crashed before, need check if the file still presents */
+		printc("when tread, tid is %d\n", td);
 		find_restore(td);
 	}
-
 
 	unsigned long long ttt;
 	for (ttt = 0; ttt < 5000000; ttt++) {;}
@@ -280,8 +285,8 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 #endif
 	LOCK();
 
-	if (unlikely(all_tor_list)) { /* has crashed before, need check if the file still presents */
-		/* printc("when write, tid is %d\n", td); */
+	if (unlikely(all_tor_list && !EMPTY_LIST(all_tor_list, next, prev))) { /* has crashed before, need check if the file still presents */
+		printc("when write, tid is %d\n", td);
 		find_restore(td);
 	}
 
@@ -331,17 +336,6 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	if (preserve_cbuf_path(cb, td, offset, ret)) BUG();
 done:	
 	UNLOCK();
-	return ret;
-}
-
-static int 
-__twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
-{
-	int ret = 0;
-	UNLOCK();
-	ret = twmeta(spdid, td, cbid, sz, offset, flag);
-	LOCK();
-
 	return ret;
 }
 
@@ -404,6 +398,17 @@ twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
 
 done:	
 	UNLOCK();
+	return ret;
+}
+
+static int 
+__twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
+{
+	int ret = 0;
+	UNLOCK();
+	ret = twmeta(spdid, td, cbid, sz, offset, flag);
+	LOCK();
+
 	return ret;
 }
 

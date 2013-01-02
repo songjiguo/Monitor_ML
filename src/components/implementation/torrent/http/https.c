@@ -935,17 +935,30 @@ unlock:
 
 #define HTTP_REPORT_FREQ 100
 
+static int ala = 0;
+
 void cos_init(void *arg)
 {
-	torlib_init();
-	lock_static_init(&h_lock);
+	union sched_param sp;
+	static int first = 0;
+	if (first == 0) {
+		first = 1;
 
-	if (periodic_wake_create(cos_spd_id(), HTTP_REPORT_FREQ)) BUG();
-	while (1) {
-		periodic_wake_wait(cos_spd_id());
-		printc("HTTP conns %ld, reqs %ld\n", http_conn_cnt, http_req_cnt);
-		http_conn_cnt = http_req_cnt = 0;
-	}
+		torlib_init();
+		lock_static_init(&h_lock);
 	
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 28;
+		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+	} else {
+		if (periodic_wake_create(cos_spd_id(), HTTP_REPORT_FREQ)) BUG();
+		while (1) {
+			periodic_wake_wait(cos_spd_id());
+			printc("HTTP conns %ld, reqs %ld (thd %d)\n", http_conn_cnt, http_req_cnt, cos_get_thd_id());
+			http_conn_cnt = http_req_cnt = 0;
+			if (ala++ == 10) assert(0);
+		}
+	}
+
 	return;
 }

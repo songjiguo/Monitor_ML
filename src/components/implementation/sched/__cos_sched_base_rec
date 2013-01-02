@@ -783,16 +783,16 @@ int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
 	cos_sched_lock_take();
-	printc("helper:thread %d waking up thread %d\n", cos_get_thd_id(), thd_id);
+	/* printc("helper:thread %d waking up thread %d\n", cos_get_thd_id(), thd_id); */
 	thd = sched_get_mapping(thd_id);
 	if (!thd) BUG();
 
 	if (!sched_thd_blocked(thd)) {
-		printc("thread %d is not blocked since crashed before\n", thd->id);
+		/* printc("thread %d is not blocked since crashed before\n", thd->id); */
 		sched_switch_thread(0, WAKE_LOOP);
 		cos_sched_lock_take();
 	}
-	printc("ok, %d wakeup %d now\n", cos_get_thd_id(), thd_id);
+	/* printc("ok, %d wakeup %d now\n", cos_get_thd_id(), thd_id); */
 	cos_sched_lock_release();
 	
 	return 0;
@@ -918,11 +918,28 @@ static void fp_block(struct sched_thd *thd, spdid_t spdid)
 
 int sched_block_helper(spdid_t spdid, unsigned short int dependency_thd)
 {
+	/* struct sched_thd *thd; */
+	/* cos_sched_lock_take(); */
+
+	/* sched_switch_thread(0, WAKE_LOOP); */
+
+	/* cos_sched_lock_take(); */
+	/* cos_sched_lock_release(); */
+	
+	/* return 0; */
+
 	struct sched_thd *thd;
+
+	int ret;
 	cos_sched_lock_take();
 
-	sched_switch_thread(0, WAKE_LOOP);
+	/* thd = sched_get_current(); */
+	/* ret = ticks - thd->block_time; */
+	/* cos_sched_lock_release(); */
+	/* return ret; */
 
+	
+	sched_switch_thread(0, WAKE_LOOP);
 	cos_sched_lock_take();
 	cos_sched_lock_release();
 	
@@ -1182,6 +1199,9 @@ static int fp_kill_thd(struct sched_thd *t)
 	REM_LIST(t, next, prev);
 	ADD_LIST(&graveyard, t, prio_next, prio_prev);
 
+
+	if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, 99)) BUG();
+
 	/* printc("fp_kill_thd calls sst\n"); */
 	sched_switch_thread(0, NULL_EVT);
 
@@ -1383,24 +1403,24 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	
 	cos_sched_lock_take();
 
-	/* thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0); */
+	thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0);
 	/* while(thd_nums) { */
-	/* 	printc("thd_num is %d\n", thd_nums); */
+	/* 	/\* printc("thd_num is %d\n", thd_nums); *\/ */
 	/* 	ret    = cos_sched_introspect(COS_SCHED_THD_GET, thd_nums, -1); */
 	/* 	thd_id = ret >> 16; */
 	/* 	assert(thd_id); */
 	/* 	prio   = ret & 0xFFFF; */
-	/* 	printc("thread %d with prio %d\n", thd_id, prio); */
-	/* 	if (prio == 29) { /\* only the default thread will have prio 29, right? *\/ */
-	/* 		cos_sched_lock_release(); */
-	/* 		printc("goto done!!\n"); */
-	/* 		goto done; */
-	/* 	} */
+	/* 	/\* printc("thread %d with prio %d\n", thd_id, prio); *\/ */
+	/* 	/\* if (prio == 29) { /\\* only the default thread will have prio 29, right? *\\/ *\/ */
+	/* 	/\* 	cos_sched_lock_release(); *\/ */
+	/* 	/\* 	printc("goto done!!\n"); *\/ */
+	/* 	/\* 	goto done; *\/ */
+	/* 	/\* } *\/ */
 	/* 	thd_nums--; */
 	/* } */
 
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, desired_thd, 1);
-	/* printc("just created new thread %d (this thread %d)\n", new->id, cos_get_thd_id()); */
+	/* printc("just created new default thread %d (this thread %d -- dest spd %d)\n", new->id, cos_get_thd_id(), (int)t); */
 	/* printc("desired thread is %d dest spd %d\n", desired_thd, t); */
 	/* printc("sched_create_thread_default calls sst\n"); */
 	sched_switch_thread(0, NULL_EVT);
@@ -1746,7 +1766,7 @@ int sched_create_net_brand(spdid_t spdid, unsigned short int port)
 {
 	int b_id;
 
-	printc("creating net brand: spdid %d port %d\n", spdid, port);
+	/* printc("creating net brand: spdid %d port %d\n", spdid, port); */
 	b_id = sched_setup_brand(spdid);
 	assert(b_id >= 0);
 	if (0 > cos_brand_wire(b_id, COS_HW_NET, port)) BUG();
@@ -1763,7 +1783,7 @@ int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short
 	ret = cos_brand_cntl(COS_BRAND_ADD_THD, bid, tid, 0);
 	if (0 > ret) return -1;
 
-	printc("thd added to the brand\n");
+	/* printc("thd added to the brand\n"); */
 	return 0;
 }
 
@@ -1794,7 +1814,7 @@ static struct sched_thd *fp_create_timer(void)
 	if (NULL == timer) BUG();
 	if (0 > sched_add_thd_to_brand(cos_spd_id(), bid, timer->id)) BUG();
 	printc("Timer thread has id %d with priority %s.(bid %d)\n", timer->id, "t", bid);
-	cos_brand_wire(bid, COS_HW_TIMER, 0); /* syscall, but initialize in hijack?? need deregister?? */
+	cos_brand_wire(bid, COS_HW_TIMER, 0);
 
 	return timer;
 }
@@ -1900,8 +1920,10 @@ int sched_root_init(int reboot)
 
 	/* switch back to this thread to terminate the system. */
 	/* however, after failed and reboot, recovery thread will change init id */
-	init = sched_alloc_thd(cos_get_thd_id());
-	assert(init);
+	if (!reboot) {
+		init = sched_alloc_thd(cos_get_thd_id());
+		assert(init);
+	}
 
 	if (unlikely(reboot)) {
 
@@ -1909,10 +1931,12 @@ int sched_root_init(int reboot)
 		init = sched_alloc_thd(3);
 		assert(init);
 
+		unsigned short int bid = 0;
 		thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0);
 		/* printc("rebuild scheduler... %d threads have been recorded\n", thd_nums); */
 		while(thd_nums) {
 			/* printc("thd_num is %d\n", thd_nums); */
+			
 			ret    = cos_sched_introspect(COS_SCHED_THD_GET, thd_nums, 0);
 			thd_id = ret >> 16;
 			assert(thd_id);
@@ -1922,18 +1946,28 @@ int sched_root_init(int reboot)
 			dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
 			/* type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id); */
 			/* printc("type is %d\n", type); */
-			/* printc("thread %d with prio %d\n", thd_id, prio); */
+
+			printc("thread %d with prio %d\n", thd_id, prio);
 			/* printc("fn %x dest %d\n", (unsigned int)fn, (int)dest); */
 			/* printc("prio is %d\n", prio); */
 
 			sp[0].c.type = SCHEDP_PRIO;;
 			sp[0].c.value = prio;
 
-			rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
+			if (prio != 99) rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
 			/* printc("rec_thd flags 2 %d\n", rec_thd->flags); */
 
 			if (type == SCHEDP_IDLE) idle = rec_thd;
 			else if (type == SCHEDP_TIMER) timer = rec_thd;
+
+
+			/* brand activate if there is one with the thread */
+			bid = cos_brand_cntl(COS_BRAND_INTRO_BID, 0, thd_id, 0);
+			if (bid > 0) {
+				ret = cos_brand_cntl(COS_BRAND_ACTIVATE_UC, bid, thd_id, 0);
+				if (ret < 0) assert(0);
+			}
+
 			thd_nums--;
 		}
 

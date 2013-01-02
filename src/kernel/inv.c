@@ -210,7 +210,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 	rdtscll(start);
 #endif
 
-	struct spd *s;
+	/* struct spd *s; */
 
 	/* printk("----cap %d cap flt %d dest_flt %d---\n",capability, cap_entry->fault.cnt, dest_spd->fault.cnt); */
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
@@ -246,8 +246,6 @@ static struct pt_regs *thd_ret_upcall_type(struct thread *t, upcall_type_t type)
  * This is complicated by the fact that we may return when no
  * invocation is made because a thread is terminating.
  */
-
-static int test_num = 0;
 
 COS_SYSCALL struct thd_invocation_frame *
 pop(struct thread *curr, struct pt_regs **regs_restore)
@@ -322,7 +320,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	unsigned int fault_cap;
 	struct pt_regs *nregs;
 
-	printk("deskt spd %d \n", spd_get_index(dest_spd));
+	/* printk("deskt spd %d \n", spd_get_index(dest_spd)); */
 	if (unlikely(dest_spd)) s = dest_spd;
 	else {
 		s = virtual_namespace_query(regs->ip);
@@ -356,7 +354,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	memcpy(&thd->fault_regs, regs, sizeof(struct pt_regs));
 	a = ipc_walk_static_cap(thd, fault_cap<<20, regs->sp, regs->ip, &r);
 	
-	printk("r.spd_id %d a %p\n", r.spd_id, a);
+	/* printk("r.spd_id %d a %p\n", r.spd_id, a); */
 
 	/* setup the registers for the fault handler invocation */
 	regs->ax = r.thd_id;
@@ -407,8 +405,8 @@ thd_ret_fault_notif(struct thread *thd)
 static void
 thd_switch_fault_notif(struct thread *thd)
 {
-	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd));
 	struct thd_invocation_frame *thd_frame;
+	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd));
 	thd_frame = thd_invstk_top(thd);
 
 	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
@@ -419,10 +417,9 @@ thd_switch_fault_notif(struct thread *thd)
 void
 fault_int_notif(struct thread *thd, struct spd *notif_spd, unsigned int cap_num, struct pt_regs *regs, int fault_num)
 {
-	printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n");
-
 	struct inv_ret_struct r;
 	vaddr_t addr;
+	printk("[[[ cos: Fault is detected on Interrupt/brand ]]]\n");
 	assert(fault_num < COS_FLT_MAX);
 
 	addr = ipc_walk_static_cap(thd, cap_num<<20, regs->sp, regs->ip, &r);
@@ -679,60 +676,6 @@ done:
 }
 
 
-unsigned long
-random()
-{
-	unsigned long x, hi, lo, t;
-
-	/*
-	 * Compute x[n + 1] = (7^5 * x[n]) mod (2^31 - 1).
-	 * From "Random number generators: good ones are hard to find",
-	 * Park and Miller, Communications of the ACM, vol. 31, no. 10,
-	 * October 1988, p. 1195.
-	 */
-	rdtscll(x);
-	hi = x / 127773;
-	lo = x % 127773;
-	t = 16807 * lo - 2836 * hi;
-	if (t <= 0) t += 0x7fffffff;
-	return t;
-}
-
-static void flip_reg_bit(long *reg)
-{
-	int flip_bit = 0;
-
-	flip_bit = random() & 0x1f;
-	/* printk("%2dth bit is going to be flipped ==> \n", flip_bit + 1); */
-	flip_bit = 1 << flip_bit;
-	
-	*reg = (*reg) ^ flip_bit;
-	return;
-}
-
-
-/* do not flip eip. Now this is just flipping every register, called nuclear bomb style */
-static void cos_flip_all_regs(struct pt_regs *r) {
-
-	printk("EIP:%10x\tESP:%10x\tEBP:%10x\n"
-	       "EAX:%10x\tEBX:%10x\tECX:%10x\n"
-	       "EDX:%10x\tEDI:%10x\tESI:%10x\n",
-	       (unsigned int)r->ip, (unsigned int)r->sp, (unsigned int)r->bp,
-	       (unsigned int)r->ax, (unsigned int)r->bx, (unsigned int)r->cx,
-	       (unsigned int)r->dx, (unsigned int)r->di, (unsigned int)r->si);
-
-	flip_reg_bit(&r->sp); /* esp */
-	flip_reg_bit(&r->bp); /* ebp */
-	flip_reg_bit(&r->ax); /* eax */
-	flip_reg_bit(&r->bx); /* ebx */
-	flip_reg_bit(&r->cx); /* ecx */
-	flip_reg_bit(&r->dx); /* edx */
-	flip_reg_bit(&r->di); /* edi */
-	flip_reg_bit(&r->si); /* esi */
-
-	return;
-}
-
 COS_SYSCALL int 
 cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 {
@@ -803,22 +746,14 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 	case COS_THD_FIND_SPD_TO_FLIP:
 	{
 		struct thd_invocation_frame *tif;
-		int i;
 		tif = thd_invstk_top(thd);
-		/* if (arg1 == spd_get_index(tif->spd)) return arg1; */
-		if (arg1 == 2) {  		/* scheduler */
-			if (arg1 == spd_get_index(tif->spd) && (thd->flags & THD_STATE_PREEMPTED)) return arg1;
-		} else {
-			if (arg1 == spd_get_index(tif->spd)) return arg1;
-		}
-		
-		return -1;
-	}
-	case COS_THD_FLIP_SPD:  /* for SWIFI: scheduler only */
-	{
-		struct thd_invocation_frame *tif;
-		/* printk("cos:thd %d flip registers!\n", thd_get_id(curr)); */
-		cos_flip_all_regs(&(thd->regs));
+		if (arg1 == spd_get_index(tif->spd) && (thd->flags & THD_STATE_PREEMPTED)) return arg1;
+
+		/* if (arg1 == 2) {  		/\* scheduler *\/ */
+		/* 	if (arg1 == spd_get_index(tif->spd) && (thd->flags & THD_STATE_PREEMPTED)) return arg1; */
+		/* } else { */
+		/* 	if (arg1 == spd_get_index(tif->spd)) return arg1; */
+		/* } */
 		
 		return -1;
 	}
@@ -1140,7 +1075,6 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 		printk("READY_UPCALL thd %d\n", thd_get_id(thd));
 		cos_meas_event(COS_MEAS_UPCALL_INACTIVE);
 		*ret_code = COS_SCHED_RET_INVAL;
-		assert(0);
 		goto ret_err;
 	}
 	
@@ -1196,6 +1130,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 		           thd_sched_flags  = COS_SCHED_EVT_NIL;
 	struct cos_sched_data_area *da;
 	int ret_code = COS_SCHED_RET_ERROR;
+	int fault_ret;
 
 	*preempt = 0;
 	curr = thd_get_current();
@@ -1255,7 +1190,8 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	/* success for this current thread */
 	curr->regs.ax = COS_SCHED_RET_SUCCESS;
 
-	/* printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
+	/* if (thd_get_id(thd) == 12 || thd_get_id(curr) == 12) */
+	/* 	printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
 	event_record("switch_thread", thd_get_id(curr), thd_get_id(thd));
 
 #ifdef MEAS_TCS_FAULT_DETECT
@@ -1263,7 +1199,6 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	rdtscll(start);
 #endif
 
-	int fault_ret;
         /* ANDY detect fault when switch thread */
 	if(unlikely(fault_ret = switch_thd_fault_detect(thd))){
 		switch_thd_fault_update(thd);
@@ -1596,7 +1531,7 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 
 	break_preemption_chain(curr);
 
-	/* printk("COS: in brand_completion_switch_to\n"); */
+	printk("COS: in brand_completion_switch_to  curr %d\n", thd_get_id(curr));
 	curr->flags &= ~THD_STATE_ACTIVE_UPCALL;
 	curr->flags |= THD_STATE_READY_UPCALL;
 	/* 
@@ -1617,13 +1552,13 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 	 * UPDATE: this has been dealt with by adding the
 	 * BREAK_PREEMPTION_CHAIN flag to sched_cntl.
 	 */
+	printk("brand_completion_switch_to: remove preemption thd %d\n", thd_get_id(prev));
 	switch_thread_context(curr, prev);
 
 	/* This might not be true if we are a brand that was just
 	 * branded by another thread.  That other thread just branded
 	 * us, and wasn't preempted. */
 	if (prev->flags & THD_STATE_PREEMPTED) {
-		/* printk("brand_completion_switch_to: remove preemption thd %d\n", thd_get_id(prev)); */
 		remove_preempted_status(prev);
 	}
 	update_sched_evts(prev, COS_SCHED_EVT_NIL, 
@@ -1648,6 +1583,7 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 	if (brand->pending_upcall_requests) {
 		event_record("brand complete, self pending upcall executed", thd_get_id(curr), 0);
 		report_upcall("c", curr);
+		printk("curr %d just process!!!\n", thd_get_id(curr));
 		return sched_tailcall_pending_upcall(curr, cspd);
 	}
 
@@ -1682,6 +1618,7 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 
 		event_record("brand complete, upcall scheduler", thd_get_id(curr), 0);
 
+		printk("curr %d upcall scheduler\n", thd_get_id(curr));
 		cos_meas_event(COS_MEAS_BRAND_COMPLETION_UC);
 		//cos_meas_event(COS_MEAS_FINISHED_BRANDS);
 		return &curr->regs;
@@ -1689,6 +1626,7 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 
 	event_record("brand completion, switch to interrupted thread", thd_get_id(curr), thd_get_id(prev));
 
+	/* printk("3 curr %d prev %d\n", thd_get_id(curr), thd_get_id(prev)); */
 	brand_completion_switch_to(curr, prev);
 	*preempt = 1;
 	report_upcall("i", curr);
@@ -1730,10 +1668,6 @@ cos_syscall_brand_wait_cont(int spd_id, unsigned short int bid, int *preempt)
 		printk("cos: component claimed in spd %d, but not\n", spd_id);
 		goto brand_wait_err;		
 	}
-
-	/* caller might fail after making call into kernel to wait interrupt */
-        /* user calls into kernel, update the fault cnt with caller */
-	/* the caller could be the home spd */
 	
 	brand = thd_get_by_id(bid);
 	if (unlikely(NULL == brand)) {
@@ -1750,6 +1684,7 @@ cos_syscall_brand_wait_cont(int spd_id, unsigned short int bid, int *preempt)
 		goto brand_wait_err;
 	}
 
+	/* printk("thd %d waiting for the interrupt (preempted %d bid %d)\n", curr->thread_id, *preempt, bid); */
 	return brand_execution_completion(curr, preempt);
 brand_wait_err:
 	curr->regs.ax = -1;
@@ -1873,9 +1808,6 @@ static inline struct thread* verify_brand_thd(unsigned short int thd_id)
 	return brand_thd;
 }
 
-u16_t cos_nbid = 0;
-u16_t cos_ntid = 0;
-
 COS_SYSCALL int 
 cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 {
@@ -1966,18 +1898,21 @@ cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 		break_preemption_chain(t);
 		t->flags |= THD_STATE_CYC_CNT;
 
-		retid = t->thread_id;
 		//print_thd_sched_structs(new_thd);
-		cos_ntid = tid;
-		cos_nbid = bid;
+
+		t->brand_thd = brand_thd;
+		/* printk("add:t %d\n", thd_get_id(t)); */
+		/* printk("brand %d\n", thd_get_id(t->brand_thd)); */
+		retid = t->thread_id;		
 		break;
 	}
 	case COS_BRAND_REMOVE_THD:
 	{
-		struct thread *brand_thd = verify_brand_thd(cos_nbid);
-		struct thread *t = thd_get_by_id(cos_ntid);
-		if (NULL == t || NULL == brand_thd) return 0;
-		if (!(t->flags & THD_STATE_UPCALL) && (!t->flags & THD_STATE_ACTIVE_UPCALL)) return 0;
+		struct thread *brand_thd = verify_brand_thd(bid);
+		struct thread *t = thd_get_by_id(tid);
+
+		if (NULL == t || NULL == brand_thd) return -1;
+		if (!(t->flags & THD_STATE_UPCALL) && !(t->flags & THD_STATE_ACTIVE_UPCALL)) return 0;
 		t->flags &= ~(THD_STATE_UPCALL | THD_STATE_ACTIVE_UPCALL | THD_STATE_READY_UPCALL);
 		t->thread_brand = NULL;
 		t->upcall_threads = NULL;
@@ -1988,20 +1923,52 @@ cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 		retid = 0;
 		break;
 	}
+	case COS_BRAND_ACTIVATE_UC:
+	{
+		struct thread *brand_thd = verify_brand_thd(bid);
+		struct thread *t = thd_get_by_id(tid);
+		if (NULL == t || NULL == brand_thd) return -1;
+
+		if (t != brand_thd->upcall_threads) return -1;
+		if (!(t->flags & THD_STATE_UPCALL)) return -1;
+		if (t->flags & THD_STATE_ACTIVE_UPCALL) return 0;
+		t->flags &= ~THD_STATE_READY_UPCALL;
+		t->flags |= THD_STATE_ACTIVE_UPCALL;
+
+		brand_thd->pending_upcall_requests = 100;
+
+		/* t->thread_brand = brand_thd; */
+		/* t->upcall_threads = brand_thd->upcall_threads; */
+		/* brand_thd->upcall_threads = t; */
+		/* break_preemption_chain(t); */
+
+		retid = 0;
+		break;
+	}
 	case COS_BRAND_INTRO_BID:
 	{
-		retid = cos_nbid;
+		struct thread *t = thd_get_by_id(tid);
+		if (NULL == t) return -1;
+		if (t->brand_thd) {
+			/* printk("read:t %d\n", thd_get_id(t)); */
+			/* printk("brand %d\n", thd_get_id(t->brand_thd)); */
+			retid = thd_get_id(t->brand_thd);
+
+		}
+		else retid = 0;
 		break;
 	}
 	case COS_BRAND_INTRO_TID:
 	{
-		retid = cos_ntid;
+		struct thread *brand_thd = verify_brand_thd(bid);
+		if (NULL == brand_thd) return -1;
+		retid = 0;  	/* place holder */
 		break;
 	}
 	case COS_BRAND_INTRO_STATUS:
 	{
-		struct thread *brand_thd = verify_brand_thd(cos_nbid);
-		struct thread *t = thd_get_by_id(cos_ntid);
+		struct thread *brand_thd = verify_brand_thd(bid);
+		struct thread *t = thd_get_by_id(tid);
 		if (NULL == t || NULL == brand_thd) return 0;
 		if (t->thread_brand == NULL) retid = 1;
 		else retid = 0;
@@ -2465,7 +2432,6 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	op     = op_spd >> 16;
 	spd_id = 0xFFFF & op_spd;
 
-	int test = spd_id;
 	if (spd_id == 33) spd_id = 8;
 
 	dest = spd_get_by_index(spd_id);
@@ -2495,7 +2461,7 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	spd_mpd_ipc_release((struct composite_spd *)thd_get_thd_spdpoly(thd));//curr_spd->composite_spd);
 	//spd_mpd_ipc_take((struct composite_spd *)dest->composite_spd);
 
-	struct pt_regs *r = &thd->regs;
+	/* struct pt_regs *r = &thd->regs; */
 
 	/* printk("r->bx %p\n", r->bx); */
 	/* printk("r->di %p\n", r->di); */
@@ -2517,22 +2483,6 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	/* printk("r->ax %p\n", r->ax); */
 	/* printk("r->ip %p\n", r->ip); */
 	/* printk("r->sp %p\n", r->sp); */
-
-
-	if (test == 33) {
-
-		printk("r->bx %p\n", r->bx);
-		printk("r->di %p\n", r->di);
-		printk("r->si %p\n", r->si);
-		printk("r->cx %p\n", r->cx);
-		printk("r->dx %p\n", r->dx);
-		printk("r->ax %p\n", r->ax);
-		printk("r->ip %p\n", r->ip);
-		printk("r->sp %p\n", r->sp);
-
-		printk("thd %d before upcall ETF  with op %d\n", thd_get_id(thd), op);
-		return 2;
-	}
 
 	/* if (!arg) upcall_setup(thd, dest, COS_UPCALL_BOOTSTRAP, 0, 0, 0); */
 	/* if (1 == arg) upcall_setup(thd, dest, COS_UPCALL_REBOOT, 0, 0, 0); */
@@ -2811,7 +2761,8 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	struct thread *upcall = brand->upcall_threads;
 
 	assert(brand->flags & (THD_STATE_BRAND|THD_STATE_HW_BRAND));
-	assert(upcall && upcall->thread_brand == brand);
+	assert(upcall);
+	assert(upcall->thread_brand == brand);
 
 	/* 
 	 * If the upcall is already active, the scheduler's already
@@ -2946,6 +2897,9 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	cos_meas_event(COS_MEAS_BRAND_DELAYED);
 	return preempted;
 }
+
+
+extern struct thread* sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums);
 
 /************** end functions for parsing async set urgencies ************/
 /* currently, only scheduler can make this syscall */
@@ -3226,6 +3180,7 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 		}
 		
 		thd->sched_info[spd->sched_depth].thread_user_prio = (unsigned int)option;
+		/* printk("cos: thd id %d update prio %d\n", (unsigned int)thd_id, (unsigned int)option); */
 		break;
 	}
 	case COS_SCHED_RECORD_VALUE:

@@ -23,6 +23,10 @@
 struct tor_list {
 	int fid;
 	int tid;
+#ifdef EAGER_RECOVERY
+	int has_rebuilt;
+#endif
+	
 	struct tor_list *next, *prev;
 };
 
@@ -45,13 +49,43 @@ find_del(int fid)
 		}
 	}
 
+	return;
+}
+
+static void
+fid_update_rebuilt(int fid, int tid)
+{
+	struct tor_list *item;
+	assert(all_tor_list);
+	
 	for (item = FIRST_LIST(all_tor_list, next, prev);
 	     item != all_tor_list;
 	     item = FIRST_LIST(item, next, prev)){
-		/* printc("after delete : fid in the list %d\n", item->fid); */
+		if (fid == item->fid) {
+			item->has_rebuilt = 1;
+			item->tid = tid;
+		}
 	}
 	
 	return;
+}
+
+static int
+fid_lookup_rebuilt(int fid)
+{
+	struct tor_list *item;
+	int ret = 0;
+	assert(all_tor_list);
+	
+	for (item = FIRST_LIST(all_tor_list, next, prev);
+	     item != all_tor_list;
+	     item = FIRST_LIST(item, next, prev)){
+		if (fid == item->fid) {
+			return item->has_rebuilt;
+		}
+	}
+
+	return ret;
 }
 
 static int
@@ -65,7 +99,9 @@ restore_tor(int fid, td_t tid)
 	tor  = tor_lookup(tid);
 	assert(tor);
 	/* printc("before meta done: tor->offset %d\n", tor->offset); */
-	
+
+	if (fid_lookup_rebuilt(fid)) goto done;
+
 	total_cbs = cbuf_c_introspect(cos_spd_id(), fid, 0, CBUF_INTRO_TOT);
 	/* printc("total cbs %d\n", total_cbs); */
 
@@ -77,14 +113,16 @@ restore_tor(int fid, td_t tid)
 		if (!sz) goto no_found;
 		offset = cbuf_c_introspect(cos_spd_id(), fid, nth_cb, CBUF_INTRO_OFFSET);
 	
-		/* printc("found cbid %d size %d offset %d\n", cbid, sz, offset); */
-		/* printc("meta write:: tor id %d for fid %d\n", tid, fid); */
+		printc("found cbid %d size %d offset %d\n", cbid, sz, offset);
+		printc("meta write:: tor id %d for fid %d\n", tid, fid);
 		__twmeta(cos_spd_id(), tid, cbid, sz, offset, 1);	/* 1 for recovery now */
 	}
 
 	/* printc("after meta done: tor->offset %d\n", tor->offset); */
 	tor->offset = 0;
-	find_del(fid);
+	/* find_del(fid); */
+	fid_update_rebuilt(fid, tid);
+
 	/* printc("[restore meta done]\n"); */
 done:
 	return ret;
@@ -113,40 +151,32 @@ find_restore(int tid)
 	return;
 }
 
-static void
-find_update(int fid, int val)
-{
-	struct tor_list *item;
-	assert(all_tor_list);
+/* static void */
+/* find_update(int fid, int val) */
+/* { */
+/* 	struct tor_list *item; */
+/* 	assert(all_tor_list); */
 	
-	for (item = FIRST_LIST(all_tor_list, next, prev);
-	     item != all_tor_list;
-	     item = FIRST_LIST(item, next, prev)){
-		if (fid == item->fid) {
-			item->tid = val;
-			break;
-		}
-	}
+/* 	for (item = FIRST_LIST(all_tor_list, next, prev); */
+/* 	     item != all_tor_list; */
+/* 	     item = FIRST_LIST(item, next, prev)){ */
+/* 		if (fid == item->fid) { */
+/* 			item->tid = val; */
+/* 		} */
+/* 	} */
 
-	/* for (item = FIRST_LIST(all_tor_list, next, prev); */
-	/*      item != all_tor_list; */
-	/*      item = FIRST_LIST(item, next, prev)){ */
-	/* 	printc("fid in the list %d has tid %d\n", item->fid, item->tid); */
-	/* } */
-	
-	return;
-}
-
+/* 	return; */
+/* } */
 
 static void
-set_tor_list()
+build_tor_list()
 {
 	int total_tor = 0, nth_fid = 0;
 	int fid;
 	struct tor_list *item;
 
 	total_tor = cbuf_c_introspect(cos_spd_id(), 0, 0, CBUF_INTRO_TOT_TOR);
-	/* printc("total file number %d\n", total_tor); */
+	printc("total file number %d\n", total_tor);
 
 	while(total_tor--) {
 		nth_fid++;
@@ -156,6 +186,7 @@ set_tor_list()
 		
 		item->fid = fid;
 		item->tid = 0;
+		item->has_rebuilt = 0;
 		INIT_LIST(item, next, prev);
 		
 		if (!all_tor_list) { /* initialize the head */
@@ -165,7 +196,7 @@ set_tor_list()
 		
 		ADD_LIST(all_tor_list, item, next, prev);
 		
-		/* printc("FID: %d\n", fid); */
+		printc("FID: %d\n", fid);
 	}
 	return;
 }

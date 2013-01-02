@@ -131,6 +131,8 @@ struct thread {
 	struct thread *crt_tail_thd, *crt_next_thd;
 	struct spd *crt_in_spd;
 
+	struct thread *brand_thd; /* track the brand thread associated with this thread */
+
 } CACHE_ALIGNED;
 
 struct thread *thd_alloc(struct spd *spd);

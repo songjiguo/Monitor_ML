@@ -21,8 +21,8 @@ va.o-fprr.o|print.o|mm.o|l.o|boot.o;\
 \
 fi.o-sm.o|fprr.o|print.o|mm.o|va.o|te.o;\
 \
-rfs.o-sm.o|fprr.o|print.o|mm.o|buf.o|l.o|e.o|va.o|unique_map.o|[faulthndlr_]llboot.o;\
+rfs.o-sm.o|fprr.o|print.o|mm.o|buf.o|l.o|e.o|va.o|unique_map.o|pfr.o;\
 unique_map.o-sm.o|fprr.o|print.o|mm.o|l.o|e.o|va.o|buf.o;\
 ramfs_rec_test2.o-sm.o|fprr.o|print.o|mm.o|buf.o|va.o|l.o|rfs.o|e.o;\
-ramfs_rec_test1.o-sm.o|fprr.o|print.o|mm.o|buf.o|va.o|l.o|rfs.o|e.o|ramfs_rec_test2.o|te.o|[faulthndlr_]llboot.o\
+ramfs_rec_test1.o-sm.o|fprr.o|print.o|mm.o|buf.o|va.o|l.o|rfs.o|e.o|ramfs_rec_test2.o|te.o|pfr.o\
 " ./gen_client_stub

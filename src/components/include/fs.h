@@ -137,7 +137,6 @@ fsobj_alloc(char *name, struct fsobj *parent)
 	fsobj_type_t t;
 	int len;
 
-	printc("fsobj_alloc: name %s\n", name);
 	end = strchr(name, '/');
 	if (end) {
 		len = end-name;

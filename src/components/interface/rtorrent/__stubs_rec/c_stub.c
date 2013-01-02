@@ -6,10 +6,11 @@
      3) writing successfully, fault later (for now)
 */
 
-
 #include <cos_component.h>
 #include <cos_debug.h>
 #include <print.h>
+
+#include <cos_list.h>
 
 #include <rtorrent.h>
 #include <cstub.h>
@@ -44,7 +45,17 @@ struct rec_data_tor {
 	long		 evtid;
 
 	unsigned long	 fcnt;
+
+#ifdef EAGER_RECOVERY
+	int has_rebuilt;
+	struct rec_data_tor *next, *prev;
+#endif
+
 };
+
+#ifdef EAGER_RECOVERY
+struct rec_data_tor* eager_list_head = NULL;
+#endif
 
 /**********************************************/
 /* slab allocator and cvect for tracking recovery data */
@@ -90,9 +101,11 @@ rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *par
 	rd->evtid	 = evtid;
 	rd->fcnt	 = fcounter;
 
+#ifdef EAGER_RECOVERY
+	rd->has_rebuilt  = 0;
+#endif
 	return;
 }
-
 
 /* restore the server state */
 static void
@@ -100,6 +113,7 @@ reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 {
 	td_t ret;
 	struct rec_data_tor *rd;
+
 	if (!(rd = rd_lookup(tid))) return; 	/* root_tid */
 
 	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
@@ -111,27 +125,20 @@ reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 		printc("re-split failed %d\n", tid);
 		BUG();
 	}
-	if (ret > 0) rd->s_tid = ret;  	/* update the ramfs side tid */
+	if (ret > 0) rd->s_tid = ret;  	/* update server side tid */
 	rd->fcnt = fcounter;
 
-	/* printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid); */
+#ifdef EAGER_RECOVERY
+	rd->has_rebuilt  = 1;
+#endif
+
+	printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid);
 	return;
 }
 
-static void
-rebuild_fs(td_t tid)
-{
-	unsigned long long start, end;
-	/* printc("\n <<<<<<<<<<<< recovery starts >>>>>>>>>>>>>>>>\n\n"); */
-	/* rdtscll(start); */
+extern void sched_active_uc(int thd_id);
 
-	reinstate(tid);
-
-	/* rdtscll(end); */
-	/* printc("rebuild fs cost %llu\n", end-start); */
-	/* printc("\n<<<<<<<<<<<< recovery ends >>>>>>>>>>>>>>>>\n\n"); */
-}
-
+extern void eager_recovery_all();
 
 static struct rec_data_tor *
 update_rd(td_t tid)
@@ -145,9 +152,13 @@ update_rd(td_t tid)
 
 	/* printc("rd->fcnt %lu fcounter %lu\n",rd->fcnt,fcounter); */
 
-	rebuild_fs(tid);
+#ifdef EAGER_RECOVERY
+	eager_recovery_all();
+#else
+	reinstate(tid);
+#endif
 
-	printc("rebuild fs is done\n\n");
+	/* printc("rebuild fs is done\n\n"); */
 	return rd;
 }
 
@@ -185,6 +196,54 @@ param_save(char *param, int param_len)
 
 	return l_param;
 }
+
+
+#ifdef EAGER_RECOVERY
+static struct rec_data_tor *
+eager_lookup(td_t td)
+{
+	struct rec_data_tor *rd = NULL;
+
+	if (!eager_list_head || EMPTY_LIST(eager_list_head, next, prev)) return NULL;
+	
+	for (rd = FIRST_LIST(eager_list_head, next, prev);
+	     rd != eager_list_head;
+	     rd = FIRST_LIST(rd, next, prev)){
+		if (td == rd->c_tid) return rd;
+	}
+	return rd;
+}
+
+void
+eager_recovery_all()
+{
+	td_t ret;
+	struct rec_data_tor *rd = NULL;
+
+	if (!eager_list_head || EMPTY_LIST(eager_list_head, next, prev)) return;
+	printc("\n [start eager recovery!]\n\n");
+
+	for (rd = FIRST_LIST(eager_list_head, next, prev);
+	     rd != eager_list_head;
+	     rd = FIRST_LIST(rd, next, prev)){
+		if (!rd->has_rebuilt) {
+			/* printc("found one c %d s %d\n", rd->c_tid, rd->s_tid); */
+			reinstate(rd->c_tid);
+		}
+	}
+	
+	
+	/* un_mark the has_rebuilt flag */
+	for (rd = FIRST_LIST(eager_list_head, next, prev);
+	     rd != eager_list_head;
+	     rd = FIRST_LIST(rd, next, prev)){
+		rd->has_rebuilt = 0;
+	}
+
+	printc("\n [eager recovery done!]\n\n");
+}
+#endif
+
 
 /************************************/
 /******  client stub functions ******/
@@ -227,7 +286,7 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
         tor_flags_t	flags	   = tflags;
         td_t		parent_tid = tid;
 
-/* printc("len %d param %s\n", len, param); */
+        /* printc("len %d param %s\n", len, param); */
 	unsigned long long start, end;
         assert(param && len >= 0);
         assert(param[len] == '\0'); 
@@ -243,7 +302,7 @@ redo:
 
         /* printc("parent_tid: %d\n", parent_tid); */
         d->tid	       = parent_tid;
-        d->flag = flag;
+        d->flag        = flag;
         d->tflags      = flags;
 	d->evtid       = evtid;
 	d->len[0]      = 0;
@@ -256,7 +315,7 @@ redo:
 #else
         if (aaa == 6) {
 #endif
-		d->flag = -10; /* test purpose only */
+		/* d->flag = -10; /\* test purpose only *\/ */
 		aaa = 100;
 		/* rdtscll(start); */
 	}
@@ -272,9 +331,20 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 		memset(&d->data[0], 0, len);
 		cbuf_free(d);
 		
-		rebuild_fs(tid);
+#ifdef EAGER_RECOVERY
+		eager_recovery_all();
+#else
+		reinstate(tid);
+#endif
 		
-		printc("rebuild is done\n\n");
+		/* printc("rebuild is done, , maybe active uc 12\n\n"); */
+
+		/* JIGUO: I think we'd better rebuild the web server status,
+		 * since no coming request will trigger the even since
+		 * the recovery */
+		/* sched_active_uc(12); */
+		/* cos_brand_cntl(COS_BRAND_ACTIVATE_UC, 13, 12, 0); */
+
 		/* rdtscll(end); */
 		/* printc("entire cost %llu\n", end-start); */
 		goto redo;
@@ -295,6 +365,11 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 		cli_tid = get_unique();
 		assert(cli_tid > 0 && cli_tid != ser_tid);
 		/* printc("found existing tid %d >> get new cli_tid %d\n", ser_tid, cli_tid); */
+#ifdef EAGER_RECOVERY
+		struct rec_data_tor *tmp;
+		tmp  = rd_lookup(ser_tid);
+		REM_LIST(tmp, next, prev);
+#endif
 	} else {
 		cli_tid = ser_tid;
 	}
@@ -303,6 +378,15 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
         rd_cons(rd, tid, ser_tid, cli_tid, l_param, len, tflags, evtid);
 	cvect_add(&rec_vect, rd, cli_tid);
 
+#ifdef EAGER_RECOVERY
+	/* only initialize the eager head */
+	if (unlikely(!eager_list_head)) {
+		eager_list_head = (struct rec_data_tor*)malloc(sizeof(struct rec_data_tor));
+		INIT_LIST(eager_list_head, next, prev);
+		rd_cons(eager_list_head, 0, 0, 0, NULL, 0, 0, 0);
+	}
+	ADD_LIST(eager_list_head, rd, next, prev);
+#endif
         ret = cli_tid;
 	/* printc("tsplit done!!!\n\n"); */
 CSTUB_POST
@@ -397,6 +481,9 @@ CSTUB_ASM_3(tmerge, spdid, cb, sz)
 	cbuf_free(d);
         if (!ret) rd_dealloc(rd); /* this must be a leaf */
 
+#ifdef EAGER_RECOVERY
+	REM_LIST(rd, next, prev);
+#endif
 
 CSTUB_POST
 
@@ -431,13 +518,25 @@ CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
         /* printc("<<< In: call tread (thread %d, spd %ld) >>>\n", cos_get_thd_id(), cos_spd_id()); */
         struct rec_data_tor *rd;
+        volatile unsigned long long start, end;
 
+	int flag_fail = 0;
 redo:
+	/* if (flag_fail == 0){ */
+	/* 	rdtscll(start); */
+	/* } */
         rd = update_rd(tid);
+
+	/* if (flag_fail == 0){ */
+	/* 	rdtscll(end); */
+	/* 	printc("tread -end cost %llu\n", end - start); */
+	/* } */
+
 	if (!rd) {
 		printc("try to read a non-existing tor\n");
 		return -1;
 	}
+
 
 CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 
@@ -447,9 +546,11 @@ CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 			printc("set cap_fault_cnt failed\n");
 			BUG();
 		}
+		/* flag_fail = 1; */
                 goto redo;
 	}
 
+        /* flag_fail = 0; */
         print_rd_info(rd);
 
 CSTUB_POST

@@ -426,7 +426,7 @@ static int interrupt_process(void *d, int sz, int *recv_len)
 
 	assert(d);
 
-	/* printc("Processing interrupt aaa %d (thd %d)\n", aaa, cos_get_thd_id()); */
+	/* printc("Processing interrupt (thd %d)\n", cos_get_thd_id()); */
 	/* if (aaa++ >= 20) assert(0); */
 
 	tm = get_thd_map(ucid);
@@ -522,7 +522,7 @@ int netif_event_wait(spdid_t spdid, char *mem, int sz)
 	interrupt_wait();
 	NET_LOCK_TAKE();
 	// just return if nothing is found for SWIFI
-	/* if (interrupt_process(mem, sz, &ret_sz)) BUG(); */   
+	/* if (interrupt_process(mem, sz, &ret_sz)) BUG(); */
 	interrupt_process(mem, sz, &ret_sz);
 	NET_LOCK_RELEASE();
 
@@ -619,7 +619,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
-	/* printc("netif: tread\n"); */
+	/* printc("thd %d netif: tread\n", cos_get_thd_id()); */
 	if (tor_isnull(td)) return -EINVAL;
 	t = tor_lookup(td);
 	if (!t)                      ERR_THROW(-EINVAL, done);

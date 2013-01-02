@@ -1258,6 +1258,8 @@ extern int parent_tread(spdid_t spdid, td_t td, int cbid, int sz);
 static volatile int event_thd = 0;
 static td_t ip_td = 0;
 
+
+unsigned long long mmm = 0;
 static int cos_net_evt_loop(void)
 {
 	int alloc_sz = MTU;
@@ -1269,11 +1271,12 @@ static int cos_net_evt_loop(void)
 	printc("cos_net_evt_loop thd %d init\n", cos_get_thd_id());
 	ip_td = parent_tsplit(cos_spd_id(), td_root, "", 0, TOR_ALL, -1);
 	assert(ip_td > 0);
-	printc("network uc %d starting...\n", cos_get_thd_id());
+	printc("network uc %d starting\n", cos_get_thd_id());
 	alloc_sz = sizeof(struct cos_array) + MTU;
 	while (1) {
 		int sz;
 
+		printc("cos_net: evt_loop spinning %d\n", cos_get_thd_id());
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
 		/* printc("cos_net: calling tread\n"); */
@@ -1615,6 +1618,7 @@ static void cos_net_create_netif_thd(void)
 	if (0 > (event_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0))) BUG();
 }
 
+unsigned long long ttt = 0;
 static int init(void) 
 {
 	int cnt = 0;
@@ -1633,6 +1637,7 @@ static int init(void)
 	NET_LOCK_RELEASE();
 	/* Start the tcp timer */
 	while (1) {
+		/* if (ttt++ % 10 == 0) printc("tcp timer %d spinning \n", cos_get_thd_id()); */
 		/* Sleep for a quarter of seconds as prescribed by lwip */
 		NET_LOCK_TAKE();
 
@@ -1660,15 +1665,25 @@ static int init(void)
 
 void cos_init(void *arg)
 {
-	static volatile int first = 1;
+	static volatile int first = 0;
+	union sched_param sp;
+	int tcp_thd;
 
 	if (cos_get_thd_id() == event_thd) cos_net_evt_loop();
 
-	if (first) {
-		first = 0;
+	if (first == 0) {
+		first = 1;
+
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 28;
+		tcp_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+		printc("tcp creates a thread %d\n", tcp_thd);
+
+		return;
+	} else {
+		printc("tcp: thread %d\n", cos_get_thd_id());
 		init();
 		BUG();
-	} else {
 		prints("net: not expecting more than one bootstrap.");
 	}
 }

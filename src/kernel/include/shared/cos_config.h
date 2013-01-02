@@ -7,16 +7,16 @@
 #define RUNTIME                5 // seconds
 
 // After how many seconds should schedulers print out their information?
-#define SCHED_PRINTOUT_PERIOD  9
+#define SCHED_PRINTOUT_PERIOD  16
 #define COMPONENT_ASSERTIONS   1 // activate assertions in components?
 
-#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idl
+#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
 
 /* 
  * Should Composite run as highest priority?  Should NOT be set if
- * using networking (cnet). 
+ * using networking (cnet).  Set if you want Composite run at the highest prio
  */
-//#define LINUX_HIGHEST_PRIORITY 0
+//#define LINUX_HIGHEST_PRIORITY 1
 
 // cos kernel settings
 #define COS_PRINT_MEASUREMENTS 1
@@ -53,7 +53,7 @@
  * versions of interfaces, such as mmgr, schduler, cbuf, torrent. To
  * use it, run python set_symbolic_link.py under composite/tools */
 
-#define RECOVERY_ENABLE 1               // 1 will enable the fault notification in Composite kernel
+#define RECOVERY_ENABLE 0               // 1 will enable the fault notification in Composite kernel
 #define SWIFI_ENABLE    1		// 1 will enable the fault injection (swifi component), for now always on
 
 #endif /* COS_CONFIG_H */

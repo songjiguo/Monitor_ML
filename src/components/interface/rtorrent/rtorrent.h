@@ -13,6 +13,8 @@
 #include <cbuf.h>
 #include <evt.h>
 
+#define ALL_ONE_RECOVERY   	/* recovery everything */
+#define LAZY_RECOVERY		/* only recover when necessary */
 
 //#define TSPLIT_FAULT
 //#define TWRITE_FAULT
@@ -20,12 +22,21 @@
 //#define TRELEASE_FAULT
 
 //#define TEST_0	   /* unit test */
-//#define TEST_1   /* single thread fails (T writes to foo/bar/who) */
+#define TEST_1   /* single thread fails (T writes to foo/bar/who) */
 //#define TEST_2   /* 2 threads, operate on the same files, one fails, (Both writes to foo/bar/who) */
 //#define TEST_3   /* 2 threads, operate on the different files(T1 writes foo/bar/who, T2 writes foo/boo/who) */
 #ifdef TEST_3
 #define TEST_4     /* two component A and B, A writes and B will fault later */
 #endif
+
+/* we can track all leaf torrents that are requested to split from
+ * this client so they and their parents can be rebuilt*/
+/* assume that only the spd which splits the torrent can read/write torrent */
+#define EAGER_RECOVERY
+
+/* we only replay the action when necessary */
+/* this is right way to do and should fit into RTA */
+//#define LAZY_RECOVERY
 
 
 /* torrent descriptor */

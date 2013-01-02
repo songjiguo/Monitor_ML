@@ -2,7 +2,7 @@ C_OBJS=ramfs_ft_test1.o
 ASM_OBJS=
 COMPONENT=ramfs_rec_test1.o
 INTERFACES=
-DEPENDENCIES=periodic_wake printc rtorrent sched cbuf_c evt mem_mgr_large valloc lock ramfs_test2 timed_blk
+DEPENDENCIES=periodic_wake printc rtorrent sched cbuf_c evt mem_mgr_large valloc lock ramfs_test2 timed_blk pgfault
 IF_LIB=
 
 include ../../Makefile.subsubdir

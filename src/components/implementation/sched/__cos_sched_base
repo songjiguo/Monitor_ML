@@ -289,6 +289,7 @@ static inline void fp_resume_thd(struct sched_thd *t)
 static void fp_activate_upcall(struct sched_thd *uc)
 {
 	if (sched_thd_inactive_evt(uc)) {
+		/* printc("curr %d --A-- uc %d\n", cos_get_thd_id(), uc->id); */
 		uc->flags &= ~THD_UC_READY;
 		uc->flags |= THD_READY;
 		REM_LIST(uc, prio_next, prio_prev); //done in move_end_runnable
@@ -297,8 +298,34 @@ static void fp_activate_upcall(struct sched_thd *uc)
 	}
 }
 
+
+void sched_active_uc(int thd_id)
+{
+	struct sched_thd *uc;
+
+	/* printc("active uc %d again here\n", thd_id); */
+	cos_sched_lock_take();
+	
+	if (0 == thd_id) {
+		cos_sched_lock_release();
+		return;
+	}
+
+	uc = sched_get_mapping(thd_id);
+	assert(uc);
+
+	fp_activate_upcall(uc);
+
+	cos_sched_lock_release();
+
+	return;
+}
+
+
+
 static void fp_deactivate_upcall(struct sched_thd *uc)
 {
+	/* printc("curr %d --D-- uc %d\n", cos_get_thd_id(), uc->id); */
 	uc->flags &= ~THD_READY;
 	uc->flags |= THD_UC_READY;
 	thread_block(uc);
@@ -410,6 +437,7 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 		 * scheduled.
 		 */
 		if (cos_sched_pending_event()) {
+			/* if (current->id == 12) printc("thd %d clean event and process\n", current->id); */
 			cos_sched_clear_events();
 			cos_sched_process_events(evt_callback, 0);
 		}
@@ -580,6 +608,7 @@ static void fp_event_completion(struct sched_thd *e)
 
 	while (1) {
 		cos_sched_lock_take();
+		/* printc("thd %d switch on event completion \n", cos_get_thd_id()); */
 		sched_switch_thread(COS_SCHED_TAILCALL, EVT_CMPLETE_LOOP);
 	}
 	BUG();
@@ -752,8 +781,8 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 	
 	cos_sched_lock_take();
 
-	unsigned long ll = 0;
-	while(ll++ < 1000000);
+	/* unsigned long ll = 0; */
+	/* while(ll++ < 1000000); */
 		
 	/* printc("thread %d waking up thread %d. %d\n", cos_get_thd_id(), thd_id, 0); */
 	thd = sched_get_mapping(thd_id);
@@ -865,9 +894,8 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	assert(thd);
 	assert(spdid);
 
-
-	unsigned long ll = 0;
-	while(ll++ < 1000000);
+	/* unsigned long ll = 0; */
+	/* while(ll++ < 1000000); */
 
 	/* we shouldn't block while holding a component lock */
 	if (unlikely(0 != thd->ncs_held)) goto warn;
@@ -996,7 +1024,8 @@ int sched_component_take(spdid_t spdid)
 	struct sched_thd *holder, *curr;
 	int first = 1;
 
-	//printc("sched take %d\n", spdid);
+	if (cos_get_thd_id() == 2) return 0; /* for eager test */
+	/* printc("sched take %d (thd %ld)\n", spdid, cos_get_thd_id()); */
 
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
@@ -1035,7 +1064,8 @@ int sched_component_release(spdid_t spdid)
 {
 	struct sched_thd *curr;
 
-	//printc("sched release %d\n", spdid);
+	if (cos_get_thd_id() == 2) return 0; /* for eager test */
+	/* printc("sched release %d\n", spdid); */
 
 	report_event(COMP_RELEASE);
 	cos_sched_lock_take();

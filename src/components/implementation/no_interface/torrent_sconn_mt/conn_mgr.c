@@ -153,13 +153,15 @@ mapping_remove(int from, int to, long feid, long teid)
 	UNLOCK();
 }
 
+static unsigned long long aaa = 0;
+
 static void 
 accept_new(int accept_fd)
 {
 	int from, to, feid, teid;
 
 	while (1) {
-		/* printc("tcp evt_get\n"); */
+		/* if (aaa++ % 1000 == 0) printc("conn: accept_new spinning %d\n", cos_get_thd_id()); */
 		feid = evt_get();
 		assert(feid > 0);
 		from = from_tsplit(cos_spd_id(), accept_fd, "", 0, TOR_RW, feid);
@@ -183,6 +185,7 @@ accept_new(int accept_fd)
 	}
 }
 
+static unsigned long long bbb = 0;
 static void 
 from_data_new(struct tor_conn *tc)
 {
@@ -194,7 +197,7 @@ from_data_new(struct tor_conn *tc)
 	while (1) {
 		int ret;
 		cbuf_t cb;
-
+		/* if (bbb++ % 1000 == 0) printc("conn: from_data_new spinning %d\n", cos_get_thd_id()); */
 		buf = cbuf_alloc(BUFF_SZ, &cb);
 		assert(buf);
 		amnt = from_tread(cos_spd_id(), from, cb, BUFF_SZ-1);
@@ -226,6 +229,7 @@ close:
 	goto done;
 }
 
+static unsigned long long ccc = 0;
 static void 
 to_data_new(struct tor_conn *tc)
 {
@@ -237,7 +241,7 @@ to_data_new(struct tor_conn *tc)
 	while (1) {
 		int ret;
 		cbuf_t cb;
-
+		/* if (ccc++ % 1000 == 0) printc("conn: to data new %d spinning \n", cos_get_thd_id()); */
 		if (!(buf = cbuf_alloc(BUFF_SZ, &cb))) BUG();
 		/* printc("conn_mgr: tread\n"); */
 		amnt = tread(cos_spd_id(), to, cb, BUFF_SZ-1);
@@ -314,6 +318,7 @@ meas_record(u64_t meas)
 	}
 }
 
+static unsigned long long ttt = 0;
 void
 cos_init(void *arg)
 {
@@ -353,9 +358,10 @@ cos_init(void *arg)
 		memset(&tc, 0, sizeof(struct tor_conn));
 		rdtscll(end);
 		meas_record(end-start);
-		/* printc("conn: wait event1\n"); */
+		/* printc("conn: thd %d wait event\n", cos_get_thd_id()); */
 		evt = evt_wait_all();
-		/* printc("conn: wait event2\n"); */
+		/* printc("conn: thd %d event comes\n", cos_get_thd_id()); */
+		/* if (ttt++ % 1000 == 0) printc("conn: event loop %d spinning \n", cos_get_thd_id()); */
 		rdtscll(start);
 		t   = evt_torrent(evt);
 		/* printc("conn_mgr: 2\n"); */
@@ -365,6 +371,7 @@ cos_init(void *arg)
 			if (t == accept_fd) {
 				tc.to = 0;
 				accept_new(accept_fd);
+				/* if (ttt++ % 1000 == 0) printc("conn: after accept new (thd %d)\n", cos_get_thd_id()); */
 				/* printc("conn_mgr: 3 (thd %d)\n", cos_get_thd_id()); */
 			} else {
 				tc.to = tor_get_to(t, &tc.teid);
@@ -379,11 +386,13 @@ cos_init(void *arg)
 			/* printc("conn_mgr: 5\n"); */
 			tc.from = tor_get_from(t, &tc.feid);
 			assert(tc.from > 0);
+			/* if (ttt++ % 1000 == 0) printc("conn: after get from (thd %d)\n", cos_get_thd_id()); */
 			/* printc("conn_mgr: 6\n"); */
 			to_data_new(&tc);
 		}
 
 		cos_mpd_update();
+		/* printc("conn: 17 is back!!\n"); */
 	}
 }
 

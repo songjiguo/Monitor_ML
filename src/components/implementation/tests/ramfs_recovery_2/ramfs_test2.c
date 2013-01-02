@@ -106,3 +106,24 @@ void ramfs_test2(void)
 	return;
 }
 
+
+void cos_init(void)
+{
+	return;
+
+}
+
+void eager_recovery_all();
+void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
+{
+	switch (t) {
+	case COS_UPCALL_EAGER_RECOVERY:
+		printc("eager upcall: thread %d (in spd %d)\n", cos_get_thd_id(), cos_spd_id());
+		eager_recovery_all();
+		break;
+	default:
+		cos_init();
+	}
+
+	return;
+}

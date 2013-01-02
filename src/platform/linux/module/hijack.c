@@ -1356,15 +1356,12 @@ paddr_t pgtbl_rem_ret(paddr_t pgtbl, vaddr_t va)
 int pgtbl_rw_set(paddr_t pgtbl, vaddr_t va, int flag)
 {
 	pte_t *pte = pgtbl_lookup_address(pgtbl, va);
-	paddr_t paddr = (unsigned long)va_to_pa(va);
 	/* if (pte) printk("cos: pte is fine\n"); */
 	
 	if (!pte || !(pte_val(*pte) & _PAGE_PRESENT)) {
 		return -1;
 	}
 
-	/* if (flag == COS_MMAP_PFN_RW) pte->pte_low = paddr | _PAGE_RW; */
-	/* if (flag == COS_MMAP_PFN_RO) pte->pte_low = paddr & ~_PAGE_RW; */
 	if (flag == COS_MMAP_PFN_RW) pte->pte_low |= _PAGE_RW;
 	if (flag == COS_MMAP_PFN_RO) pte->pte_low &= ~_PAGE_RW;
 
@@ -1661,11 +1658,16 @@ static void
 thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 {
 	struct thd_invocation_frame *thd_frame;
+	unsigned int fltnotif_cap;
+	struct invocation_cap *flt_notif_cap_entry;
+	struct spd *notif_spd;
+
+#if RECOVERY_ENABLE
 	thd_frame = thd_invstk_top(thd);
 
-	unsigned int fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
-	struct invocation_cap *flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
-	struct spd *notif_spd = flt_notif_cap_entry->destination;
+	fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
+	flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
+	notif_spd = flt_notif_cap_entry->destination;
 	/* printk("notif spd is %d\n", spd_get_index(notif_spd)); */
 	if (fltnotif_cap - thd_frame->spd->cap_base > COS_FLT_MAX) {
 		flt_notif_cap_entry->dest_entry_instruction = 0;
@@ -1674,6 +1676,7 @@ thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 		printk("handler is not defined !!!\n");
 	}
 	cos_fault_int_notif(thd, notif_spd, fltnotif_cap, regs);
+#endif
 
 	return;
 }
@@ -1744,7 +1747,9 @@ int host_attempt_brand(struct thread *brand)
 			if (next != cos_current) {
 				/* update the fault counter (recovery) */
 				thd_frame = thd_invstk_top(cos_current);
+#if RECOVERY_ENABLE
 				thd_frame->curr_fault.cnt = thd_frame->spd->fault.cnt;
+#endif
 
 				assert(thd_get_current() == next);
 				/* the following call isn't
@@ -1815,6 +1820,7 @@ int host_attempt_brand(struct thread *brand)
 				unsigned long long start, end;
 				rdtscll(start);
 #endif
+				/* printk("brand %d next thd %d\n", brand->thread_id, next->thread_id); */
 				if (unlikely(interrupt_fault_detect(next))) {
 				/* if (thd_get_id(cos_current) == 11) {  // test 8 for spin, 11 for pong */
 					/* Peter: detect fault on interrupt path */

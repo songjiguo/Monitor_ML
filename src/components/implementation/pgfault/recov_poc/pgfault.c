@@ -21,16 +21,17 @@ struct cos_regs regs;
 
 static int first = 0;
 
+
 int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 {
 	unsigned long r_ip; 	/* the ip to return to */
 	int tid = cos_get_thd_id();
 
-	/* first++; */
-	/* if(first == 5) { */
-	/* 	printc("has failed %d times\n",first); */
-	/* 	assert(0); */
-	/* } */
+	first++;
+	if(first == 6) {
+		printc("plain pgfault has failed %d times\n",first);
+		assert(0);
+	}
 
 
 	printc("PGFAULT: thd %d faults in spd %d @ %p\n",
@@ -55,8 +56,17 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
 	assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0)); /* increase the spd.fault_cnt in kernel */
 
+	volatile unsigned long long start, end;
+	
 	if ((int)ip == 1) failure_notif_wait(cos_spd_id(), spdid);
-	else         failure_notif_fail(cos_spd_id(), spdid);
+	else {
+		/* rdtscll(start); */
+
+		failure_notif_fail(cos_spd_id(), spdid);
+
+		/* rdtscll(end); */
+		/* printc("rebooting cost: %llu\n", (end-start)); */
+	}
 
 	return 0;
 }

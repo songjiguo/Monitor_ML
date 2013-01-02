@@ -63,6 +63,7 @@ static void thd_ft_init(struct thread *thd, int thd_id)
 	thd->crt_tail_thd = NULL;
 	thd->crt_next_thd = NULL;
 	thd->crt_in_spd   = NULL;
+	thd->brand_thd    = NULL;
 
 	return;
 }

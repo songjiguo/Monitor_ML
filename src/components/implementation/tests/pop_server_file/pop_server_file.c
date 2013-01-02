@@ -20,7 +20,7 @@ void pop_cgi(void)
 	char *data1 = "helloworld", *data2 = "andykevin";
 	unsigned int ret1, ret2;
 
-	printc("pop the file on the server\n");
+	/* printc("pop the file on the server\n"); */
 	evt1 = evt_split(cos_spd_id(), 0, 0);
 	evt2 = evt_split(cos_spd_id(), 0, 0);
 	assert(evt1 > 0 && evt2 > 0);

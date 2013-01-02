@@ -19,22 +19,23 @@
 #define MEAS_INT_FAULT_DETECT   /* measure the fault detection cost for interrupt */
 #endif
 
+
 /*---------Threads that created by scheduler--------*/
-static struct thread*
-find_thd(struct spd *spd, struct thread *thd)
-{
-	/* "remove" the found thd from original location */
-	thd->sched_next->sched_prev = thd->sched_prev;
-	thd->sched_prev->sched_next = thd->sched_next;
+/* static struct thread* */
+/* find_thd(struct spd *spd, struct thread *thd) */
+/* { */
+/* 	/\* "remove" the found thd from original location *\/ */
+/* 	thd->sched_next->sched_prev = thd->sched_prev; */
+/* 	thd->sched_prev->sched_next = thd->sched_next; */
 
-	/* put the found thd to the front of list */
-	thd->sched_next = spd->scheduler_all_threads->sched_next;
-	thd->sched_prev = spd->scheduler_all_threads;
-	spd->scheduler_all_threads->sched_next = thd;
-	thd->sched_next->sched_prev = thd;
+/* 	/\* put the found thd to the front of list *\/ */
+/* 	thd->sched_next = spd->scheduler_all_threads->sched_next; */
+/* 	thd->sched_prev = spd->scheduler_all_threads; */
+/* 	spd->scheduler_all_threads->sched_next = thd; */
+/* 	thd->sched_next->sched_prev = thd; */
 
-	return thd;
-}
+/* 	return thd; */
+/* } */
 
 static struct thread*
 sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums)
@@ -103,7 +104,7 @@ static inline int
 ipc_fault_detect(struct invocation_cap *cap_entry, struct spd *dest_spd)
 {
 	if (cap_entry->fault.cnt != dest_spd->fault.cnt) {
-		printk("dest spd %d fault cnt %d\n", spd_get_index(dest_spd), dest_spd->fault.cnt);
+		/* printk("dest spd %d fault cnt %lu\n", spd_get_index(dest_spd), dest_spd->fault.cnt); */
 		return 1;
 	}
 	else return 0;

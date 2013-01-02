@@ -20,6 +20,8 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 //#include <failure_notif.h>
 #include <cgraph.h>
 
+#include <recovery_upcall.h>
+
 //#define MEAS_COST
 
 /* local meta-data to track the components */
@@ -201,12 +203,10 @@ static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t c
 		vaddr_t dest_daddr;
 		char *lsrc, *dsrc;
 		int left, page_left;
-
 		sect       = cobj_sect_get(h, i);
 		dest_daddr = sect->vaddr;
 		lsrc       = cobj_sect_contents(h, i);
 		left       = cobj_sect_size(h, i);
-
 		while (left) {
 			/* data left on a page to copy over */
 			page_left   = (left > PAGE_SIZE) ? PAGE_SIZE : left;
@@ -439,13 +439,12 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 //	boot_spd_caps_chg_activation(failed, 0);
 	md = &local_md[failed];
 	assert(md);
-	/* printc("caller %d failed spd %d md->h %x\n", caller, failed, md->h); */
+	printc("caller %d failed spd %d md->h %x\n", caller, failed, md->h);
 	if (boot_spd_map_populate(md->h, failed, md->comp_info)) BUG();
 
 	/* rdtscll(end); */
 	/* printc("COST 1: %llu\n", end - start); */
 	/* rdtscll(start); */
-
 	/* can fail if component had no boot threads: */
 	if (boot_spd_caps(md->h, failed)) BUG();  /* do this first ??? */
 
@@ -461,7 +460,15 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 
 	/* rdtscll(end); */
 	/* printc("COST (caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start); */
+
+	if (failed == 14)
+		recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 16, 0);
+
+	if (failed == 14)
+		recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 15, 0);
+
 	UNLOCK();
+
 
 }
 

@@ -139,7 +139,7 @@ CSTUB_ASM_4(sched_create_thd, spdid, sched_param0, sched_param1, desired_thd)
 		       printc("replay the sched_timeout_thd\n");
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
        	       goto redo;
        }
 
@@ -181,7 +181,7 @@ CSTUB_ASM_4(sched_create_thread_default, spdid, sched_param0, sched_param1, desi
 		       printc("replay the sched_timeout_thd\n");
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
        	       goto redo;
        }
 
@@ -225,19 +225,22 @@ CSTUB_ASM_3(sched_wakeup, spdid, dep_thd, crash_flag)
 		       printc("replay the sched_timeout_thd\n");
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
        	       goto redo;
        }
 
 CSTUB_POST
 
 
+static unsigned long long ttt = 0;
+
 CSTUB_FN_ARGS_2(int, sched_block, spdid_t, spdid, unsigned short int, thd_id)
         unsigned long long start, end;
         struct period_thd *item;
         int crash_flag = 0;
 redo:
-/* printc("thread %d calls << sched_block -- thd_id %d >>\n",cos_get_thd_id(), thd_id); */
+	/* if (ttt++ % 1000 == 0) printc("thread %d calls << sched_block -- thd_id %d >>\n",cos_get_thd_id(), thd_id); */
+
 #ifdef MEASU_SCHED_INTERFACE_BLOCK
               rdtscll(start);
 #endif
@@ -268,7 +271,7 @@ CSTUB_ASM_3(sched_block, spdid, thd_id, crash_flag)
 		       printc("replay the sched_timeout_thd\n");
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
        	       goto redo;
        }
 
@@ -310,7 +313,7 @@ CSTUB_ASM_1(sched_component_take, spdid)
 		       printc("replay the sched_timeout_thd\n");
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
        	       goto redo;
        }
 
@@ -355,7 +358,7 @@ CSTUB_ASM_1(sched_component_release, spdid)
 		       printc("replay the sched_timeout_thd\n");
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
 	       goto redo;
        }
 
@@ -389,7 +392,7 @@ CSTUB_ASM_1(sched_timeout_thd, spdid)
 		       printc("replay the sched_timeout_thd\n");
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
 	       goto redo;
        }
 
@@ -417,7 +420,7 @@ CSTUB_ASM_2(sched_timeout, spdid, amnt)
 		       sched_timeout(cos_spd_id(), wakeup_time);
 	       }
 
-	       rebuild_net_brand();
+	       /* rebuild_net_brand(); */
        	       goto redo;
        }
        /* printc("cli: thd %d amnt %lu for the sched_timeout \n", cos_get_thd_id(), amnt); */

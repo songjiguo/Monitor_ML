@@ -10,7 +10,7 @@
 "c0.o, ;llboot.o, ;*fprr.o, ;mm.o, ;print.o, ;boot.o, ;\
 \
 !sm.o,a1;!mpool.o, ;!buf.o, ;!va.o,a2;!mpd.o,a5;!tif.o,a5;!tip.o, ;\
-!port.o, ;!l.o,a4;!te.o,a3;!tnet.o, ;!eg.o,a5;!tp.o, ;\
+!port.o, ;!l.o,a4;!te.o,a3;!tnet.o, ;!eg.o,a5;\
 !stconnmt.o, '1:10:200:/bind:0:%d/listen:255';\
 !pfr.o, ;!httpt.o,a8;!rfs.o, ;!initfs.o,a3;!unique_map.o, ;!popcgi.o, ;!fi.o, :\
 \
@@ -25,7 +25,6 @@ sm.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o|mpool.o;\
 pfr.o-sm.o|fprr.o|mm.o|print.o|va.o|l.o|boot.o;\
 buf.o-boot.o|sm.o|fprr.o|print.o|l.o|mm.o|va.o|mpool.o;\
 mpool.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o;\
-tp.o-sm.o|buf.o|print.o|te.o|fprr.o|mm.o|va.o|mpool.o;\
 va.o-fprr.o|print.o|mm.o|l.o|boot.o;\
 \
 stconnmt.o-sm.o|print.o|fprr.o|mm.o|va.o|l.o|httpt.o|[from_]tnet.o|buf.o|eg.o|pfr.o;\

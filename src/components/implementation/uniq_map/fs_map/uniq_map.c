@@ -35,7 +35,7 @@ struct obj_id obj_id_list;
 
 /* public function. Only used by torrent for now, could be used by network... */
 uid
-uniq_map_get(spdid_t spdid, cbuf_t cb, int sz)
+uniq_map_set(spdid_t spdid, cbuf_t cb, int sz)
 {
 	uid ret_uid = 0;
 	struct obj_id *item;

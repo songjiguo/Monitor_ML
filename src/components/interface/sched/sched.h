@@ -33,4 +33,6 @@ int sched_component_release(spdid_t spdid);
 
 int sched_create_thd_again(unsigned int tid);
 
+void sched_active_uc(int thd_id);
+
 #endif 	    /* !SCHED_H */
