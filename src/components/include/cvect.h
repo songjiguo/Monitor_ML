@@ -243,6 +243,11 @@ __cvect_expand_rec(struct cvect_intern *vi, const long id, const int depth)
 		long n = id >> (CVECT_SHIFT * (depth-1));
 		if (vi[n & CVECT_MASK].c.next == NULL) {
 			struct cvect_intern *new = CVECT_ALLOC();
+			unsigned int i;
+
+			for (i = 0 ; i < PAGE_SIZE/sizeof(struct cvect_intern) ; i++) {
+				assert(new[i].c.val == NULL);
+			}
 			if (!new) return -1;
 			vi[n & CVECT_MASK].c.next = new;
 		}

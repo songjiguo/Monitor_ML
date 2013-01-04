@@ -7,13 +7,11 @@
 
 #include <cos_component.h>
 
-
 extern struct cos_component_information cos_comp_info;
 struct cobj_header *hs[MAX_NUM_SPDS+1];
 
 /* dependencies */
 #include <boot_deps.h>
-
 #include <cobj_format.h>
 
 /* interfaces */
@@ -28,7 +26,7 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 struct spd_local_md {
 	spdid_t spdid;
 	vaddr_t comp_info;
-	char *page_start;
+	char *page_start, *page_end;
 	struct cobj_header *h;
 } local_md[MAX_NUM_SPDS+1];
 
@@ -67,7 +65,6 @@ boot_spd_symbs(struct cobj_header *h, spdid_t spdid, vaddr_t *comp_info)
 
 		symb = cobj_symb_get(h, i);
 		assert(symb);
-
 		if (COBJ_SYMB_UNDEF == symb->type) break;
 
 		switch (symb->type) {
@@ -104,26 +101,27 @@ boot_symb_reify_16(char *mem, vaddr_t d_addr, vaddr_t symb_addr, u16_t value)
 	}
 }
 
-static void 
-boot_symb_process(struct cobj_header *h, spdid_t spdid, vaddr_t heap_val, 
-		  char *mem, vaddr_t d_addr, vaddr_t symb_addr)
+static int
+boot_process_cinfo(struct cobj_header *h, spdid_t spdid, vaddr_t heap_val, 
+		   char *mem, vaddr_t symb_addr)
 {
 	int i;
 	struct cos_component_information *ci;
 
-	if (round_to_page(symb_addr) != d_addr) return;
-		
-	ci = (struct cos_component_information*)(mem + ((PAGE_SIZE-1) & symb_addr));
-//		ci->cos_heap_alloc_extent = ci->cos_heap_ptr;
-//		ci->cos_heap_allocated = heap_val;
+	//if (round_to_page(symb_addr) != d_addr) return 0;
+
+	assert(symb_addr == round_to_page(symb_addr));
+	ci = (struct cos_component_information*)(mem);
+
 	if (!ci->cos_heap_ptr) ci->cos_heap_ptr = heap_val;
 	ci->cos_this_spd_id = spdid;
 	ci->init_string[0]  = '\0';
 	for (i = 0 ; init_args[i].spdid ; i++) {
 		char *start, *end;
 		int len;
-
+		
 		if (init_args[i].spdid != spdid) continue;
+		
 		start = strchr(init_args[i].init_str, '\'');
 		if (!start) break;
 		start++;
@@ -137,9 +135,12 @@ boot_symb_process(struct cobj_header *h, spdid_t spdid, vaddr_t heap_val,
 	/* save the address of this page for later retrieval
 	 * (e.g. to manipulate the stack pointer) */
 	comp_info_record(h, spdid, ci);
+	
+	return 1;
 }
 
-static vaddr_t boot_spd_end(struct cobj_header *h)
+static vaddr_t 
+boot_spd_end(struct cobj_header *h)
 {
 	struct cobj_sect *sect;
 	int max_sect;
@@ -150,103 +151,139 @@ static vaddr_t boot_spd_end(struct cobj_header *h)
 	return sect->vaddr + round_up_to_page(sect->bytes);
 }
 
-static int boot_spd_map_memory(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
+static int 
+boot_spd_map_memory(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
 {
-	unsigned int i, tot_sz = 0;
-	char *map_start, *map_iter;
-	vaddr_t dest_daddr;
+	unsigned int i, use_kmem, comp_sz = 0;
+	vaddr_t dest_daddr, prev_map = 0;
+	char *hp, *hp_end;
 
 	local_md[spdid].spdid      = spdid;
 	local_md[spdid].h          = h;
-	local_md[spdid].page_start = cos_get_heap_ptr();
+	hp                         = cos_get_heap_ptr();
+	local_md[spdid].page_start = hp;
 	local_md[spdid].comp_info  = comp_info;
 
-	/* Here we want to preallocate the contiguous span of virtual address pages... */
-	for (i = 0 ; i < h->nsect ; i++) {
-		tot_sz += round_up_to_page(cobj_sect_size(h, i)); 
-	}
-	map_start = cos_get_vas_pages(tot_sz/PAGE_SIZE);
-	assert(map_start == local_md[spdid].page_start);
-	map_iter = map_start;
-
+	/* Make comp_sz = how much room we need for the component */
 	for (i = 0 ; i < h->nsect ; i++) {
 		struct cobj_sect *sect;
+		char *dsrc;
 		int left;
 
+		use_kmem   = 0;
 		sect       = cobj_sect_get(h, i);
 		dest_daddr = sect->vaddr;
 		left       = cobj_sect_size(h, i);
-
+		/* previous section overlaps with this one, don't remap! */
+		if (round_to_page(dest_daddr) == prev_map) {
+			left      -= (prev_map + PAGE_SIZE - dest_daddr);
+			dest_daddr = prev_map + PAGE_SIZE;
+		} 
 		while (left > 0) {
-			if ((vaddr_t)map_iter != __mman_get_page(cos_spd_id(), (vaddr_t)map_iter, 0)) BUG();
-			if (dest_daddr != (__mman_alias_page(cos_spd_id(), (vaddr_t)map_iter, spdid, dest_daddr))) BUG();
-
-			map_iter   += PAGE_SIZE;
+			prev_map    = dest_daddr;
 			dest_daddr += PAGE_SIZE;
 			left       -= PAGE_SIZE;
 		}
 	}
+	comp_sz = dest_daddr - cobj_sect_get(h, 0)->vaddr;
+	cos_set_heap_ptr_conditional(hp, hp + comp_sz);
+	assert(cos_get_heap_ptr() == hp + comp_sz);
+	hp_end = cos_get_heap_ptr();
+	assert(comp_sz);
+
+	/* Once we know the size, actually map the memory! */
+	for (i = 0 ; i < h->nsect ; i++) {
+		struct cobj_sect *sect;
+		char *dsrc;
+		int left;
+
+		use_kmem   = 0;
+		sect       = cobj_sect_get(h, i);
+		if (sect->flags & COBJ_SECT_KMEM) use_kmem = 1;
+		dest_daddr = sect->vaddr;
+		left       = cobj_sect_size(h, i);
+		/* previous section overlaps with this one, don't remap! */
+		if (round_to_page(dest_daddr) == prev_map) {
+			left      -= (prev_map + PAGE_SIZE - dest_daddr);
+			dest_daddr = prev_map + PAGE_SIZE;
+		} 
+		while (left > 0) {
+			dsrc = hp;
+			hp  += PAGE_SIZE;
+			assert(dsrc <= hp_end);
+			/* TODO: if use_kmem, we should allocate
+			 * kernel-accessible memory, rather than
+			 * normal user-memory */
+			if ((vaddr_t)dsrc != __mman_get_page(cos_spd_id(), (vaddr_t)dsrc, 0)) BUG();
+			if (dest_daddr != (__mman_alias_page(cos_spd_id(), (vaddr_t)dsrc, spdid, dest_daddr))) BUG();
+
+			prev_map    = dest_daddr;
+			dest_daddr += PAGE_SIZE;
+			left       -= PAGE_SIZE;
+		}
+	}
+	local_md[spdid].page_end = (void*)dest_daddr;
+	assert(hp_end == hp); 	/* make sure the mapped memory is the same as the reservation size */
 
 	return 0;
 }
 
-static int boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
+static int 
+boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, int first_time)
 {
 	unsigned int i;
-	char *start_page;
+	/* Where are we in the actual component's memory in the booter? */
+	char *start_addr, *offset;
+	/* Where are we in the destination address space? */
+	vaddr_t prev_daddr, init_daddr;
 
-	unsigned long long start, end;
+	start_addr = local_md[spdid].page_start;
+	init_daddr = cobj_sect_get(h, 0)->vaddr;
 
-	start_page = local_md[spdid].page_start;
 	for (i = 0 ; i < h->nsect ; i++) {
 		struct cobj_sect *sect;
 		vaddr_t dest_daddr;
 		char *lsrc, *dsrc;
-		int left, page_left;
+		int left, dest_doff;
+
 		sect       = cobj_sect_get(h, i);
+		/* virtual address in the destination address space */
 		dest_daddr = sect->vaddr;
+		/* where we're copying from in the cobj */
 		lsrc       = cobj_sect_contents(h, i);
+		/* how much is left to copy? */
 		left       = cobj_sect_size(h, i);
-		while (left) {
-			/* data left on a page to copy over */
-			page_left   = (left > PAGE_SIZE) ? PAGE_SIZE : left;
-			dsrc        = start_page;
-			start_page += PAGE_SIZE;
-#ifdef MEAS_COST
-			rdtscll(start);
-#endif
+
+		/* Initialize memory. */
+		if (first_time || !(sect->flags & COBJ_SECT_INITONCE)) {
 			if (sect->flags & COBJ_SECT_ZEROS) {
-				memset(dsrc, 0, PAGE_SIZE);
+				printc("spdid %d memset to 0 (addr %p  size %d)\n",spdid, start_addr + (dest_daddr - init_daddr), left);
+				memset(start_addr + (dest_daddr - init_daddr), 0, left);
 			} else {
-				memcpy(dsrc, lsrc, page_left);
-				if (page_left < PAGE_SIZE) memset(dsrc+page_left, 0, PAGE_SIZE - page_left);
+				memcpy(start_addr + (dest_daddr - init_daddr), lsrc, left);
 			}
-#ifdef MEAS_COST
-			rdtscll(end);
-			printc("mem cost: %llu\n", end - start);
-#endif
+		}
 
-			/* Check if special symbols that need
-			 * modification are in this page */
-			boot_symb_process(h, spdid, boot_spd_end(h), dsrc, dest_daddr, comp_info);
-
-			lsrc       += PAGE_SIZE;
-			dest_daddr += PAGE_SIZE;
-			left       -= page_left;
+		if (sect->flags & COBJ_SECT_CINFO) {
+			assert(left == PAGE_SIZE);
+			assert(comp_info == dest_daddr);
+			boot_process_cinfo(h, spdid, boot_spd_end(h), start_addr + (comp_info-init_daddr), comp_info);
 		}
 	}
-	return 0;
+ 	return 0;
 }
 
-static int boot_spd_map(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
+static int 
+boot_spd_map(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
 {
 	if (boot_spd_map_memory(h, spdid, comp_info)) return -1; 
-	if (boot_spd_map_populate(h, spdid, comp_info)) return -1;
+	if (boot_spd_map_populate(h, spdid, comp_info, 1)) return -1;
 
 	return 0;
 }
 
-static int boot_spd_reserve_caps(struct cobj_header *h, spdid_t spdid)
+static int 
+boot_spd_reserve_caps(struct cobj_header *h, spdid_t spdid)
 {
 	if (cos_spd_cntl(COS_SPD_RESERVE_CAPS, spdid, h->ncap, 0)) BUG();
 	return 0;
@@ -328,8 +365,8 @@ static int
 boot_spd_thd(spdid_t spdid)
 {
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
-	
-	/* /\* Create a thread IF the component requested one *\/ */
+
+	/* Create a thread IF the component requested one */
 	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
 
 	/* if ((sched_create_thread_default(spdid, sp.v, 0, 99)) < 0) return -1; /\* test only *\/ */
@@ -372,7 +409,7 @@ boot_create_system(void)
 	for (i = 0 ; hs[i] != NULL ; i++) {
 		if (hs[i]->id < min) min = hs[i]->id;
 	}
-	
+
 	for (i = 0 ; hs[i] != NULL ; i++) {
 		struct cobj_header *h;
 		spdid_t spdid;
@@ -434,13 +471,13 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 
 	LOCK();
 
-	/* rdtscll(start); */
+	rdtscll(start);
 
 //	boot_spd_caps_chg_activation(failed, 0);
 	md = &local_md[failed];
 	assert(md);
-	printc("caller %d failed spd %d md->h %x\n", caller, failed, md->h);
-	if (boot_spd_map_populate(md->h, failed, md->comp_info)) BUG();
+	/* printc("caller %d failed spd %d md->h %x\n", caller, failed, md->h); */
+	if (boot_spd_map_populate(md->h, failed, md->comp_info, 0)) BUG();
 
 	/* rdtscll(end); */
 	/* printc("COST 1: %llu\n", end - start); */
@@ -455,14 +492,14 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
 //	boot_spd_caps_chg_activation(failed, 1);
 
-	/* rdtscll(end); */
-	/* printc("COST 3: %llu\n", end - start); */
+	rdtscll(end);
+	printc("COST 3: %llu\n", end - start);
 
 	/* rdtscll(end); */
 	/* printc("COST (caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start); */
 
-	if (failed == 14)
-		recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 16, 0);
+	/* if (failed == 14) */
+	/* 	recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 16, 0); */
 
 	if (failed == 14)
 		recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 15, 0);

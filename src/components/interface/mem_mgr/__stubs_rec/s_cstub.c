@@ -14,7 +14,7 @@ vaddr_t __sg_mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr
 
 vaddr_t __sg_mman_alias_page2(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
-	return __mman_alias_page(s_spd, s_addr, d_spd, d_addr);
+	return __mman_alias_page_rec(s_spd, s_addr, d_spd, d_addr);
 }
 
 int __sg_mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)

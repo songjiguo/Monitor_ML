@@ -34,7 +34,7 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags);
 int __mman_revoke_page(spdid_t spd, vaddr_t addr, int flags);
 /* The invoking component (s_spd) must own the mapping. */
 vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr);
-vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr);
+vaddr_t __mman_alias_page_rec(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr);
 void mman_print_stats(void);
 
 #define CLI_UPCALL_ENABLE   	/* enable recovery thread to upcall into these spds to rebuild the mappings */

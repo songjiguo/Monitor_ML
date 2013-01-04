@@ -87,6 +87,8 @@ CVECT_CREATE_STATIC(rec_mm_vect);
 CSLAB_CREATE(rdmm, sizeof(struct rec_data_mm));
 CSLAB_CREATE(rdmm_ls, sizeof(struct rec_data_mm_list));
 
+#define VALIDATE() do { assert(cos_spd_id() != 5 || cvect_lookup(&rec_mm_vect, 0x428a0000>>PAGE_SHIFT) == 0); } while(0)
+
 void print_rdmm_info(struct rec_data_mm *rdmm);
 void print_rdmm_list(struct rec_data_mm_list *rdmm_list);
 
@@ -129,15 +131,18 @@ rdmm_list_init(long id)
 		printc("Cli: can not add list into cvect\n");
 		return NULL;
 	}
-	/* printc("rec_mm_vect @ %p\n", &rec_mm_vect); */
-	/* printc("list init done @ %p\n", rdmm_list); */
+	/* printc("Init a list using id %d (vect @ %p ", id,&rec_mm_vect); */
+	/* printc("list @ %p)\n", rdmm_list); */
 	return rdmm_list;
 }
 
 static struct rec_data_mm_list *
 rdmm_list_lookup(int id)
-{ 
-	return cvect_lookup(&rec_mm_vect, id); 
+{
+	/* struct rec_data_mm_list *test; */
+	/* test = cvect_lookup(&rec_mm_vect, id); */
+	/* if (test) printc("rdmm_list is found using id %d (vect @ %p list @ %p)\n", id, &rec_mm_vect, test);  */
+	return cvect_lookup(&rec_mm_vect, id);
 }
 
 static int
@@ -237,8 +242,8 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 		rdmm_list->recordable = 0; /* no more same records added during the replay alias */
 		printc("replay::<rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x>\n",
 		       cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
-		if (rdmm->d_addr != __mman_alias_page(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr)) BUG();
-		/* __mman_alias_page(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr); */
+		if (rdmm->d_addr != __mman_alias_page_rec(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr)) BUG();
+		/* __mman_alias_page_rec(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr); */
 		if (!(rdmm = rdmm->next)) break;
 	}
 	rdmm_list->recordable = 1;
@@ -322,11 +327,12 @@ CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid
         /* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("s_addr %p -- d_addr %p\n", s_addr, d_addr); */
         volatile unsigned long long start, end;
         struct rec_data_mm_list *rdmm_list;
+
+	/* printc("add the record: s_spd %d s_addr %p d_spd %d d_addr %p\n", s_spd, s_addr, d_spd, d_addr); */
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
 
-        if (!rdmm_list || rdmm_list->recordable == 1) {
+	if (!rdmm_list || rdmm_list->recordable == 1) 
 		rdmm_list = record_add(rdmm_list, s_addr, d_spd, d_addr);
-	}
 
 	assert(rdmm_list);
 redo:
@@ -354,7 +360,7 @@ CSTUB_ASM_4(mman_alias_page, s_spd, s_addr, d_spd, d_addr)
 CSTUB_POST
 
 
-CSTUB_FN_ARGS_4(vaddr_t, __mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
+CSTUB_FN_ARGS_4(vaddr_t, __mman_alias_page_rec, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
 
         volatile unsigned long long start, end;
         struct rec_data_mm_list *rdmm_list;
@@ -362,7 +368,7 @@ CSTUB_FN_ARGS_4(vaddr_t, __mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spd
 	assert(rdmm_list);
 redo:
 if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id());
-CSTUB_ASM_4(__mman_alias_page, s_spd, s_addr, d_spd, d_addr)
+CSTUB_ASM_4(__mman_alias_page_rec, s_spd, s_addr, d_spd, d_addr)
 
        if (unlikely (fault)){
 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {

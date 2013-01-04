@@ -1,4 +1,5 @@
 #include <print.h>
+#undef assert
 #define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); *((int *)0) = 0;} } while(0)
 
 #include <mem_mgr.h>
@@ -17,7 +18,6 @@
 
 /* scheduling/thread operations... */
 #define __sched_create_thread_default sched_create_thread_default
-#define __sched_thd_parameter_set sched_thd_parameter_set
 
 /* memory operations... */
 #define __mman_get_page   mman_get_page
@@ -70,3 +70,4 @@ boot_deps_init(void)
 
 static void
 boot_deps_run(void) { return; }
+

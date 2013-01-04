@@ -26,7 +26,7 @@
  * usage.
  */
 
-/*
+/* 
  * FIXME: locking!
  */
 
@@ -37,6 +37,7 @@
 #include <print.h>
 
 #include <cos_list.h>
+#include "../../sched/cos_sched_ds.h"
 #include "../../sched/cos_sched_sync.h"
 #define LOCK()   if (cos_sched_lock_take())    assert(0);
 #define UNLOCK() if (cos_sched_lock_release()) assert(0);
@@ -79,7 +80,7 @@ static struct mapping *mapping_crt(struct mapping *p, struct frame *f, spdid_t d
 static struct mapping *mapping_lookup(spdid_t spdid, vaddr_t addr);
 
 static inline struct frame *
-frame_alloc()
+frame_alloc(void)
 {
 	spdid_t root_spd;
 
@@ -101,9 +102,9 @@ again:
 
 static inline void
 frame_deref(struct frame *f)
-{
+{ 
 	assert(f->nmaps > 0);
-	f->nmaps--;
+	f->nmaps--; 
 	if (f->nmaps == 0) {
 		f->c.free = freelist;
 		freelist  = f;
@@ -136,7 +137,8 @@ mm_init(void)
 /*************************************/
 /*** Memory allocation shenanigans ***/
 /*************************************/
-static inline struct frame *frame_alloc();
+
+static inline struct frame *frame_alloc(void);
 static inline int frame_index(struct frame *f);
 static inline void *
 __page_get(void)
@@ -146,7 +148,7 @@ __page_get(void)
 
 	void *hp;
 	struct frame *f;
-	printc("elephant\n");
+	/* printc("elephant\n"); */
 again:
 	hp = cos_get_vas_page(); /* use lib function if USE_VALLOC is not defined */
 	f = frame_alloc();
@@ -205,6 +207,7 @@ static struct comp_vas *
 cvas_alloc(spdid_t spdid)
 {
 	struct comp_vas *cv;
+
 	assert(!cvas_lookup(spdid));
 	cv = cslab_alloc_cvas();
 	if (!cv) {
@@ -232,7 +235,7 @@ cvas_ref(struct comp_vas *cv)
 	cv->nmaps++;
 }
 
-static void
+static void 
 cvas_deref(struct comp_vas *cv)
 {
 	assert(cv && cv->nmaps > 0);
@@ -347,9 +350,7 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	assert(!p || frame_nrefs(f) > 0);
 	frame_ref(f);
 	assert(frame_nrefs(f) > 0);
-
 	if (cvect_add(cv->pages, m, idx)) BUG();
-
 done:
 	return m;
 no_mapping:
@@ -371,7 +372,7 @@ static struct mapping *
 __mapping_linearize_decendents(struct mapping *m)
 {
 	struct mapping *first, *last, *c, *gc;
-
+	
 	first = c = m->c;
 	m->c = NULL;
 	if (!c) return NULL;
@@ -384,7 +385,7 @@ __mapping_linearize_decendents(struct mapping *m)
 		if (gc) ADD_LIST(last, gc, _s, s_);
 		c = FIRST_LIST(c, _s, s_);
 	} while (first != c);
-
+	
 	return first;
 }
 
@@ -404,10 +405,10 @@ __mapping_destroy(struct mapping *m)
 	assert(m == cvect_lookup(cv->pages, m->addr >> PAGE_SHIFT));
 	cvect_del(cv->pages, m->addr >> PAGE_SHIFT);
 	cvas_deref(cv);
+
 	idx = cos_mmap_cntl(COS_MMAP_REVOKE, 0, m->spdid, m->addr, 0);
 	assert(idx == frame_index(m->f));
 	frame_deref(m->f);
-
 	cslab_free_mapping(m);
 }
 
@@ -478,7 +479,7 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m = NULL;
 	vaddr_t ret = -1;
 
-	printc("mman_get_page....addr %x\n", (unsigned int)addr);
+	/* printc("mman_get_page....addr %x\n", (unsigned int)addr); */
 	/* if (spd == 7) printc("mman_get_page....addr %x\n", (unsigned int)addr); */
 	if (spd == 7) get_test++;
 
@@ -531,7 +532,6 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	struct mapping *m, *n;
 	vaddr_t ret = 0;
 
-	printc("in alias function\n");
 	/* if (s_spd == 8) printc("in alias function\n"); */
 	
 	if (s_spd == 7) alias_test++;
@@ -567,7 +567,7 @@ done:
 	return ret;
 }
 
-vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
+vaddr_t __mman_alias_page_rec(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
 	/* printc("alias helper\n"); */
 	struct mapping *m, *n;

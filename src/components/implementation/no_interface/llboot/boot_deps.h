@@ -34,9 +34,10 @@ printc(char *fmt, ...)
 #define cos_idle_thd  4	        /* idle thread*/
 #define cos_timer_thd 7  	/* timer thread */
 
+#ifndef assert
 /* On assert, immediately switch to the "exit" thread */
 #define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); cos_switch_thread(alpha, 0);} } while(0)
-
+#endif
 
 #ifdef BOOT_DEPS_H
 #error "boot_deps.h should not be included more than once, or in anything other than boot."
@@ -85,6 +86,7 @@ typedef void (*crt_thd_fn_t)(void);
  */
 
 #include "../../sched/cos_sched_sync.h"
+#include "../../sched/cos_sched_ds.h"
 /* synchronization... */
 #define LOCK()   if (cos_sched_lock_take())    BUG();
 #define UNLOCK() if (cos_sched_lock_release()) BUG();
@@ -372,11 +374,12 @@ comp_info_record(struct cobj_header *h, spdid_t spdid, struct cos_component_info
 	}
 }
 
+
 static void
 boot_deps_init(void)
 {
 	int i;
-	
+
 	alpha        = cos_get_thd_id();
 	recovery_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(recovery_thd >= 0);

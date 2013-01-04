@@ -64,3 +64,10 @@ CSTUB_POST
 
 CSTUB_4(int, tread, spdid_t, td_t, int, int);
 CSTUB_4(int, twrite, spdid_t, td_t, int, int);
+
+
+extern void eager_recovery_all();
+void eager_recovery_all()
+{
+	return;
+}

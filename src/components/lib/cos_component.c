@@ -7,18 +7,15 @@
 
 #include <cos_component.h>
 
-long stkmgr_stack_space[ALL_TMP_STACKS_SZ];
+//long stkmgr_stack_space[ALL_TMP_STACKS_SZ];
 
+int cos_sched_notifications __attribute__((weak));
 /* This should only really be present in schedulers! */
-struct cos_sched_data_area cos_sched_notifications = {
-	.cos_next = {.next_thd_id = 0, .next_thd_flags = 0},
-	.cos_locks = {.v = 0},
-	.cos_events = {}
-};
-
-/* will be initialized to a list */
-struct user_thread_id uthd_ids[MAX_NUM_THREADS];
-struct user_thread_id *global_user_thread_id_list;
+/* struct cos_sched_data_area cos_sched_notifications = { */
+/* 	.cos_next = {.next_thd_id = 0, .next_thd_flags = 0}, */
+/* 	.cos_locks = {.v = 0}, */
+/* 	.cos_events = {} */
+/* }; */
 
 __attribute__ ((weak))
 void cos_init(void *arg)
@@ -50,7 +47,12 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	case COS_UPCALL_BOOTSTRAP:
 	{
 		static int first = 1;
-		if (first) { first = 0; __alloc_libc_initilize(); }
+
+		if (first) { 
+			first = 0; 
+			__alloc_libc_initilize(); 
+			constructors_execute();
+		}
 		cos_argreg_init();
 		cos_init(arg1);
 		break;
@@ -71,32 +73,23 @@ int main(void)
 
 __attribute__((weak)) vaddr_t ST_user_caps;
 
-__attribute__((weak)) void *
-cos_get_vas_pages(int npages)
+__attribute__((weak)) 
+void *cos_get_vas_page(void)
 {
-	char *s;
+	char *h;
 	long r;
-
 	do {
-		s = cos_get_heap_ptr();
-		/* assert(h_i = h_{i-1} + PAGE_SIZE */
-		r = (long)s+(PAGE_SIZE * npages);
-	} while (cos_cmpxchg(&cos_comp_info.cos_heap_ptr, (long)s, r) != r);
-
-	return s;
+		h = cos_get_heap_ptr();
+		r = (long)h+PAGE_SIZE;
+	} while (cos_cmpxchg(&cos_comp_info.cos_heap_ptr, (long)h, r) != r);
+	return h;
 }
 
-__attribute__((weak)) void *
-cos_get_vas_page(void) { return cos_get_vas_pages(1); }
-
-__attribute__((weak)) void 
-cos_release_vas_pages(void *p, int npages)
+__attribute__((weak)) 
+void cos_release_vas_page(void *p)
 {
-	cos_set_heap_ptr_conditional(p + (npages*PAGE_SIZE), p);
+	cos_set_heap_ptr_conditional(p + PAGE_SIZE, p);
 }
-
-__attribute__((weak)) void
-cos_release_vas_page(void *p) { cos_release_vas_pages(p, 1); }
 
 extern const vaddr_t cos_atomic_cmpxchg, cos_atomic_cmpxchg_end, 
 	cos_atomic_user1, cos_atomic_user1_end, 
@@ -109,13 +102,13 @@ extern const vaddr_t cos_upcall_entry;
  * Much of this is either initialized at load time, or passed to the
  * loader though this structure.
  */
-struct cos_component_information cos_comp_info = {
+struct cos_component_information cos_comp_info __attribute__((section(".cinfo"))) = {
 	.cos_this_spd_id = 0,
 	.cos_heap_ptr = 0,
 	.cos_heap_limit = 0,
 	.cos_stacks.freelists[0] = {.freelist = 0, .thd_id = 0},
 	.cos_upcall_entry = (vaddr_t)&cos_upcall_entry,
-	.cos_sched_data_area = &cos_sched_notifications,
+	.cos_sched_data_area = (struct cos_sched_data_area*)&cos_sched_notifications,
 	.cos_user_caps = (vaddr_t)&ST_user_caps,
 	.cos_ras = {{.start = (vaddr_t)&cos_atomic_cmpxchg, .end = (vaddr_t)&cos_atomic_cmpxchg_end}, 
 		    {.start = (vaddr_t)&cos_atomic_user1, .end = (vaddr_t)&cos_atomic_user1_end},

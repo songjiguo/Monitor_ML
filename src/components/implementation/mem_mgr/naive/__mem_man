@@ -37,6 +37,7 @@
 #include <print.h>
 
 #include <cos_list.h>
+#include "../../sched/cos_sched_ds.h"
 #include "../../sched/cos_sched_sync.h"
 #define LOCK()   if (cos_sched_lock_take())    assert(0);
 #define UNLOCK() if (cos_sched_lock_release()) assert(0);
@@ -257,7 +258,6 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to)
 	assert(cv->pages);
 
 	if (cvect_lookup(cv->pages, idx)) goto collision;
-
 	cvas_ref(cv);
 	m = cslab_alloc_mapping();
 	if (!m) goto collision;

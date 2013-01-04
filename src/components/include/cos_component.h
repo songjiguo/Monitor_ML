@@ -18,7 +18,7 @@
 
 extern long stkmgr_stack_space[ALL_TMP_STACKS_SZ];
 
-extern struct cos_sched_data_area cos_sched_notifications;
+//gap extern struct cos_sched_data_area cos_sched_notifications;
 extern struct cos_component_information cos_comp_info;
 
 /*
@@ -222,7 +222,7 @@ static inline int cos_trans_cntl(int op, int channel, unsigned long addr, int of
 	return cos___trans_cntl(((op << 16) | (channel & 0xFFFF)), addr, off);
 }
 
-
+#ifdef NIL
 /*
  * We cannot just pass the thread id into the system call in registers
  * as the current thread of control making the switch_thread system
@@ -267,6 +267,7 @@ static inline void cos_next_thread(unsigned short int thd_id)
 
 	cos_next->next_thd_id = thd_id;
 }
+#endif
 
 static inline unsigned short int cos_get_thd_id(void)
 {
@@ -419,6 +420,48 @@ static inline void *cos_memset(void * s, char c , int count)
 /* compiler branch prediction hints */
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
+
+/* 
+ * A composite constructor (deconstructor): will be executed before
+ * other component execution (after component execution).  CRECOV is a
+ * function that should be called if one of the depended-on components
+ * has failed (e.g. the function serves as a callback notification).
+ */
+#define CCTOR __attribute__((constructor))
+#define CDTOR __attribute__((destructor)) /* currently unused! */
+#define CRECOV(fnname) long crecov_##fnname##_ptr __attribute__((section(".crecov"))) = (long)fnname
+
+static inline void
+section_fnptrs_execute(long *list)
+{
+	int i;
+	typedef void (*ctors_t)(void);
+	ctors_t ctors;
+
+	ctors = (ctors_t)list[1];
+	for (i = 0 ; i < list[0] ; i++, ctors++) ctors();
+}
+
+static void 
+constructors_execute(void)
+{
+	extern long __CTOR_LIST__;
+	section_fnptrs_execute(&__CTOR_LIST__);
+}
+static void 
+destructors_execute(void)
+{
+	extern long __DTOR_LIST__;
+	section_fnptrs_execute(&__DTOR_LIST__);
+}
+static void 
+recoveryfns_execute(void)
+{
+	extern long __CRECOV_LIST__;
+	section_fnptrs_execute(&__CRECOV_LIST__);
+}
+
+
 
 /* functionality for managing the argument region */
 #define COS_ARGREG_SZ PAGE_SIZE /* must be power of 2 */

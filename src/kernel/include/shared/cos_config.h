@@ -54,6 +54,6 @@
  * use it, run python set_symbolic_link.py under composite/tools */
 
 #define RECOVERY_ENABLE 0               // 1 will enable the fault notification in Composite kernel
-#define SWIFI_ENABLE    1		// 1 will enable the fault injection (swifi component), for now always on
+#define SWIFI_ENABLE    0		// 1 will enable the fault injection (swifi component), for now always on
 
 #endif /* COS_CONFIG_H */

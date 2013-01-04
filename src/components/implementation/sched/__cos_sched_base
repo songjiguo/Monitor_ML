@@ -19,6 +19,7 @@
 #define COS_FMT_PRINT
 
 #include <cos_component.h>
+#include <cos_sched_ds.h>
 #include <cos_scheduler.h>
 #include <cos_time.h>
 #include <print.h>
@@ -769,7 +770,6 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 	fp_resume_thd(thd);
 	report_event(THD_WAKE);
 }
-
 
 /* 
  * FIXME: should verify that the blocks and wakes come from the same
