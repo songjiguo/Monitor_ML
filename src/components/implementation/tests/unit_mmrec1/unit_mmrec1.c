@@ -30,13 +30,15 @@ revoke_test()
 #ifdef TEN2TEN  		/* 10 to 10 */
 	for (i = 0; i<PAGE_NUM; i++) {
 		addr = s_addr[i];
+		/* printc("s_addr %p\n", addr); */
 		/* rdtscll(start); */
 		mman_revoke_page(cos_spd_id(), addr, 0);
 		/* rdtscll(end); */
-		/* printc("cost %llu\n", end - start); */
+		/* printc("COST (mman_revoke_page) %llu\n", end - start); */
 	}
 #else  /* 1 to 10 */
 	addr = s_addr[0];
+	/* printc("s_addr %p\n", addr); */
 	mman_revoke_page(cos_spd_id(), addr, 0);
 #endif
 	printc("<<< REVOKE TEST END! >>>\n\n");
@@ -58,6 +60,7 @@ alias_test()
 		addr = s_addr[0];
 		#endif
 
+		/* printc("s_addr %p d_addr %p\n", addr, d_addr[i]); */
 		/* rdtscll(start); */
 		if (d_addr[i]!= mman_alias_page(cos_spd_id(), addr, cos_spd_id()+1, d_addr[i])) BUG();
 		/* rdtscll(end); */
@@ -82,6 +85,7 @@ get_test()
 			printc("Cannot get vas for comp %ld!\n", cos_spd_id());
 			BUG();
 		}
+		/* printc("s_addr %p\n", s_addr[i]); */
 		/* rdtscll(start); */
 		if (s_addr[i]!= mman_get_page(cos_spd_id(), s_addr[i], 0)) BUG();
 		/* rdtscll(end); */
@@ -153,12 +157,18 @@ cos_init(void)
 
 #ifdef CLI_UPCALL_ENABLE
 void alias_replay(vaddr_t s_addr);
+void eager_replay();
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_RECOVERY:
+#if (!LAZY_RECOVERY)
+		/* printc("EAGER!!! UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id()); */
+		eager_replay();
+#else
 		/* printc("UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id()); */
 		alias_replay((vaddr_t)arg3);
+#endif
 		break;
 	default:
 		cos_init();

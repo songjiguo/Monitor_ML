@@ -77,7 +77,14 @@ struct rec_data_mm_list {
 	unsigned long fcnt;
 	struct rec_data_mm first;
 	struct rec_data_mm *head, *tail;
+#if (!LAZY_RECOVERY)
+	struct rec_data_mm_list *next, *prev;
+#endif
 };
+
+#if (!LAZY_RECOVERY)
+struct rec_data_mm_list *all_rdmm_list = NULL;
+#endif
 
 /**********************************************/
 /* slab allocator and cvect for tracking pages */
@@ -133,6 +140,18 @@ rdmm_list_init(long id)
 	}
 	/* printc("Init a list using id %d (vect @ %p ", id,&rec_mm_vect); */
 	/* printc("list @ %p)\n", rdmm_list); */
+
+#if (!LAZY_RECOVERY)
+	INIT_LIST(rdmm_list, next, prev);
+	if (!all_rdmm_list) {
+		all_rdmm_list = cslab_alloc_rdmm_ls();
+		assert(all_rdmm_list);
+		INIT_LIST(all_rdmm_list, next, prev);
+	} else {
+		ADD_LIST(all_rdmm_list, rdmm_list, next, prev);
+	}
+#endif
+
 	return rdmm_list;
 }
 
@@ -149,11 +168,17 @@ static int
 rdmm_list_free(struct rec_data_mm_list *rdmm_list)
 {
 	assert(rdmm_list);
+
+#if (!LAZY_RECOVERY)
+	REM_LIST(rdmm_list, next, prev);
+#endif
+
 	if (cvect_del(&rec_mm_vect, rdmm_list->id)) {
 		printc("Cli: can not del from cvect\n");
 		return -1;
 	}
 	cslab_free_rdmm_ls(rdmm_list);
+
 	return 0;
 }
 
@@ -190,7 +215,7 @@ rdmm_list_add(struct rec_data_mm *rdmm, struct rec_data_mm_list *rdmm_list)
 static struct rec_data_mm_list *
 record_add(struct rec_data_mm_list *rdmm_list, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
-	/* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("recording....\n"); */
+	/* if (cos_spd_id() == 8 || cos_spd_id() == 9) printc("recording....\n"); */
 	struct rec_data_mm *rdmm;
 	if (!rdmm_list) {
 		rdmm_list = rdmm_list_init(s_addr >> PAGE_SHIFT);
@@ -202,12 +227,12 @@ record_add(struct rec_data_mm_list *rdmm_list, vaddr_t s_addr, spdid_t d_spd, va
 		rdmm = rdmm_alloc();
 		assert(rdmm);
 	}
-	/* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("record added here rdmm_list %x s_addr %x d_addr %x\n", rdmm_list, s_addr, d_addr); */
+	/* if (cos_spd_id() == 8 || cos_spd_id() == 9) printc("record added here rdmm_list %x s_addr %x d_addr %x\n", rdmm_list, s_addr, d_addr); */
 	rdmm->d_spd = d_spd;
 	rdmm->d_addr = d_addr;
 	rdmm_list_add(rdmm, rdmm_list);
 	rdmm->next = NULL;
-	/* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("recording....done!\n"); */
+	/* if (cos_spd_id() == 8 || cos_spd_id() == 9) printc("recording....done!\n"); */
 
 	return rdmm_list;
 }
@@ -217,6 +242,7 @@ record_rem(struct rec_data_mm_list *rdmm_list)
 {
 	struct rec_data_mm *rdmm;
 	assert(rdmm_list);
+
 	rdmm = rdmm_list_rem(rdmm_list);
 	while(rdmm) {
 		/* printc("keep removing item...\n"); */
@@ -240,14 +266,15 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 	assert(rdmm);
 	while (1) {
 		rdmm_list->recordable = 0; /* no more same records added during the replay alias */
-		printc("replay::<rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x>\n",
-		       cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr);
+		/* printc("replay::<rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x>\n", */
+		/*        cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr); */
 		if (rdmm->d_addr != __mman_alias_page_rec(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr)) BUG();
 		/* __mman_alias_page_rec(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr); */
 		if (!(rdmm = rdmm->next)) break;
 	}
 	rdmm_list->recordable = 1;
 	rdmm_list->fcnt = fcounter;
+	/* printc("set: rdmm_list->fcnt %d, fcounter %d\n",rdmm_list->fcnt, fcounter); */
 	/* printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
 	return;
 }
@@ -261,12 +288,17 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 void
 update_info(struct rec_data_mm_list *rdmm_list)
 {
+#if (!LAZY_RECOVERY)
+	return;
+#else
 	/* printc("\n((Cstub:update crash status thd %d) spd %d)\n", cos_get_thd_id(), cos_spd_id()); */
 	if (unlikely(rdmm_list->fcnt != fcounter)) {
 		/* printc(" -- mm crashed before when this spd called it -- thd %d\n", cos_get_thd_id()); */
+		/* printc("rdmm_list->fcnt %d, fcounter %d\n",rdmm_list->fcnt, fcounter); */
 		record_replay(rdmm_list);
 	}
 	return;
+#endif
 }
 
 /* replay all alias from root pages for this component */
@@ -279,6 +311,28 @@ alias_replay(vaddr_t s_addr)
 	if (rdmm_list) record_replay(rdmm_list);
 	return;
 }
+
+#if (!LAZY_RECOVERY)
+/* replay all alias from root pages for this component */
+void 
+eager_replay()
+{
+	/* printc("Eager: Cli %ld: from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	struct rec_data_mm_list *rdmm_list;
+	if (!all_rdmm_list) {
+		/* printc("No rdmm_list found in this spd, do nothing\n"); */
+		return;
+	}
+	for(rdmm_list = FIRST_LIST(all_rdmm_list, next, prev);
+	    rdmm_list != all_rdmm_list;
+	    rdmm_list = FIRST_LIST(rdmm_list, next, prev)) {
+		/* printc("\n[[ Find rdmm_list (%d)]]\n\n", rdmm_list->head->d_spd); */
+		record_replay(rdmm_list);
+	}
+
+	return;
+}
+#endif
 
 /************************************/
 /******  client stub functions ******/
@@ -299,7 +353,7 @@ unsigned long long end = 0;
 CSTUB_FN_ARGS_3(vaddr_t, mman_get_page, spdid_t, spdid, vaddr_t, addr, int, flags)
        volatile unsigned long long start, end;
 redo:
-if (cos_get_thd_id() != 5) printc("<< thd %d call get_page  >>\n", cos_get_thd_id());
+/* if (cos_get_thd_id() != 5) printc("<< thd %d call get_page  >>\n", cos_get_thd_id()); */
 #ifdef TEST_GET
        rdtscll(start);
 #endif
@@ -312,6 +366,7 @@ CSTUB_ASM_3(mman_get_page, spdid, addr, flags)
 	       }
 	       
        	       fcounter++;
+	       /* printc("get: fcounter ++ %d\n", fcounter); */
 #ifdef TEST_GET
 	       rdtscll(end);
 	       printc("get cost %llu\n", end - start);
@@ -336,7 +391,7 @@ CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid
 
 	assert(rdmm_list);
 redo:
-if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id());
+/* if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id()); */
 #ifdef TEST_ALIAS
         rdtscll(start);
 #endif
@@ -349,6 +404,7 @@ CSTUB_ASM_4(mman_alias_page, s_spd, s_addr, d_spd, d_addr)
 	       }
 	       
        	       fcounter++;
+	       /* printc("alias: fcounter ++ %d\n", fcounter); */
 	       rdmm_list->recordable = 0;
 #ifdef TEST_ALIAS
 	       rdtscll(end);
@@ -367,7 +423,7 @@ CSTUB_FN_ARGS_4(vaddr_t, __mman_alias_page_rec, spdid_t, s_spd, vaddr_t, s_addr,
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
 	assert(rdmm_list);
 redo:
-if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id());
+/* if (cos_get_thd_id() != 5) printc("<< thd %d call alias_page  >>\n", cos_get_thd_id()); */
 CSTUB_ASM_4(__mman_alias_page_rec, s_spd, s_addr, d_spd, d_addr)
 
        if (unlikely (fault)){
@@ -376,6 +432,7 @@ CSTUB_ASM_4(__mman_alias_page_rec, s_spd, s_addr, d_spd, d_addr)
 		       BUG();
 	       }
        	       fcounter++;
+	       /* printc("alias_rec: fcounter ++ %d\n", fcounter); */
        	       goto redo;
        }
 
@@ -389,12 +446,12 @@ CSTUB_FN_ARGS_3(int, mman_revoke_page, spdid_t, spdid, vaddr_t, addr, int, flags
        measure_first = 0;
        rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT);
        assert(rdmm_list);
-
 redo:
        if (unlikely(rdmm_list->fcnt != fcounter)) flags = 1;
        update_info(rdmm_list);   //can not deal with the further levels
 /* if (cos_get_thd_id() != 5) printc("<< thd %d call revoke_page  >>\n", cos_get_thd_id()); */
 #ifdef TEST_REVOKE
+        printc("start measuring the revoke cost\n");
         rdtscll(start);
 #endif
 
@@ -407,6 +464,7 @@ CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
 	       }
 
        	       fcounter++;
+	       /* printc("revoke: fcounter ++ %d\n", fcounter); */
 	       flags = 0;
 #ifdef TEST_REVOKE
 	       rdtscll(end);

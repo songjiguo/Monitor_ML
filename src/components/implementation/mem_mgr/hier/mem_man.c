@@ -149,7 +149,7 @@ err:
 	return 0;
 }
 
-vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
+vaddr_t __mman_alias_page_rec(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
 	return 0;
 }

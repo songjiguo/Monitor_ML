@@ -15,8 +15,8 @@ unsigned long counter = 0;
 /* #define TEST_LOCAL */
 
 //#define TARGET_COMPONENT 21   /*22 in web server case */
-#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
-//#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
+//#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
+#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
 /* #define TARGET_COMPONENT  2   /\* sched *\/ */
 
 #ifndef TARGET_COMPONENT   
@@ -31,8 +31,8 @@ int fault_inject()
 	int tid, spdid;
 
 	entry_cnt++;
-	/* printc("\n{\n"); */
-	/* printc("thread %d in fault injector %ld (%d)\n", cos_get_thd_id(), cos_spd_id(), entry_cnt); */
+	printc("\n{\n");
+	printc("thread %d in fault injector %ld (%d)\n", cos_get_thd_id(), cos_spd_id(), entry_cnt);
 
 	if (TARGET_COMPONENT == 0) return 0;
 	
@@ -48,7 +48,7 @@ int fault_inject()
 		flip_all_regs(&r);
 		/* cos_regs_print(&r); */
 	}
-	/* printc("}\n\n"); */
+	printc("}\n\n");
 	return 0;
 }
 

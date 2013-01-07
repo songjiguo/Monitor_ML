@@ -448,7 +448,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_EAGER_RECOVERY:
-		printc("eager upcall: thread %d (in spd %d)\n", cos_get_thd_id(), cos_spd_id());
+		printc("eager upcall: thread %d (in spd %ld)\n", cos_get_thd_id(), cos_spd_id());
 		eager_recovery_all();
 		break;
 	default:

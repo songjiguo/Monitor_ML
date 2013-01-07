@@ -257,7 +257,6 @@ boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, i
 		/* Initialize memory. */
 		if (first_time || !(sect->flags & COBJ_SECT_INITONCE)) {
 			if (sect->flags & COBJ_SECT_ZEROS) {
-				printc("spdid %d memset to 0 (addr %p  size %d)\n",spdid, start_addr + (dest_daddr - init_daddr), left);
 				memset(start_addr + (dest_daddr - init_daddr), 0, left);
 			} else {
 				memcpy(start_addr + (dest_daddr - init_daddr), lsrc, left);
@@ -471,6 +470,7 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 
 	LOCK();
 
+	printc("COST(mem op): starting recording\n");
 	rdtscll(start);
 
 //	boot_spd_caps_chg_activation(failed, 0);
@@ -493,7 +493,7 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 //	boot_spd_caps_chg_activation(failed, 1);
 
 	rdtscll(end);
-	printc("COST 3: %llu\n", end - start);
+	printc("COST(mem op): %llu\n", end - start);
 
 	/* rdtscll(end); */
 	/* printc("COST (caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start); */

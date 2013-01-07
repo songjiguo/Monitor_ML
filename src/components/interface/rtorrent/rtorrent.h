@@ -14,7 +14,6 @@
 #include <evt.h>
 
 #define ALL_ONE_RECOVERY   	/* recovery everything */
-#define LAZY_RECOVERY		/* only recover when necessary */
 
 //#define TSPLIT_FAULT
 //#define TWRITE_FAULT

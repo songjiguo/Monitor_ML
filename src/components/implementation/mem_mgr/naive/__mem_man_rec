@@ -162,9 +162,9 @@ again:
 		if (root_addr != (vaddr_t)hp) {
 			f->nmaps  = -1; 	 
 			f->c.addr = root_addr; 
-			/* cos_release_vas_page(hp); */
-			/* frame_deref(f); */
-			printc("found an used one, goto again\n");
+			/* /\* cos_release_vas_page(hp); *\/ */
+			/* /\* frame_deref(f); *\/ */
+			/* printc("found an used one, goto again\n"); */
 			goto again;
 		}
 	}
@@ -339,7 +339,6 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
 #endif
 	if (ret) {
-		printc("1\n");
 		if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, dest, to, 0) != frame_index(f)) {
 			printc("found mismatch here\n");
 			goto no_mapping;
@@ -457,12 +456,12 @@ static int revoke_test = 0;
 /* 
    this function is used only for the fault injection purpose: without
    delay, it is hard to inject the fault while the thread is running
-   in MM
+   in MM (test purpose only)
 */
 void some_delay()
 {
-	int ccc = 0;
-	while(ccc++ < 1000000) {;};
+	volatile int ccc = 0;
+	while(ccc++ < 500000) {;};
 }
 ////////////////////////////
 /*                 ,--.   */
@@ -532,7 +531,7 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	struct mapping *m, *n;
 	vaddr_t ret = 0;
 
-	/* if (s_spd == 8) printc("in alias function\n"); */
+	/* printc("in alias function\n"); */
 	
 	if (s_spd == 7) alias_test++;
 	
@@ -545,7 +544,7 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 
 	m = mapping_lookup(s_spd, s_addr);
 	if (unlikely(!m)) {
-		printc("crashed 1 --> rebuild s_addr %p mapping (thd %d)\n", (void *)s_addr, cos_get_thd_id());
+		/* printc("crashed (alias) --> rebuild s_addr %p (spd %d) mapping (thd %d)\n", (void *)s_addr, s_spd,cos_get_thd_id()); */
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
 		assert(EMPTY_LIST(m, next, prev));
@@ -576,7 +575,7 @@ vaddr_t __mman_alias_page_rec(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vadd
 	LOCK();
 	m = mapping_lookup(s_spd, s_addr);
 	if (unlikely(!m)) {
-		printc("crashed 2 --> rebuild s_addr %p mapping (thd %d)\n", (void *)s_addr, cos_get_thd_id());
+	/* 	printc("crashed (__alias) --> rebuild s_addr %p mapping (thd %d)\n", (void *)s_addr, cos_get_thd_id()); */
 		m = recovery_rebuild_mapping(s_spd, s_addr);
 		assert(m);
 		assert(EMPTY_LIST(m, next, prev));
@@ -606,7 +605,7 @@ vaddr_t __mman_alias_page_rec(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vadd
 	/* max_upcalls++; */
 	/* assert(max_upcalls < MAX_UPCALL_LIST_DEPTH); /\* upcall depths *\/ */
 	
-	/* /\* printc("upcall spd %d record is added to m->spd %d\n", n->spdid, m->spdid); *\/ */
+	/* printc("upcall spd %d record is added to m->spd %d\n", n->spdid, m->spdid); */
 	/* struct mapping *a; */
 	/* for(a = FIRST_LIST(m, next, prev); */
 	/*     a != m; */
@@ -633,7 +632,7 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m;
 	int ret = 0;
 
-	printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id());
+	/* printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id()); */
 	/* if (spd == 7) printc("MM: mman_revoke_page....thd %d\n", cos_get_thd_id()); */
 	if (spd == 7) revoke_test++;
 
@@ -663,7 +662,9 @@ int __mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	if (spd == 7 && revoke_test == 5 && flags == 0) assert(0);
 #endif
 
+#if (LAZY_RECOVERY)
 	recovery_upcalls_helper(spd, addr, flags);
+#endif
 	mman_revoke_page(spd, addr, flags);
 
 	/* revoke_page should have release the lock */
@@ -680,7 +681,6 @@ int mman_release_page(spdid_t spd, vaddr_t addr, int flags)
 
 	LOCK();
 
-	printc("2\n");
 	if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, spd, addr, 0) == -1) {
 		printc("The page %p does not exist when release\n", (void *)addr);
 		goto done;

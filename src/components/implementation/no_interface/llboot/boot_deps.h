@@ -26,7 +26,7 @@ printc(char *fmt, ...)
 	return ret;
 }
 
-//#define MEAS_RECOVERY
+#define MEAS_RECOVERY
 //#define MEAS_REBOOT
 //#define MEAS_FRM_OP
 //#define MEAS_NOTIF_COST_2
@@ -188,7 +188,7 @@ llboot_thd_done(void)
 int
 recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 {
-	printc("LL: llbooter upcall to spd %d, arg %x thd %d op %d\n", dest, (unsigned int)arg, cos_get_thd_id(), op);
+	/* printc("LL: llbooter upcall to spd %d, arg %x thd %d op %d\n", dest, (unsigned int)arg, cos_get_thd_id(), op); */
 
 	prev_thd     = cos_get_thd_id();	/* this ensure that prev_thd is always the highest prio thread */
 	recover_spd  = dest;
@@ -214,7 +214,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	reboot = (spdid == 2) ? 1:0;
 
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
-	printc("\nLL: <<0>> thd %d : failed spd %d (this spd %ld)\n\n", cos_get_thd_id(), spdid, cos_spd_id());
+	/* printc("\nLL: <<0>> thd %d : failed spd %d (this spd %ld)\n\n", cos_get_thd_id(), spdid, cos_spd_id()); */
 
 	/* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); /\* remove the brand *\/ */
 
@@ -224,7 +224,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	/* debug only: avoid endless faults */
 	first++;
-	if(first == 5) {
+	if(first == 20) {
 		printc("has failed %d times\n",first);
 		sched_exit();
 	}
@@ -260,10 +260,20 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		printc("INV Frame operation cost: %llu\n", (end-start));
 #endif
 
-		printc("Try to recover the spd\n");
+		/* printc("Try to recover the spd %d (reboot %d)\n", spdid, reboot); */
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
 		else recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 
+#if (!LAZY_RECOVERY)  		/* mm eager recovery */
+		volatile unsigned long long start, end;
+		printc("record upcall cost\n");
+		rdtscll(start);
+		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 8, 0);
+		rdtscll(end);
+		printc("COST(Eager recovery all): %llu\n", (end-start));
+
+		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 9, 0);
+#endif
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */
 		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */

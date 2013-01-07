@@ -53,7 +53,9 @@
  * versions of interfaces, such as mmgr, schduler, cbuf, torrent. To
  * use it, run python set_symbolic_link.py under composite/tools */
 
-#define RECOVERY_ENABLE 0               // 1 will enable the fault notification in Composite kernel
-#define SWIFI_ENABLE    0		// 1 will enable the fault injection (swifi component), for now always on
+#define RECOVERY_ENABLE 1               // 1 will enable the fault notification in Composite kernel
+#define LAZY_RECOVERY   1               // 1 will enable the lazy recovery, 0 for eager recovery
+
+#define SWIFI_ENABLE    1		// 1 will enable the fault injection (swifi component), for now always on
 
 #endif /* COS_CONFIG_H */

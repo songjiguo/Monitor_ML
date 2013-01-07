@@ -26,6 +26,8 @@ void mm_test2_34()
 	vaddr_t s_addr;
 	int i;
 
+	printc("in mm_test2_34\n");
+
 	for (i = 0; i< PAGE_NUM; i++) {
 		if (i < PAGE_NUM/2) {
 #ifdef ONE2FIVE
@@ -53,16 +55,23 @@ void mm_test2_34()
 
 #ifdef CLI_UPCALL_ENABLE
 void alias_replay(vaddr_t s_addr);
+void eager_replay();
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_RECOVERY:
-		/* printc("UNIT_MMREC 2 upcall: thread %d arg3 %x\n", cos_get_thd_id(), (unsigned int)arg3); */
+#if (!LAZY_RECOVERY)
+		/* printc("EAGER!!! UNIT_MMREC 1 upcall: thread %d (spd %ld)\n", cos_get_thd_id(), cos_spd_id()); */
+		eager_replay();
+#else
+		/* printc("UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id()); */
 		alias_replay((vaddr_t)arg3);
+#endif
 		break;
 	default:
-		break;
+		return;
 	}
+
 	return;
 }
 #endif
