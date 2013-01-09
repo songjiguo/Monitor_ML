@@ -221,9 +221,8 @@ struct spd {
 	struct spd *composite_member_next, *composite_member_prev;
 
 	/* fault tolerance related */
-
-	struct thread *scheduler_all_threads;
-
+	struct thread *scheduler_hrt_threads; /* hard real time threads */
+	struct thread *scheduler_bes_threads; /* best effort threads */
 } CACHE_ALIGNED; //cache line size
 
 paddr_t spd_alloc_pgtbl(void);

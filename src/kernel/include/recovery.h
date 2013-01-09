@@ -2,7 +2,7 @@
   Jiguo: This is the header file to help the kernel keep clean 
          for recovery related changes
          depends on gcc will optimize away for i = 0 case
- ***************************************************************/
+***************************************************************/
 
 #ifndef RECOVERY_H
 #define RECOVERY_H
@@ -19,37 +19,27 @@
 #define MEAS_INT_FAULT_DETECT   /* measure the fault detection cost for interrupt */
 #endif
 
+/* type indicates it is HRT(0) or BEST(1) */
 
 /*---------Threads that created by scheduler--------*/
-/* static struct thread* */
-/* find_thd(struct spd *spd, struct thread *thd) */
-/* { */
-/* 	/\* "remove" the found thd from original location *\/ */
-/* 	thd->sched_next->sched_prev = thd->sched_prev; */
-/* 	thd->sched_prev->sched_next = thd->sched_next; */
-
-/* 	/\* put the found thd to the front of list *\/ */
-/* 	thd->sched_next = spd->scheduler_all_threads->sched_next; */
-/* 	thd->sched_prev = spd->scheduler_all_threads; */
-/* 	spd->scheduler_all_threads->sched_next = thd; */
-/* 	thd->sched_next->sched_prev = thd; */
-
-/* 	return thd; */
-/* } */
-
 static struct thread*
-sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums)
+sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums, int type)
 {
 	struct thread *thd;
 	int i, cnt;;
 
-	if (!(thd = spd->scheduler_all_threads)) return NULL;
-	cnt = spd->scheduler_all_threads->thd_cnts;
+	if (!type) {
+		if (!(thd = spd->scheduler_hrt_threads)) return NULL;
+		cnt = spd->scheduler_hrt_threads->thd_cnts;
+	} else {
+		if (!(thd = spd->scheduler_bes_threads)) return NULL;
+		cnt = spd->scheduler_bes_threads->thd_cnts;
+	}
+
 	i = cnt - thd_nums;
 	
 	if (thd_id > 0) {
 		while(cnt) {
-			/* printk("<<< cnt %d thd %d  and look up id %d>>>\n", cnt, thd->thread_id, thd_id); */
 			/* if (thd->thread_id == thd_id) return find_thd(spd, thd); */
 			if (thd->thread_id == thd_id) return thd;
 			thd = thd->sched_prev;
@@ -66,14 +56,80 @@ sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums)
 }
 
 static int
-sched_thread_cnts(struct spd *spd)
+sched_thread_add(struct spd *spd, int thd_id, int type)
 {
-	return spd->scheduler_all_threads->thd_cnts;
+	struct thread *thd;
+	struct thd_sched_info *tsi;
+		
+	thd = thd_get_by_id(thd_id);
+	if (!thd) {
+		printk("cos: thd id %d invalid (when record dest)\n", (unsigned int)thd_id);
+		return -1;
+	}
+		
+	tsi = thd_get_sched_info(thd, spd->sched_depth);
+	if (tsi->scheduler != spd) {
+		printk("cos: spd %d not the scheduler of %d\n",
+		       spd_get_index(spd), (unsigned int)thd_id);
+		return -1;
+	}
+
+	if (spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
+		/* printk("cos: add thread %d onto spd %d list\n", thd_id, spd_get_index(spd)); */
+		if (type == 0) { /* hard real time tasks */
+			if (!spd->scheduler_hrt_threads) {
+				/* initialize the list head */
+				spd->scheduler_hrt_threads = thd;
+				spd->scheduler_hrt_threads->sched_next = thd;
+				spd->scheduler_hrt_threads->sched_prev = thd;
+			} else {
+				thd->sched_next = spd->scheduler_hrt_threads->sched_next;
+				thd->sched_prev = spd->scheduler_hrt_threads;
+				spd->scheduler_hrt_threads->sched_next = thd;
+				thd->sched_next->sched_prev = thd;
+			}
+			spd->scheduler_hrt_threads->thd_cnts++;
+			/* printk("HRT thread number %d\n", spd->scheduler_hrt_threads->thd_cnts); */
+		} else {	/* best effort tasks */
+			if (!spd->scheduler_bes_threads) {
+				/* initialize the list head */
+				spd->scheduler_bes_threads = thd;
+				spd->scheduler_bes_threads->sched_next = thd;
+				spd->scheduler_bes_threads->sched_prev = thd;
+			} else {
+				thd->sched_next = spd->scheduler_bes_threads->sched_next;
+				thd->sched_prev = spd->scheduler_bes_threads;
+				spd->scheduler_bes_threads->sched_next = thd;
+				thd->sched_next->sched_prev = thd;
+			}
+			spd->scheduler_bes_threads->thd_cnts++;
+			/* printk("BEST thread number %d\n", spd->scheduler_bes_threads->thd_cnts); */
+		}
+	}
+	
+	return 0;
+}
+
+static int
+sched_thread_cnts(struct spd *spd, int type)
+{
+	int ret = 0;
+	if (type == 0) {
+		if (!spd->scheduler_hrt_threads) goto done;
+		ret = spd->scheduler_hrt_threads->thd_cnts;
+	}
+	else {
+		if (!spd->scheduler_bes_threads) goto done;
+		ret = spd->scheduler_bes_threads->thd_cnts;
+	}
+done:
+	/* printk("return the recorded thread number ret %d\n", ret); */
+	return ret;
 }
 
 #if RECOVERY_ENABLE == 1
 //*************************************************
-           /* enable recovery */
+/* enable recovery */
 //*************************************************
 
 /*---------Fault Notification Operations--------*/
@@ -307,7 +363,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 
 #else
 //*************************************************
-           /* disable recovery */
+/* disable recovery */
 //*************************************************
 static inline int
 init_spd_fault_cnt(struct spd *spd)

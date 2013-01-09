@@ -26,7 +26,7 @@ printc(char *fmt, ...)
 	return ret;
 }
 
-#define MEAS_RECOVERY
+//#define MEAS_RECOVERY
 //#define MEAS_REBOOT
 //#define MEAS_FRM_OP
 //#define MEAS_NOTIF_COST_2
@@ -222,12 +222,12 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	/* printc("there is no mechanism to handle the fault in this case, exit\n"); */
 	/* sched_exit(); */
 
-	/* debug only: avoid endless faults */
-	first++;
-	if(first == 20) {
-		printc("has failed %d times\n",first);
-		sched_exit();
-	}
+	/* debug only: avoid endless faults and wait */
+	/* first++; */
+	/* if(first == 5) { */
+	/* 	printc("has failed %d times\n",first); */
+	/* 	sched_exit(); */
+	/* } */
 
 
 #ifdef MEAS_REBOOT
@@ -264,19 +264,24 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
 		else recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 
-#if (!LAZY_RECOVERY)  		/* mm eager recovery */
-		volatile unsigned long long start, end;
-		printc("record upcall cost\n");
-		rdtscll(start);
-		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 8, 0);
-		rdtscll(end);
-		printc("COST(Eager recovery all): %llu\n", (end-start));
-
-		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 9, 0);
+/* mm eager recovery, spdid == 3 */
+#if (!LAZY_RECOVERY)  		
+		if (spdid == 3)	/* hardcode for mm */
+		{
+			volatile unsigned long long start, end;
+			printc("record upcall cost\n");
+			rdtscll(start);
+			recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 8, 0);
+			rdtscll(end);
+			printc("COST(Eager recovery all): %llu\n", (end-start));
+			
+			recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 9, 0);
+		}
 #endif
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */
 		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */
+		/* printc("done with upcalling, Ready to return 0\n"); */
 		return 0;
 	}
 	

@@ -19,6 +19,7 @@
 #define COS_FMT_PRINT
 
 #include <cos_component.h>
+#include <cos_sched_ds.h>
 #include <cos_scheduler.h>
 #include <cos_time.h>
 #include <print.h>
@@ -562,14 +563,14 @@ static void sched_timer_tick(void)
 	while (1) {
 		/* printc("thread %d in while(1)\n", cos_get_thd_id()); */
 		cos_sched_lock_take();
-
+		
 		report_event(TIMER_TICK);
 		
 		if (unlikely((ticks % (REPORT_FREQ*TIMER_FREQ)) == ((REPORT_FREQ*TIMER_FREQ)-1))) {
 			report_thd_accouting();
 			//cos_stats();
 		}
-
+		
 		/* are we done running? */
 		if (unlikely(ticks >= RUNTIME_SEC*TIMER_FREQ+1)) {
 			sched_exit();
@@ -587,7 +588,7 @@ static void sched_timer_tick(void)
 		ticks++;
 		/* printc("ticks %llu end %d\n", ticks, RUNTIME_SEC*TIMER_FREQ); */
 		sched_process_wakeups();
-		
+
 		timer_tick(1);
 		/* printc("sched_timer_tick calls sst\n"); */
 		sched_switch_thread(COS_SCHED_BRAND_WAIT, TIMER_SWITCH_LOOP);
@@ -614,7 +615,7 @@ typedef void (*crt_thd_fn_t)(void *data);
 
 static void fp_timer(void *d)
 {
-	/* printc("Starting timer\n"); */
+	printc("Starting timer\n");
 	sched_timer_tick();
 	BUG();
 }
@@ -627,11 +628,54 @@ static void fp_create_spd_thd(void *d)
 	BUG();
 }
 
+static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t fn, void *d, 
+						unsigned short int desired_thd, int parm);
+
 static void fp_idle_loop(void *d)
 {
-	/* printc("thread %d upcall into idle loop\n",cos_get_thd_id()); */
+	printc("thread %d upcall into idle loop\n",cos_get_thd_id());
 	assert(sched_is_root());
+	int ret;
+	int thd_id, thd_nums, type = 0;
+	unsigned short int prio;
+	void *fn, *dest;
+	union sched_param sp[2] = {{.c = {.type = SCHEDP_NOOP}},
+				   {.c = {.type = SCHEDP_NOOP}}};
+
+	int reboot = 0;
+	reboot = (int)d;
+
 	while(1) {
+		/* Some work compared to lazy style for scheduler recovery */
+		/* Here we check if there are any best effort threads
+		 * need to be restored */
+
+		/* Remember: this is done only when the scheduler is idle */
+		/* printc("passed reboot: %d\n", (int)reboot); */
+		if (unlikely((int)reboot)) {
+			thd_nums = cos_sched_introspect(COS_SCHED_BES_THD_NUMBERS, cos_spd_id(), 0); 
+			/* printc("rebuild all best effort threads\n"); */
+			while(thd_nums) {
+				/* printc("thd_num is %d\n", thd_nums); */
+			 
+				ret    = cos_sched_introspect(COS_SCHED_BES_THD_GET, thd_nums, 0);
+				thd_id = ret >> 16;
+				assert(thd_id);
+				prio   = ret & 0xFFFF;
+				assert(prio == 25);
+
+				fn    = (void *)cos_sched_introspect(COS_SCHED_BES_THD_FN, cos_spd_id(), thd_id);
+				dest  = (void *)cos_sched_introspect(COS_SCHED_BES_THD_DEST, cos_spd_id(), thd_id);
+				/* printc("rebooting best effort: thread %d with prio %d\n", thd_id, prio); */
+				sp[0].c.type = SCHEDP_PRIO;
+				sp[0].c.value = prio;
+
+				/* 99 are those killed threads, will not be recovered */
+				if (prio ==25) sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
+				thd_nums--;
+			}
+			reboot = 0; /* ready for the next failure/recovery on best effort threads */
+		}
 		/* Unfortunately, we can't make this strong an
 		 * assertion.  Instead, we really can only assert that
 		 * non-upcall-complete events shouldn't happen
@@ -714,6 +758,7 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 	fp_block(thd, cos_spd_id());
 	/* printc("sched_timeout calls sst\n"); */
 	sched_switch_thread(0, TIMEOUT_LOOP);	
+
 	return;
 }
 
@@ -773,8 +818,8 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 static void some_delay()  		/* only used for SWIFI */
 {
 /* #ifdef SWIFI_ENABLE */
-/* 	unsigned int ccc = 0; */
-/* 	while(ccc++ < 1000000) {;}; */
+/* 	volatile unsigned int ccc = 0; */
+/* 	while(ccc++ < 100000) {;}; */
 /* #endif */
 	return;
 }
@@ -807,25 +852,13 @@ static int aaa = 0;
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
-
-	/* printc("%d in wakeup call\n", cos_get_thd_id()); */
-	/* if (cos_get_thd_id() == 11) return 0; */
-
-#ifdef TEST_WAKEUP
-	if (aaa++>=6) {
-		printc("\n<<<wakeup Before ASSERT!!!>>>\n");
-		assert(0);
-		printc("\n<<<wakeup After ASSERT!!!>>>\n");
-	}
-#endif
-	cos_sched_lock_take();
-
-	some_delay();
 	
-	/* printc("thread %d waking up thread %d\n", cos_get_thd_id(), thd_id); */
+	cos_sched_lock_take();
+		
+	/* printc("thread %d waking up thread %d. %d\n", cos_get_thd_id(), thd_id, 0); */
 	thd = sched_get_mapping(thd_id);
 	if (!thd) goto error;
-
+	
 	/* only increase the count once */
 	fp_pre_wakeup(thd);
 	
@@ -1302,7 +1335,7 @@ sched_create_thread(spdid_t spdid, struct cos_array *data)
 	void *d = (void*)(int)spdid;
 	char *metric_str;
 
-	printc("WARNING: the sched_create_thread function is deprecated.  Please use sched_create_thd5B\n");
+	printc("WARNING: the sched_create_thread function is deprecated.  Please use sched_create_thd\n");
 	
 	if (!cos_argreg_arr_intern(data)) return -1;
 	if (((char *)data->mem)[data->sz-1] != '\0') return -1;
@@ -1770,6 +1803,7 @@ int sched_create_net_brand(spdid_t spdid, unsigned short int port)
 	b_id = sched_setup_brand(spdid);
 	assert(b_id >= 0);
 	if (0 > cos_brand_wire(b_id, COS_HW_NET, port)) BUG();
+
 	return b_id;
 }
 
@@ -1831,7 +1865,7 @@ sched_init_create_threads(int boot_threads)
 				   {.c = {.type = SCHEDP_NOOP}}};
 
 	/* create the idle thread */
-	/* printc("create idle thread\n"); */
+	printc("create idle thread, thd %d\n", cos_get_thd_id());
 	idle = sched_setup_thread_arg(&sp, fp_idle_loop, NULL, 0, 1);
 	assert(idle);
 	printc("Idle thread has id %d with priority %s.\n", idle->id, "i");
@@ -1858,6 +1892,7 @@ __sched_init(void)
 	sched_init_thd(&graveyard, 0, THD_FREE);
 	sched_ds_init();
 	sched_initialization();
+
 	return;
 }
 
@@ -1932,7 +1967,8 @@ int sched_root_init(int reboot)
 		assert(init);
 
 		unsigned short int bid = 0;
-		thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0);
+                /* always restore HRT threads first */ 
+		thd_nums = cos_sched_introspect(COS_SCHED_THD_NUMBERS, cos_spd_id(), 0); 
 		/* printc("rebuild scheduler... %d threads have been recorded\n", thd_nums); */
 		while(thd_nums) {
 			/* printc("thd_num is %d\n", thd_nums); */
@@ -1944,22 +1980,21 @@ int sched_root_init(int reboot)
 
 			fn    = (void *)cos_sched_introspect(COS_SCHED_THD_FN, cos_spd_id(), thd_id);
 			dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
-			/* type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id); */
+			type  = cos_sched_introspect(COS_SCHED_THD_PARA, cos_spd_id(), thd_id);
 			/* printc("type is %d\n", type); */
 
-			printc("thread %d with prio %d\n", thd_id, prio);
+			/* printc("rebooting: thread %d with prio %d\n", thd_id, prio); */
 			/* printc("fn %x dest %d\n", (unsigned int)fn, (int)dest); */
-			/* printc("prio is %d\n", prio); */
 
 			sp[0].c.type = SCHEDP_PRIO;;
 			sp[0].c.value = prio;
 
+			/* 99 are those killed threads */
 			if (prio != 99) rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
 			/* printc("rec_thd flags 2 %d\n", rec_thd->flags); */
 
 			if (type == SCHEDP_IDLE) idle = rec_thd;
 			else if (type == SCHEDP_TIMER) timer = rec_thd;
-
 
 			/* brand activate if there is one with the thread */
 			bid = cos_brand_cntl(COS_BRAND_INTRO_BID, 0, thd_id, 0);
@@ -2026,15 +2061,15 @@ sched_init(int reboot)
 	return 0;
 }
 
-
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_BRAND_EXEC:
 		sched_timer_tick();
 		break;
-	case COS_UPCALL_IDLE:   /* only for fault case */
-		fp_idle_loop(0);
+        /* only for fault case, we need this to tell idle thread that the sched has failed */
+	case COS_UPCALL_IDLE:
+		fp_idle_loop((void *)1);
 		break;
 	case COS_UPCALL_BOOTSTRAP:
 		/* printc("UPCALL into Scheduler: BOOTSTRAP\n"); */

@@ -217,7 +217,7 @@ CSTUB_ASM_3(sched_wakeup, spdid, dep_thd, crash_flag)
 	       }
 
 	       /* test time event spd */
-	       printc("thd %d wakeup failed and redo!!\n", cos_get_thd_id());
+	       /* printc("thd %d wakeup failed and redo!!\n", cos_get_thd_id()); */
 	       crash_flag = 1;
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
 		       sched_timeout_thd(cos_spd_id());
@@ -239,7 +239,7 @@ CSTUB_FN_ARGS_2(int, sched_block, spdid_t, spdid, unsigned short int, thd_id)
         struct period_thd *item;
         int crash_flag = 0;
 redo:
-	/* if (ttt++ % 1000 == 0) printc("thread %d calls << sched_block -- thd_id %d >>\n",cos_get_thd_id(), thd_id); */
+	/* if (ttt++ % 8000 == 0) printc("thread %d calls << sched_block -- thd_id %d >>\n",cos_get_thd_id(), thd_id); */
 
 #ifdef MEASU_SCHED_INTERFACE_BLOCK
               rdtscll(start);
@@ -263,7 +263,7 @@ CSTUB_ASM_3(sched_block, spdid, thd_id, crash_flag)
 		       sched_component_take(cos_spd_id());
 	       }
 
-	       printc("thd %d block failed and redo!!\n", cos_get_thd_id());
+	       /* printc("thd %d block failed and redo!!\n", cos_get_thd_id()); */
 	       crash_flag = 1;
 	       if (unlikely(cos_get_thd_id() == timer_thd)) {
 		       sched_timeout_thd(cos_spd_id());
@@ -397,7 +397,7 @@ CSTUB_ASM_1(sched_timeout_thd, spdid)
        }
 
        if(!ret) timer_thd = cos_get_thd_id(); /* record the wakeup thread over the interface */
-       printc("interface: time event  thread is %d\n",timer_thd);
+       /* printc("interface: time event  thread is %d\n",timer_thd); */
 
 CSTUB_POST
 

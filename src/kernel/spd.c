@@ -283,7 +283,8 @@ static void spd_init_all(struct spd *spds)
 		spds[i].spd_info.flags = SPD_FREE;
 		spds[i].composite_spd = &spds[i].spd_info;
 		spds[i].freelist_next = (i == (MAX_NUM_SPDS-1)) ? NULL : &spds[i+1];
-		spds[i].scheduler_all_threads = NULL;
+		spds[i].scheduler_hrt_threads = NULL;
+		spds[i].scheduler_bes_threads = NULL;
 	}
 
 	spd_freelist_head = spds;

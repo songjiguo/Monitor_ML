@@ -16,8 +16,8 @@ unsigned long counter = 0;
 
 //#define TARGET_COMPONENT 21   /*22 in web server case */
 //#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
-#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
-/* #define TARGET_COMPONENT  2   /\* sched *\/ */
+//#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
+#define TARGET_COMPONENT  2   /* sched */
 
 #ifndef TARGET_COMPONENT   
 #define TARGET_COMPONENT 0    	/* no fault injection */
@@ -31,8 +31,8 @@ int fault_inject()
 	int tid, spdid;
 
 	entry_cnt++;
-	printc("\n{\n");
-	printc("thread %d in fault injector %ld (%d)\n", cos_get_thd_id(), cos_spd_id(), entry_cnt);
+	/* printc("\n{\n"); */
+	/* printc("thread %d in fault injector %ld (%d) ... TARGET_COMPONENT %d\n", cos_get_thd_id(), cos_spd_id(), entry_cnt, TARGET_COMPONENT); */
 
 	if (TARGET_COMPONENT == 0) return 0;
 	
@@ -48,7 +48,7 @@ int fault_inject()
 		flip_all_regs(&r);
 		/* cos_regs_print(&r); */
 	}
-	printc("}\n\n");
+	/* printc("}\n\n"); */
 	return 0;
 }
 
@@ -76,9 +76,10 @@ void cos_init(void)
 		if (cos_get_thd_id() == high) {
 			printc("\nfault injector %ld (high %d thd %d)\n", cos_spd_id(), high, cos_get_thd_id());
 			timed_event_block(cos_spd_id(), 20);
-			periodic_wake_create(cos_spd_id(), 1);
-			/* while(num++ < 500) { */
-			while(1){
+			periodic_wake_create(cos_spd_id(), 5);
+			/* periodic_wake_create(cos_spd_id(), 1); */
+			while(num++ < 500) {
+			/* while(1){ */
 				periodic_wake_wait(cos_spd_id()); /*  run this first to update the wakeup time */
 				if (flag == 1) fault_inject();
 				flag = 1;

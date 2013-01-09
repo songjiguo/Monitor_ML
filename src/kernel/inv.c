@@ -389,7 +389,7 @@ cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_
 static vaddr_t
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd)
 {
-	printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on INVOCATION ]]]]]]\n"); */
 
 	return __fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, dest_spd);
 }
@@ -397,7 +397,7 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd)
 static struct pt_regs *
 thd_ret_fault_notif(struct thread *thd)
 {
-	printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n");
+	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
 	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
 	return &thd->regs;
 }
@@ -406,7 +406,7 @@ static void
 thd_switch_fault_notif(struct thread *thd)
 {
 	struct thd_invocation_frame *thd_frame;
-	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd));
+	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd)); */
 	thd_frame = thd_invstk_top(thd);
 
 	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
@@ -637,7 +637,7 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 	/* printk("fn %d\n", a); */
 	/* printk("dest spd %d\n", b); */
 
-	/* for now, just save all threads for simplcity */
+	/* for now, just save all threads for simplicity */
 	thd->sched_info[curr_spd->sched_depth].thread_fn = (void *)a;
 	thd->sched_info[curr_spd->sched_depth].thread_dest = (void *)b;
 
@@ -2899,7 +2899,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 }
 
 
-extern struct thread* sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums);
+extern struct thread* sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums, int type);
 
 /************** end functions for parsing async set urgencies ************/
 /* currently, only scheduler can make this syscall */
@@ -2930,13 +2930,13 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 	case COS_SCHED_THD_EXIST:
 	{
 		assert(spd_is_scheduler(spd));
-		if (sched_thread_lookup(spd, thd_id, 0)) ret = 1;
+		if (sched_thread_lookup(spd, thd_id, 0, 0)) ret = 1;
 		break;
 	}
 	case COS_SCHED_THD_GET:
 	{
 		assert(spd_is_scheduler(spd));
-		if ((ret_thd = sched_thread_lookup(spd, 0, arg))) {
+		if ((ret_thd = sched_thread_lookup(spd, 0, arg, 0))) {
 			id = thd_get_id(ret_thd);
 			/* timer thread, set THD_STATE_ACTIVE_UPCALL so it can be
 			 * scheduled */
@@ -2951,35 +2951,84 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 	case COS_SCHED_THD_PRIO:
 	{
 		assert(spd_is_scheduler(spd));
-		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0))) 
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 0))) 
 			ret = ret_thd->sched_info[spd->sched_depth].thread_user_prio;
 		break;
 	}
 	case COS_SCHED_THD_FN:
 	{
 		assert(spd_is_scheduler(spd));
-		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0))) 
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 0))) 
 			ret = (int)ret_thd->sched_info[spd->sched_depth].thread_fn;
 		break;
 	}
 	case COS_SCHED_THD_DEST:
 	{
 		assert(spd_is_scheduler(spd));
-		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0))) 
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 0))) 
 			ret = (int)ret_thd->sched_info[spd->sched_depth].thread_dest;
 		break;
 	}
 	case COS_SCHED_THD_PARA:
 	{
 		assert(spd_is_scheduler(spd));
-		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0))) 
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 0))) 
 			ret = ret_thd->sched_info[spd->sched_depth].thread_value;
 		break;
 	}
-	case COS_SCHED_THD_NUMBERS:
+	case COS_SCHED_THD_NUMBERS: /* hrt threads */
 	{
 		assert(spd_is_scheduler(spd));
-		ret = sched_thread_cnts(spd);
+		ret = sched_thread_cnts(spd, 0);
+		break;
+	}
+	case COS_SCHED_BES_THD_GET:
+	{
+		assert(spd_is_scheduler(spd));
+		if ((ret_thd = sched_thread_lookup(spd, 0, arg, 1))) {
+			id = thd_get_id(ret_thd);
+			/* timer thread, set THD_STATE_ACTIVE_UPCALL so it can be
+			 * scheduled */
+			if ( thd_id == 0 && ret_thd->sched_info[spd->sched_depth].thread_user_prio == 0) {
+				ret_thd->flags |= THD_STATE_ACTIVE_UPCALL;
+				ret_thd->flags &= ~THD_STATE_READY_UPCALL;
+			}
+			ret = ((id << 16) | (ret_thd->sched_info[spd->sched_depth].thread_user_prio & 0xFFFF));
+		}		
+		break;
+	}
+	case COS_SCHED_BES_THD_PRIO:
+	{
+		assert(spd_is_scheduler(spd));
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 1))) 
+			ret = ret_thd->sched_info[spd->sched_depth].thread_user_prio;
+		break;
+	}
+	case COS_SCHED_BES_THD_FN:
+	{
+		assert(spd_is_scheduler(spd));
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 1))) 
+			ret = (int)ret_thd->sched_info[spd->sched_depth].thread_fn;
+		break;
+	}
+	case COS_SCHED_BES_THD_DEST:
+	{
+		assert(spd_is_scheduler(spd));
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 1))) 
+			ret = (int)ret_thd->sched_info[spd->sched_depth].thread_dest;
+		break;
+	}
+	case COS_SCHED_BES_THD_PARA:
+	{
+		assert(spd_is_scheduler(spd));
+		if ((ret_thd = sched_thread_lookup(spd, thd_id, 0, 1))) 
+			ret = ret_thd->sched_info[spd->sched_depth].thread_value;
+		break;
+	}
+	case COS_SCHED_BES_THD_NUMBERS:	/* best effort threads */
+	{
+		assert(spd_is_scheduler(spd));
+		ret = sched_thread_cnts(spd, 1);
 		break;
 	}
 	default:
@@ -3210,38 +3259,12 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 	}
 	case COS_SCHED_RECORD_THD:
 	{
-		struct thread *thd;
-		struct thd_sched_info *tsi;
-		
-		thd = thd_get_by_id(thd_id);
-		if (!thd) {
-			printk("cos: thd id %d invalid (when record dest)\n", (unsigned int)thd_id);
-			return -1;
-		}
-		
-		tsi = thd_get_sched_info(thd, spd->sched_depth);
-		if (tsi->scheduler != spd) {
-			printk("cos: spd %d not the scheduler of %d\n",
-			       spd_get_index(spd), (unsigned int)thd_id);
-			return -1;
-		}
-
-		if (spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
-			/* printk("cos: add thread %d onto spd %d list\n", thd_id, spd_get_index(spd)); */
-			if (!spd->scheduler_all_threads) {
-				/* initialize the list head */
-				spd->scheduler_all_threads = thd;
-				spd->scheduler_all_threads->sched_next = thd;
-				spd->scheduler_all_threads->sched_prev = thd;
-			} else {
-				thd->sched_next = spd->scheduler_all_threads->sched_next;
-				thd->sched_prev = spd->scheduler_all_threads;
-				spd->scheduler_all_threads->sched_next = thd;
-				thd->sched_next->sched_prev = thd;
-			}
-			spd->scheduler_all_threads->thd_cnts++;
-		}
-
+		sched_thread_add(spd, thd_id, 0); /* 0 for hard real time threads */
+		break;
+	}
+	case COS_SCHED_RECORD_BES_THD:
+	{
+		sched_thread_add(spd, thd_id, 1); /* 1 for best effort threads */
 		break;
 	}
 	case COS_SCHED_BREAK_PREEMPTION_CHAIN:

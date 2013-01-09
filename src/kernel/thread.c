@@ -57,13 +57,15 @@ static void thd_ft_init(struct thread *thd, int thd_id)
 		thd->sched_info[i].thread_dest      = NULL;
 	}
 
-	thd->sched_next = NULL;
-	thd->sched_prev = NULL;
+	thd->sched_next   = NULL;
+	thd->sched_prev   = NULL;
 
 	thd->crt_tail_thd = NULL;
 	thd->crt_next_thd = NULL;
 	thd->crt_in_spd   = NULL;
 	thd->brand_thd    = NULL;
+
+	thd->thd_cnts     = 0;
 
 	return;
 }
@@ -82,6 +84,7 @@ void thd_init_all(struct thread *thds)
 
 	thread_freelist_head = thds;
 
+	/* This should be consistent with the thread creation chain */
 	thd_ft_init(&SRT_threads_head, 0);
 	thd_ft_init(&HRT_threads_head, 0);
 	thd_ft_init(&BST_threads_head, 0);
