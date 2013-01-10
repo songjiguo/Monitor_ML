@@ -46,14 +46,14 @@ struct rec_data_tor {
 
 	unsigned long	 fcnt;
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 	int has_rebuilt;
 	struct rec_data_tor *next, *prev;
 #endif
 
 };
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 struct rec_data_tor* eager_list_head = NULL;
 #endif
 
@@ -101,7 +101,7 @@ rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *par
 	rd->evtid	 = evtid;
 	rd->fcnt	 = fcounter;
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 	rd->has_rebuilt  = 0;
 #endif
 	return;
@@ -114,13 +114,23 @@ reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 	td_t ret;
 	struct rec_data_tor *rd;
 
-	if (!(rd = rd_lookup(tid))) return; 	/* root_tid */
+	/* printc("in reinstate...tid %d\n", tid); */
+	if (!(rd = rd_lookup(tid))) {\
+		/* printc("found root...tid %d\n", tid); */
+		return; 	/* root_tid */
+	}
 
-	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
+	printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid);
+	volatile unsigned long long start, end;
+	rdtscll(start);
 	/* printc("parent tid %d\n", rd->parent_tid); */
 
 	/* printc("param reinstate %s of length %d\n", rd->param, rd->param_len); */
 	ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid);
+
+	rdtscll(end);
+	printc("reinstate cost: %llu\n", end-start);
+
 	if (ret < 1) {
 		printc("re-split failed %d\n", tid);
 		BUG();
@@ -128,17 +138,14 @@ reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 	if (ret > 0) rd->s_tid = ret;  	/* update server side tid */
 	rd->fcnt = fcounter;
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 	rd->has_rebuilt  = 1;
 #endif
-
 	printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid);
 	return;
 }
 
 extern void sched_active_uc(int thd_id);
-
-extern void eager_recovery_all();
 
 static struct rec_data_tor *
 update_rd(td_t tid)
@@ -152,7 +159,7 @@ update_rd(td_t tid)
 
 	/* printc("rd->fcnt %lu fcounter %lu\n",rd->fcnt,fcounter); */
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 	eager_recovery_all();
 #else
 	reinstate(tid);
@@ -198,7 +205,7 @@ param_save(char *param, int param_len)
 }
 
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 static struct rec_data_tor *
 eager_lookup(td_t td)
 {
@@ -221,7 +228,7 @@ eager_recovery_all()
 	struct rec_data_tor *rd = NULL;
 
 	if (!eager_list_head || EMPTY_LIST(eager_list_head, next, prev)) return;
-	printc("\n [start eager recovery!]\n\n");
+	/* printc("\n [start eager recovery!]\n\n"); */
 
 	for (rd = FIRST_LIST(eager_list_head, next, prev);
 	     rd != eager_list_head;
@@ -240,7 +247,7 @@ eager_recovery_all()
 		rd->has_rebuilt = 0;
 	}
 
-	printc("\n [eager recovery done!]\n\n");
+	/* printc("\n [eager recovery done!]\n\n"); */
 }
 #endif
 
@@ -331,7 +338,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 		memset(&d->data[0], 0, len);
 		cbuf_free(d);
 		
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 		eager_recovery_all();
 #else
 		reinstate(tid);
@@ -365,7 +372,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 		cli_tid = get_unique();
 		assert(cli_tid > 0 && cli_tid != ser_tid);
 		/* printc("found existing tid %d >> get new cli_tid %d\n", ser_tid, cli_tid); */
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 		struct rec_data_tor *tmp;
 		tmp  = rd_lookup(ser_tid);
 		REM_LIST(tmp, next, prev);
@@ -378,7 +385,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
         rd_cons(rd, tid, ser_tid, cli_tid, l_param, len, tflags, evtid);
 	cvect_add(&rec_vect, rd, cli_tid);
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 	/* only initialize the eager head */
 	if (unlikely(!eager_list_head)) {
 		eager_list_head = (struct rec_data_tor*)malloc(sizeof(struct rec_data_tor));
@@ -481,7 +488,7 @@ CSTUB_ASM_3(tmerge, spdid, cb, sz)
 	cbuf_free(d);
         if (!ret) rd_dealloc(rd); /* this must be a leaf */
 
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 	REM_LIST(rd, next, prev);
 #endif
 
@@ -522,15 +529,17 @@ CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
 	int flag_fail = 0;
 redo:
-	/* if (flag_fail == 0){ */
+	/* if (flag_fail == 1){ */
 	/* 	rdtscll(start); */
 	/* } */
         rd = update_rd(tid);
 
-	/* if (flag_fail == 0){ */
+	/* if (flag_fail == 1){ */
 	/* 	rdtscll(end); */
-	/* 	printc("tread -end cost %llu\n", end - start); */
+	/* 	printc("tread recovery -end cost %llu\n", end - start); */
 	/* } */
+
+	flag_fail = 0;
 
 	if (!rd) {
 		printc("try to read a non-existing tor\n");
@@ -546,7 +555,8 @@ CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 			printc("set cap_fault_cnt failed\n");
 			BUG();
 		}
-		/* flag_fail = 1; */
+		/* printc("failed!!! in tread\n"); */
+		flag_fail = 1;
                 goto redo;
 	}
 

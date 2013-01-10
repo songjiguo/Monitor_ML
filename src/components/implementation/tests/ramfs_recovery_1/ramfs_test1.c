@@ -96,10 +96,13 @@ void test1(void)
 {
 	td_t t1, t2, t3;
 	long evt1, evt2, evt3;
-	char *params4, *params1, *params2, *params3;
+	char *params4, *params1, *params2, *params3, *params0, *params99;
 	char *data0, *data1, *data2, *data3;
 	int ret1, ret2, ret3;
 	char *strl, *strh;
+
+	params0 = "doo/";
+	params99 = "koo/";
 
 	params1 = "foo/";
 	params2 = "bar1234567/";
@@ -113,62 +116,44 @@ void test1(void)
 
 	char *merge = "delete";
 
-	printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id());
+	/* printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id()); */
 
 	evt1 = evt_create(cos_spd_id());
-	/* evt2 = evt_create(cos_spd_id()); */
-	/* evt3 = evt_create(cos_spd_id()); */
-	/* assert(evt1 > 0 && evt2 > 0 && evt3 > 0); */
+	evt2 = evt_create(cos_spd_id());
+	evt3 = evt_create(cos_spd_id());
 
 	t1 = tsplit(cos_spd_id(), td_root, params1, strlen(params1), TOR_ALL, evt1);
-	/* t2 = tsplit(cos_spd_id(), t1, params2, strlen(params2), TOR_ALL, evt2); */
-	/* t3 = tsplit(cos_spd_id(), t2, params3, strlen(params3), TOR_ALL, evt3); */
-	/* if (t1 < 1 || t2 < 1 || t3 < 1) { */
-	/* 	printc("splits failed\n"); */
-	/* 	return; */
-	/* } */
+	t2 = tsplit(cos_spd_id(), td_root, params0, strlen(params0), TOR_ALL, evt2);
+	t3 = tsplit(cos_spd_id(), td_root, params99, strlen(params99), TOR_ALL, evt3);
 
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
-	/* ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2)); */
-	/* ret3 = twrite_pack(cos_spd_id(), t3, data3, strlen(data3)); */
+	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
+	ret3 = twrite_pack(cos_spd_id(), t3, data2, strlen(data2));
 
 	trelease(cos_spd_id(), t1);
-	/* trelease(cos_spd_id(), t2); */
-	/* trelease(cos_spd_id(), t3); */
+	trelease(cos_spd_id(), t2);
+	trelease(cos_spd_id(), t3);
 
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
-	/* t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2); */
-	/* t3 = tsplit(cos_spd_id(), t2, params3, strlen(params3), TOR_ALL, evt3); */
-	/* if (t1 < 1 || t2 < 1 || t3 < 1) { */
-	/* 	printc("splits failed\n"); */
-	/* 	return; */
-	/* } */
+	t2 = tsplit(cos_spd_id(), td_root, params0, strlen(params0), TOR_ALL, evt2);
+	t3 = tsplit(cos_spd_id(), td_root, params99, strlen(params99), TOR_ALL, evt3);
 
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
 	if (ret1 > 0 && ret1 <= 1023) buffer[ret1] = '\0';
-	/* printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret1, strlen(data1), buffer, data1); */
 	buffer[0] = '\0';
-	
-	/* /\* t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2); *\/ */
-	/* ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023); */
-	/* if (ret2 > 0 && ret2 <= 1023) buffer[ret2] = '\0'; */
-	/* /\* printv("thread %d read %d: %s\n", cos_get_thd_id(), ret2, buffer); *\/ */
-	/* buffer[0] = '\0'; */
 
-	/* /\* t0 = tsplit(cos_spd_id(), t2, params0, strlen(params0), TOR_ALL, evt0); *\/ */
-	/* ret0 = tread_pack(cos_spd_id(), t0, buffer, 1023); */
-	/* if (ret0 < 0){printc("No such file\n");} */
-	/* if (ret0 > 0 && ret0 <= 1023) { */
-	/* 	buffer[ret0] = '\0'; */
-	/* 	/\* printv("thread %d read %d: %s\n", cos_get_thd_id(), ret0, buffer); *\/ */
-	/* 	buffer[0] = '\0'; */
-	/* } */
+	ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023);
+	if (ret2 > 0 && ret2 <= 1023) buffer[ret2] = '\0';
+	buffer[0] = '\0';
+
+	ret3 = tread_pack(cos_spd_id(), t3, buffer, 1023);
+	if (ret3 > 0 && ret3 <= 1023) buffer[ret3] = '\0';
+	buffer[0] = '\0';
 		
 	trelease(cos_spd_id(), t1);
-	/* trelease(cos_spd_id(), t2); */
-	/* trelease(cos_spd_id(), t3); */
-
-	printc("<<< TEST 1 PASSED (thread %d)>>>\n\n", cos_get_thd_id());
+	trelease(cos_spd_id(), t2);
+	trelease(cos_spd_id(), t3);
+	/* printc("<<< TEST 1 PASSED (thread %d)>>>\n\n", cos_get_thd_id()); */
 
 	return;
 }
@@ -442,14 +427,17 @@ void cos_init(void)
 	return;
 }
 
-
+#if (!LAZY_RECOVERY)
 void eager_recovery_all();
+#endif
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_EAGER_RECOVERY:
+#if (!LAZY_RECOVERY)
 		printc("eager upcall: thread %d (in spd %ld)\n", cos_get_thd_id(), cos_spd_id());
 		eager_recovery_all();
+#endif
 		break;
 	default:
 		cos_init();

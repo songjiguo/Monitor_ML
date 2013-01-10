@@ -15,9 +15,10 @@ unsigned long counter = 0;
 /* #define TEST_LOCAL */
 
 //#define TARGET_COMPONENT 21   /*22 in web server case */
+
 //#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
-//#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
-#define TARGET_COMPONENT  2   /* sched */
+#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
+//#define TARGET_COMPONENT  2   /* sched */
 
 #ifndef TARGET_COMPONENT   
 #define TARGET_COMPONENT 0    	/* no fault injection */
@@ -75,11 +76,11 @@ void cos_init(void)
 #ifdef SWIFI_ENABLE
 		if (cos_get_thd_id() == high) {
 			printc("\nfault injector %ld (high %d thd %d)\n", cos_spd_id(), high, cos_get_thd_id());
-			timed_event_block(cos_spd_id(), 20);
+			timed_event_block(cos_spd_id(), 30);
 			periodic_wake_create(cos_spd_id(), 5);
 			/* periodic_wake_create(cos_spd_id(), 1); */
-			while(num++ < 500) {
-			/* while(1){ */
+			/* while(num++ < 500) { */
+			while(1){
 				periodic_wake_wait(cos_spd_id()); /*  run this first to update the wakeup time */
 				if (flag == 1) fault_inject();
 				flag = 1;

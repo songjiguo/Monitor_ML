@@ -48,6 +48,7 @@ static inline int cos_sched_lock_take(void)
 	u16_t curr_thd = cos_get_thd_id(), owner;
 	
 	/* Recursively taking the lock: not good */
+	printc("current thread %d\n", curr_thd);
 	assert(l->c.owner_thd != curr_thd);
 	do {
 		union cos_synchronization_atom p, n; /* previous and new */

@@ -23,7 +23,7 @@
 struct tor_list {
 	int fid;
 	int tid;
-#ifdef EAGER_RECOVERY
+#if (!LAZY_RECOVERY)
 	int has_rebuilt;
 #endif
 	
@@ -62,7 +62,9 @@ fid_update_rebuilt(int fid, int tid)
 	     item != all_tor_list;
 	     item = FIRST_LIST(item, next, prev)){
 		if (fid == item->fid) {
+#if (!LAZY_RECOVERY)
 			item->has_rebuilt = 1;
+#endif
 			item->tid = tid;
 		}
 	}
@@ -76,7 +78,8 @@ fid_lookup_rebuilt(int fid)
 	struct tor_list *item;
 	int ret = 0;
 	assert(all_tor_list);
-	
+
+#if (!LAZY_RECOVERY)	
 	for (item = FIRST_LIST(all_tor_list, next, prev);
 	     item != all_tor_list;
 	     item = FIRST_LIST(item, next, prev)){
@@ -84,7 +87,7 @@ fid_lookup_rebuilt(int fid)
 			return item->has_rebuilt;
 		}
 	}
-
+#endif
 	return ret;
 }
 
@@ -113,8 +116,8 @@ restore_tor(int fid, td_t tid)
 		if (!sz) goto no_found;
 		offset = cbuf_c_introspect(cos_spd_id(), fid, nth_cb, CBUF_INTRO_OFFSET);
 	
-		printc("found cbid %d size %d offset %d\n", cbid, sz, offset);
-		printc("meta write:: tor id %d for fid %d\n", tid, fid);
+		/* printc("found cbid %d size %d offset %d\n", cbid, sz, offset); */
+		/* printc("meta write:: tor id %d for fid %d\n", tid, fid); */
 		__twmeta(cos_spd_id(), tid, cbid, sz, offset, 1);	/* 1 for recovery now */
 	}
 
@@ -176,7 +179,7 @@ build_tor_list()
 	struct tor_list *item;
 
 	total_tor = cbuf_c_introspect(cos_spd_id(), 0, 0, CBUF_INTRO_TOT_TOR);
-	printc("total file number %d\n", total_tor);
+	/* printc("total file number %d\n", total_tor); */
 
 	while(total_tor--) {
 		nth_fid++;
@@ -186,7 +189,9 @@ build_tor_list()
 		
 		item->fid = fid;
 		item->tid = 0;
+#if (!LAZY_RECOVERY)
 		item->has_rebuilt = 0;
+#endif
 		INIT_LIST(item, next, prev);
 		
 		if (!all_tor_list) { /* initialize the head */
@@ -196,7 +201,7 @@ build_tor_list()
 		
 		ADD_LIST(all_tor_list, item, next, prev);
 		
-		printc("FID: %d\n", fid);
+		/* printc("FID: %d\n", fid); */
 	}
 	return;
 }

@@ -214,7 +214,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 
 	/* printk("----cap %d cap flt %d dest_flt %d---\n",capability, cap_entry->fault.cnt, dest_spd->fault.cnt); */
 	if (unlikely(fault_ret = ipc_fault_detect(cap_entry, dest_spd))){
-		printk("thd %d invocation....from %d to %d\n", thd_get_id(thd), spd_get_index(curr_spd), spd_get_index(dest_spd));
+		/* printk("thd %d invocation....from %d to %d\n", thd_get_id(thd), spd_get_index(curr_spd), spd_get_index(dest_spd)); */
 		/* s = virtual_namespace_query(cap_entry->dest_entry_instruction); */
 		/* printk("cos: s spd %d\n", spd_get_index(s)); */
 
@@ -637,39 +637,9 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 	/* printk("fn %d\n", a); */
 	/* printk("dest spd %d\n", b); */
 
-	/* for now, just save all threads for simplicity */
+	/* for now, just save all threads for simplicity (Jiguo) */
 	thd->sched_info[curr_spd->sched_depth].thread_fn = (void *)a;
 	thd->sched_info[curr_spd->sched_depth].thread_dest = (void *)b;
-
-	/* struct thread *test; */
-	/* record all threads that are created by curr, and in which spd the thread is created */
-	/* a->fn, b->dest_spd, c->0, for now */
-	/* printk("cos: In cos_create_thread now and b is %d\n", b); */
-	if (b) {  		/* no init and recovery thread, 6 for timer brand */
-		spd = spd_get_by_index(b); /* i.e. timer brand id 6, but no spd for it */
-		if (!spd) goto done;
-
-		if (!thd->crt_in_spd) {
-			thd->crt_in_spd = spd;
-		}
-		
-		if (!curr->crt_next_thd) {
-			curr->crt_next_thd = curr->crt_tail_thd = thd;
-		} else {
-			curr->crt_tail_thd->crt_next_thd = thd;
-			curr->crt_tail_thd = thd;
-		}
-
-		/* ****** */
-		/* print info for debug */
-		/* test = curr; */
-		/* printk("HEAD: thread %d\n", thd_get_id(test)); */
-		/* while((test = test->crt_next_thd)) { */
-		/* 	printk("NODE: thread %d created in spd %d by thd %d\n",  */
-		/* 	       thd_get_id(test), spd_get_index(test->crt_in_spd),thd_get_id(curr)); */
-		/* } */
-		/* ****** */
-	}
 done:	
 	/* printk("thread is created %d\n", thd_get_id(thd)); */
 	return thd_get_id(thd);
@@ -1191,7 +1161,7 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	curr->regs.ax = COS_SCHED_RET_SUCCESS;
 
 	/* if (thd_get_id(thd) == 12 || thd_get_id(curr) == 12) */
-	/* 	printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
+		/* printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
 	event_record("switch_thread", thd_get_id(curr), thd_get_id(thd));
 
 #ifdef MEAS_TCS_FAULT_DETECT
@@ -3820,7 +3790,8 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 	short int op, flags, dspd_id;
 	int ret = 0;
 	struct spd *spd, *this_spd;
-	
+
+	/* printk("In mmap_introspect...\n"); */
 	/* decode arguments, could be zero */
 	op       = op_flags_dspd>>24;
 	flags    = op_flags_dspd>>16 & 0x000000FF;

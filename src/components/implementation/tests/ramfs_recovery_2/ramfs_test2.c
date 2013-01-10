@@ -113,13 +113,18 @@ void cos_init(void)
 
 }
 
+
+#if (!LAZY_RECOVERY)
 void eager_recovery_all();
+#endif
 void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_EAGER_RECOVERY:
+#if (!LAZY_RECOVERY)
 		printc("eager upcall: thread %d (in spd %ld)\n", cos_get_thd_id(), cos_spd_id());
 		eager_recovery_all();
+#endif
 		break;
 	default:
 		cos_init();

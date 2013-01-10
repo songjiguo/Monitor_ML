@@ -25,7 +25,7 @@ revoke_test()
 {
 	int i;
 	vaddr_t addr = 0;
-	printc("\n<<< REVOKE TEST BEGIN! >>>\n");
+	/* printc("\n<<< REVOKE TEST BEGIN! >>>\n"); */
 
 #ifdef TEN2TEN  		/* 10 to 10 */
 	for (i = 0; i<PAGE_NUM; i++) {
@@ -41,7 +41,7 @@ revoke_test()
 	/* printc("s_addr %p\n", addr); */
 	mman_revoke_page(cos_spd_id(), addr, 0);
 #endif
-	printc("<<< REVOKE TEST END! >>>\n\n");
+	/* printc("<<< REVOKE TEST END! >>>\n\n"); */
 	return;
 }
 
@@ -50,7 +50,7 @@ alias_test()
 {
 	int i;
 	vaddr_t addr = 0;
-	printc("\n<<< ALIAS TEST BEGIN! >>>\n");
+	/* printc("\n<<< ALIAS TEST BEGIN! >>>\n"); */
 	for (i = 0; i<PAGE_NUM; i++) {
 		d_addr[i] = mm_test2();
 
@@ -69,7 +69,7 @@ alias_test()
 	}
 	/* mm_test2_34(); */
 	
-	printc("<<< ALIAS TEST END! >>>\n\n");
+	/* printc("<<< ALIAS TEST END! >>>\n\n"); */
 	return;
 }
 
@@ -78,7 +78,7 @@ static void
 get_test()
 {
 	int i;
-	printc("\n<<< GET TEST BEGIN! >>>\n");
+	/* printc("\n<<< GET TEST BEGIN! >>>\n"); */
 	for (i = 0; i<PAGE_NUM; i++) {
 		s_addr[i] = (vaddr_t)cos_get_vas_page();
 		if (unlikely(!s_addr[i])) {
@@ -91,7 +91,7 @@ get_test()
 		/* rdtscll(end); */
 		/* printc("cost %llu\n", end - start); */
 	}
-	printc("<<< GET TEST END! >>>\n\n");
+	/* printc("<<< GET TEST END! >>>\n\n"); */
 	return;
 }
 
@@ -137,16 +137,16 @@ cos_init(void)
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 	} else {
-		printc("<<< MM RECOVERY TEST START >>>\n");
+		printc("<<< MM RECOVERY TEST START (thd %d) >>>\n", cos_get_thd_id());
 		timed_event_block(cos_spd_id(), 1);
 		periodic_wake_create(cos_spd_id(), 1);
 		i = 0;
 		while(i++ < 30) {
-			get_test();
-			alias_test();
-			revoke_test();
+			/* get_test(); */
+			/* alias_test(); */
+			/* revoke_test(); */
 
-			/* all_in_one(); */
+			all_in_one();
 			periodic_wake_wait(cos_spd_id());
 		}
 		printc("<<< MM RECOVERY TEST DONE!! >>>.........\n\n\n");

@@ -376,6 +376,7 @@ cbuf_c_create(spdid_t spdid, int size, long cbid)
 		} 
 	}
 	cos_map_del(&cb_ids, cbid);
+	/* printc("cbuf grant\n"); */
 	cbuf_item = tmem_grant(sti);
 	assert(cbuf_item);
 

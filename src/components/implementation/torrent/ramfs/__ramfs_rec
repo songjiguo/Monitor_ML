@@ -19,6 +19,7 @@
 #include <cos_alloc.h>
 #include <cos_map.h>
 #include <fs.h>
+#include <sched.h>
 
 #include <uniq_map.h>
 #include <pgfault.h>
@@ -42,6 +43,9 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	int sz = 0;
 	cbuf_t cb_p;
 	char *path, *d;
+
+	volatile unsigned long long start, end;
+	rdtscll(start);
 
 	if (flag == -10) aaa = 1;	/* control the fault, test purpose only */
 	ret =  tsplit(spdid, tid, param, len, tflags, evtid);
@@ -76,8 +80,10 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 		/* printc("rebuild meta done\n"); */
 	}
 	/* if (all_tor_list && !EMPTY_LIST(all_tor_list, next, prev)) find_update(fid, ret); */
-	UNLOCK();
+	rdtscll(end);
+	/* printc("__tsplit cost: %llu\n", end-start); */
 
+	UNLOCK();
 	return ret;
 }
 
@@ -227,7 +233,7 @@ tread(spdid_t spdid, td_t td, int cb, int sz)
 	LOCK();
 
 	if (unlikely(all_tor_list && !EMPTY_LIST(all_tor_list, next, prev))) { /* has crashed before, need check if the file still presents */
-		printc("when tread, tid is %d\n", td);
+		/* printc("when tread, tid is %d\n", td); */
 		find_restore(td);
 	}
 
@@ -286,7 +292,7 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	LOCK();
 
 	if (unlikely(all_tor_list && !EMPTY_LIST(all_tor_list, next, prev))) { /* has crashed before, need check if the file still presents */
-		printc("when write, tid is %d\n", td);
+		/* printc("when write, tid is %d\n", td); */
 		find_restore(td);
 	}
 
@@ -414,12 +420,18 @@ __twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
 
 int cos_init(void)
 {
+	/* unsigned long long start, end; */
+	/* rdtscll(start); */
+	
 	lock_static_init(&fs_lock);
 	torlib_init();
-
+	
 	fs_init_root(&root);
 	root_torrent.data = &root;
 	root.flags = TOR_READ | TOR_SPLIT;
+	
+	/* rdtscll(end); */
+	/* printc("cost of ramfs init  %llu (thd %d)\n", end - start, cos_get_thd_id()); */
 
 	return 0;
 }

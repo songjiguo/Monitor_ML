@@ -89,6 +89,7 @@ frame_alloc(void)
 again:
 	freelist = f->c.free;
 
+	/* printc("3\n"); */
 	root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTROSPECT_SPD, 0, 0, 0, frame_index(f));
 	if (unlikely(root_spd)){
 		if (root_spd == cos_spd_id()) return f;
@@ -156,6 +157,7 @@ again:
 	assert(hp && f);
 	frame_ref(f);
 	
+	/* printc("4\n"); */
 	root_spd = (spdid_t)cos_mmap_introspect(COS_MMAP_INTROSPECT_SPD, 0, 0, 0, frame_index(f));
 	if (unlikely(root_spd == cos_spd_id())){ /* reuse the same page for ourself */
 		root_addr = (vaddr_t)cos_mmap_introspect(COS_MMAP_INTROSPECT_ADDR, 0, 0, 0, frame_index(f));
@@ -339,6 +341,7 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
 #endif
 	if (ret) {
+		/* printc("5\n"); */
 		if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, dest, to, 0) != frame_index(f)) {
 			printc("found mismatch here\n");
 			goto no_mapping;
@@ -681,6 +684,7 @@ int mman_release_page(spdid_t spd, vaddr_t addr, int flags)
 
 	LOCK();
 
+	/* printc("1\n"); */
 	if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, spd, addr, 0) == -1) {
 		printc("The page %p does not exist when release\n", (void *)addr);
 		goto done;
@@ -733,6 +737,7 @@ recovery_rebuild_mapping(spdid_t s_spd, vaddr_t s_addr)
 	/* this could result many independent trees */
 	struct mapping *m = NULL;
 	int fr_idx = 0;
+	/* printc("2\n"); */
 	fr_idx = (int)cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME,
 					  0, s_spd, s_addr, 0);
 

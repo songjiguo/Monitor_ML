@@ -254,7 +254,7 @@ tmem_grant(struct spd_tmem_info *sti)
 		tmi = free_mem_in_local_cache(sti);
 		if (tmi) {
 			local_cache = tmi;
-			DOUT("found one cached!! \n");
+			/* printc("found one cached!! \n"); */
 			break;
 		}
 
@@ -265,7 +265,7 @@ tmem_grant(struct spd_tmem_info *sti)
 
 		if (sti->num_allocated < sti->num_desired &&
 		    (empty_comps < (MAX_NUM_MEM - tmems_allocated) || sti->num_allocated == 0)) {
-			/* DOUT("alloooooooooo!!\n"); */
+			DOUT("alloooooooooo!!\n");
 			/* We are eligible for allocation! */
 			eligible = 1;
 			tmi = get_mem();

@@ -13,8 +13,6 @@
 #include <cbuf.h>
 #include <evt.h>
 
-#define ALL_ONE_RECOVERY   	/* recovery everything */
-
 //#define TSPLIT_FAULT
 //#define TWRITE_FAULT
 //#define TREAD_FAULT
@@ -31,12 +29,13 @@
 /* we can track all leaf torrents that are requested to split from
  * this client so they and their parents can be rebuilt*/
 /* assume that only the spd which splits the torrent can read/write torrent */
-#define EAGER_RECOVERY
 
 /* we only replay the action when necessary */
 /* this is right way to do and should fit into RTA */
-//#define LAZY_RECOVERY
 
+#if (!LAZY_RECOVERY)
+void eager_recovery_all();
+#endif
 
 /* torrent descriptor */
 typedef int td_t;

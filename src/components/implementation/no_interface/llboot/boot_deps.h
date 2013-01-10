@@ -26,10 +26,14 @@ printc(char *fmt, ...)
 	return ret;
 }
 
+
 //#define MEAS_RECOVERY
 //#define MEAS_REBOOT
 //#define MEAS_FRM_OP
 //#define MEAS_NOTIF_COST_2
+
+//#define MEAS_REC_SCHE
+#define MEAS_REC_MMGR
 
 #define cos_idle_thd  4	        /* idle thread*/
 #define cos_timer_thd 7  	/* timer thread */
@@ -151,10 +155,6 @@ llboot_thd_done(void)
 		BUG();
 	}
 
-#ifdef MEAS_RECOVERY
-	unsigned long long start, end;
-#endif
-
 	while (1) {
 		int     pthd  = prev_thd;
 		spdid_t rspd  = recover_spd;
@@ -164,6 +164,7 @@ llboot_thd_done(void)
 		assert(tid == recovery_thd);
 		if (rspd) {             /* need to recover a component */
 #ifdef MEAS_RECOVERY
+			unsigned long long start, end;
 			rdtscll(start);	
 #endif
 			assert(pthd);
@@ -185,6 +186,7 @@ llboot_thd_done(void)
 }
 
 /* can only be called from mmgr/scheduler */
+/* In eager recovery (ramFS) can also be upcalled within booter */
 int
 recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 {
@@ -214,7 +216,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	reboot = (spdid == 2) ? 1:0;
 
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
-	/* printc("\nLL: <<0>> thd %d : failed spd %d (this spd %ld)\n\n", cos_get_thd_id(), spdid, cos_spd_id()); */
+	printc("\nLL: <<0>> thd %d : failed spd %d (this spd %ld)\n\n", cos_get_thd_id(), spdid, cos_spd_id());
 
 	/* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); /\* remove the brand *\/ */
 
@@ -223,15 +225,15 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	/* sched_exit(); */
 
 	/* debug only: avoid endless faults and wait */
-	/* first++; */
-	/* if(first == 5) { */
-	/* 	printc("has failed %d times\n",first); */
-	/* 	sched_exit(); */
-	/* } */
-
+	first++;
+	if(first == 5) {
+		printc("has failed %d times\n",first);
+		sched_exit();
+	}
+	volatile unsigned long long start, end;
+	start = end = 0;
 
 #ifdef MEAS_REBOOT
-	volatile unsigned long long start, end;
 	rdtscll(start);
 #endif
 	failure_notif_fail(cos_spd_id(), spdid);
@@ -252,7 +254,6 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* ...and set it to its value -8, which is the fault handler
 		 * of the stub. */
 		assert(!cos_thd_cntl(COS_THD_INVFRM_SET_IP, tid, 1, r_ip-8));
-
 		assert(!cos_fault_cntl(COS_SPD_FAULT_TRIGGER, spdid, 0));
 
 #ifdef MEAS_FRM_OP
@@ -261,19 +262,33 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 #endif
 
 		/* printc("Try to recover the spd %d (reboot %d)\n", spdid, reboot); */
+
+#if defined(MEAS_REC_MMGR) || defined(MEAS_REC_SCHE)
+		printc("starting measuring rec cost ...\n");
+		rdtscll(start);
+#endif
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
 		else recovery_upcall(cos_spd_id(), COS_UPCALL_BOOTSTRAP, spdid, 0);
 
+#ifdef MEAS_REC_SCHE
+		rdtscll(end);
+		printc("COST(sched recovery): %llu (thd %d)\n", (end-start), cos_get_thd_id());
+#endif
+
+#if (LAZY_RECOVERY) && defined(MEAS_REC_MMGR)
+		rdtscll(end);
+		printc("COST(Lazy mm recovery): %llu (thd %d)\n", (end-start), cos_get_thd_id());
+#endif
+
 /* mm eager recovery, spdid == 3 */
-#if (!LAZY_RECOVERY)  		
+#if (!LAZY_RECOVERY)
 		if (spdid == 3)	/* hardcode for mm */
 		{
-			volatile unsigned long long start, end;
-			printc("record upcall cost\n");
-			rdtscll(start);
 			recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 8, 0);
+#ifdef MEAS_REC_MMGR
 			rdtscll(end);
-			printc("COST(Eager recovery all): %llu\n", (end-start));
+			printc("COST(Eager mm recovery all): %llu\n", (end-start));
+#endif
 			
 			recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 9, 0);
 		}
@@ -281,7 +296,6 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* after the recovery thread is done, it should switch back to us. */
 		/* rdtscll(end); */
 		/* printc("COST (rest of fault_handler) : %llu\n", end - start); */
-		/* printc("done with upcalling, Ready to return 0\n"); */
 		return 0;
 	}
 	
@@ -446,6 +460,7 @@ int  sched_isroot(void) { return 1; }
 void 
 sched_exit(void)
 {
+	printc("leaving the system, thd %d\n", cos_get_thd_id());
 	while (1) cos_switch_thread(alpha, 0);	
 }
 

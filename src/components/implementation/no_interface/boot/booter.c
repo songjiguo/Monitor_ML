@@ -20,7 +20,8 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 
 #include <recovery_upcall.h>
 
-//#define MEAS_COST
+//#define MEAS_MEM_COST
+#define MEAS_REC_RAMFS
 
 /* local meta-data to track the components */
 struct spd_local_md {
@@ -202,11 +203,13 @@ boot_spd_map_memory(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
 		if (sect->flags & COBJ_SECT_KMEM) use_kmem = 1;
 		dest_daddr = sect->vaddr;
 		left       = cobj_sect_size(h, i);
+
 		/* previous section overlaps with this one, don't remap! */
 		if (round_to_page(dest_daddr) == prev_map) {
 			left      -= (prev_map + PAGE_SIZE - dest_daddr);
 			dest_daddr = prev_map + PAGE_SIZE;
 		} 
+
 		while (left > 0) {
 			dsrc = hp;
 			hp  += PAGE_SIZE;
@@ -236,6 +239,9 @@ boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, i
 	char *start_addr, *offset;
 	/* Where are we in the destination address space? */
 	vaddr_t prev_daddr, init_daddr;
+
+	unsigned long long start, end;
+	rdtscll(start);
 
 	start_addr = local_md[spdid].page_start;
 	init_daddr = cobj_sect_get(h, 0)->vaddr;
@@ -269,6 +275,10 @@ boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, i
 			boot_process_cinfo(h, spdid, boot_spd_end(h), start_addr + (comp_info-init_daddr), comp_info);
 		}
 	}
+
+	rdtscll(end);
+	printc("COST-- mem op(map populate spdid %d) : %llu\n", spdid, end - start);
+
  	return 0;
 }
 
@@ -334,6 +344,9 @@ static int boot_spd_caps(struct cobj_header *h, spdid_t spdid)
 	struct cobj_cap *cap;
 	unsigned int i;
 
+	volatile unsigned long long start, end;
+	rdtscll(start);
+
 	for (i = 0 ; i < h->ncap ; i++) {
 		cap = cobj_cap_get(h, i);
 
@@ -354,6 +367,9 @@ static int boot_spd_caps(struct cobj_header *h, spdid_t spdid)
 		boot_edge_create(spdid, cap->dest_id);
 	}
 
+	rdtscll(end);
+	printc("COST-- mem op(boot_spd_caps spdid %d) : %llu\n", spdid, end - start);
+
 	return 0;
 }
 
@@ -365,11 +381,16 @@ boot_spd_thd(spdid_t spdid)
 {
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
 
+	volatile unsigned long long start, end;
+	printc("start measuring the cost of boto_spd_thd (spdid %d)\n", spdid);
+	rdtscll(start);
+
 	/* Create a thread IF the component requested one */
 	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
+	rdtscll(end);
+	printc("COST-- mem op(boot_spd_thd) : %llu\n", end - start);
 
 	/* if ((sched_create_thread_default(spdid, sp.v, 0, 99)) < 0) return -1; /\* test only *\/ */
-
 	return 0;
 }
 
@@ -417,10 +438,11 @@ boot_create_system(void)
 		
 		h = hs[i];
 		if ((spdid = cos_spd_cntl(COS_SPD_CREATE, 0, 0, 0)) == 0) BUG();
-		//printc("spdid %d, h->id %d\n", spdid, h->id);
 		assert(spdid == h->id);
 		sect = cobj_sect_get(h, 0);
 		if (cos_spd_cntl(COS_SPD_LOCATION, spdid, sect->vaddr, SERVICE_SIZE)) BUG();
+
+		/* printc("spdid %d, flags %x\n", spdid, sect->flags); */
 
 		if (boot_spd_symbs(h, spdid, &comp_info))        BUG();
 		if (boot_spd_map(h, spdid, comp_info))           BUG();
@@ -463,47 +485,47 @@ failure_notif_wait(spdid_t caller, spdid_t failed)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed)
 {
-
-	unsigned long long start, end;
 	/* printc("failure notif fail\n"); */
 	struct spd_local_md *md;
 
+	volatile unsigned long long start, end;
+
 	LOCK();
 
-	printc("COST(mem op): starting recording\n");
+#ifdef MEAS_MEM_COST	
+	printc("starting measuring memOP cost ... thd %d\n", cos_get_thd_id());
 	rdtscll(start);
-
-//	boot_spd_caps_chg_activation(failed, 0);
+#endif
 	md = &local_md[failed];
 	assert(md);
-	/* printc("caller %d failed spd %d md->h %x\n", caller, failed, md->h); */
 	if (boot_spd_map_populate(md->h, failed, md->comp_info, 0)) BUG();
 
-	/* rdtscll(end); */
-	/* printc("COST 1: %llu\n", end - start); */
-	/* rdtscll(start); */
 	/* can fail if component had no boot threads: */
-	if (boot_spd_caps(md->h, failed)) BUG();  /* do this first ??? */
-
-	/* rdtscll(end); */
-	/* printc("COST 2: %llu\n", end - start); */
-	/* rdtscll(start); */
+	/* For now, just add ININTONCE in cos_loader.c */
+	/* So this can be avoided during the reinitialzation */
+	/* if (boot_spd_caps(md->h, failed)) BUG();  /\* do this first ??? *\/ */
 
 	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
-//	boot_spd_caps_chg_activation(failed, 1);
 
+#ifdef MEAS_MEM_COST
 	rdtscll(end);
-	printc("COST(mem op): %llu\n", end - start);
-
-	/* rdtscll(end); */
-	/* printc("COST (caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start); */
-
-	/* if (failed == 14) */
-	/* 	recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 16, 0); */
-
-	if (failed == 14)
+	printc("COST-- mem op(caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start);
+#endif
+	/* ramfs eager recovery */
+#if (!LAZY_RECOVERY)
+	if (failed == 14){	/* hard coded, 14 = ramfs */
+#ifdef MEAS_REC_RAMFS
+		printc("starting measuring rec cost ...\n");
+		/* TODO: use constructor and go through all spds */
+		rdtscll(start);
+#endif
 		recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 15, 0);
-
+#ifdef MEAS_REC_RAMFS
+		rdtscll(end);
+		printc("COST(Lazy fs recovery): %llu (thd %d)\n", (end-start), cos_get_thd_id());
+#endif
+	}
+#endif
 	UNLOCK();
 
 
@@ -582,5 +604,6 @@ void cos_init(void)
 	/* printc("<<<UNLOCK? yes>>>\n"); */
 	boot_deps_run();
 
+	printc("boot thread %d is leaving\n", cos_get_thd_id());
 	return;
 }

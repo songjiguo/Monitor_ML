@@ -31,6 +31,11 @@ sched_rec_c = '__cos_sched_base_rec'
 sched_nor_c = '__cos_sched_base'
 sched_c = 'cos_sched_base.c'
 
+fprr_path = '/src/components/implementation/sched/fprr'
+fprr_rec_c = '__fp_rr_rec'
+fprr_nor_c = '__fp_rr'
+fprr_c = 'fp_rr.c'
+
 ramfs_component_path = '/src/components/implementation/torrent/ramfs/'
 ramfs_rec_c = '__ramfs_rec'
 ramfs_nor_c = '__ramfs'
@@ -127,6 +132,18 @@ def main():
                 os.system("ln -s " + sched_rec_c + " " + sched_c)
             else:
                 os.system("ln -s " + sched_nor_c + " " + sched_c)
+
+            prefix_fprr  = path + fprr_path
+            os.chdir(prefix_fprr)
+
+            if os.path.exists(fprr_c):
+                os.unlink(fprr_c)
+            if (ret == 'normal') or (ret == 'n'):
+                os.system("ln -s " + fprr_nor_c + " " + fprr_c)
+            elif (ret == 'recovery') or (ret == 'r'):
+                os.system("ln -s " + fprr_rec_c + " " + fprr_c)
+            else:
+                os.system("ln -s " + fprr_nor_c + " " + fprr_c)            
 
 #        if (names[i] == 'torrent'):
         if (names[i] == 'rtorrent'):

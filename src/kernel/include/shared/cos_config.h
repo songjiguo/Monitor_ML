@@ -54,6 +54,12 @@
  * use it, run python set_symbolic_link.py under composite/tools */
 
 #define RECOVERY_ENABLE 1               // 1 will enable the fault notification in Composite kernel
+/* for ramfs (eager recovery), set recovery_enable to 0 */
+/* for mm (eager recovery), set recovery_enable to 0 or 1? */
+/* for scheduler, this does not make difference, so set it as 1 when scheduler */
+
+/* For now, set INITONCE in cos_laoder and comment out boot_spd_caps in booter/fail function */
+/* to avoid the overhead of re-capability. Need fix later */
 #define LAZY_RECOVERY   1               // 1 will enable the lazy recovery, 0 for eager recovery
 
 #define SWIFI_ENABLE    1		// 1 will enable the fault injection (swifi component), for now always on

@@ -412,6 +412,7 @@ stkmgr_grant_stack(spdid_t d_spdid)
 	assert(SPD_IS_MANAGED(info));
 	
 	/* Apply for transient memory. Might block! */
+	/* printc("stkmgr grant\n"); */
 	tmem_grant(info);
 	
 	RELEASE();

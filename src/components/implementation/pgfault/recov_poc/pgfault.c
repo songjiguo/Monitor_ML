@@ -28,14 +28,14 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	int tid = cos_get_thd_id();
 
 	first++;
-	if(first == 6) {
+	if(first == 10) {
 		printc("plain pgfault has failed %d times\n",first);
 		assert(0);
 	}
 
 
-	printc("PGFAULT: thd %d faults in spd %d @ %p\n",
-	       tid, spdid, fault_addr);
+	/* printc("PGFAULT: thd %d faults in spd %d @ %p\n", */
+	/*        tid, spdid, fault_addr); */
 
          /*
 	 * Look at the booter: when recover is happening, the sstub is
@@ -77,7 +77,7 @@ int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip
 {
 	unsigned long long start, end;
 	int tid = cos_get_thd_id();
-	/* printc("pgf notif parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip); */
+	printc("pgf notif parameters: spdid %d fault_addr %p flags %d ip %p\n", spdid, fault_addr, flags, ip);
 	printc("<< thd %d in Fault FLT Notif>> \n", cos_get_thd_id());
 
 	unsigned long r_ip; 	/* the ip to return to */
