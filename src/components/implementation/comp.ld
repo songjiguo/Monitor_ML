@@ -23,7 +23,8 @@ SECTIONS
 		LONG(0)
 		__CRECOV_END__ = .;
 	}	
-	.kmem : { *(.kmem*) }
+	.kmem_caps : { *(.kmem_caps*) }
+	.kmem_sched : { *(.kmem_sched*) }
 	.cinfo : { *(.cinfo*) }
 	.data : { *(.data*) }
 	.bss : { *(.bss*) }

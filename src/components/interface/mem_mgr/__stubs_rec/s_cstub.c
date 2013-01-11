@@ -26,3 +26,13 @@ int __sg_mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 
 	return ret;
 }
+
+/* int __sg_mman_release_page(spdid_t spd, vaddr_t addr, int flags) */
+/* { */
+/* 	int ret = 0; */
+
+/* 	if (flags == 1) ret = __mman_release_page(spd, addr, flags); */
+/* 	else ret = mman_release_page(spd, addr, flags); */
+
+/* 	return ret; */
+/* } */

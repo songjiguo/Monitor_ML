@@ -171,6 +171,11 @@ int mman_release_page(spdid_t spd, vaddr_t addr, int flags)
 	return 0;
 }
 
+/* int __mman_release_page(spdid_t spd, vaddr_t addr, int flags) */
+/* { */
+/* 	return 0; */
+/* } */
+
 int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 {
 	return 0;

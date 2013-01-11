@@ -3708,6 +3708,9 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 	dspd_id  = op_flags_dspd & 0x0000FFFF;
 	this_spd = spd_get_by_index(spdid);
 	spd      = spd_get_by_index(dspd_id);
+	/* printk("cos: mmap cntl call for spd %d for spd %d @ vaddr %x\n", */
+	/*        spdid, dspd_id, (unsigned int)daddr); */
+
 	if (!this_spd || !spd || virtual_namespace_query(daddr) != spd) {
 		printk("cos: invalid mmap cntl call for spd %d for spd %d @ vaddr %x\n",
 		       spdid, dspd_id, (unsigned int)daddr);
@@ -3720,7 +3723,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		if (mem_id < this_spd->pfn_base || /* <- check for overflow? */
 		    mem_id >= (this_spd->pfn_base + this_spd->pfn_extent)) {
 			/* printk("Accessing physical frame outside of allowed range (%d outside of [%d, %d).\n", */
-			/*        (int)mem_id, this_spd->pfn_base,  */
+			/*        (int)mem_id, this_spd->pfn_base, */
 			/*        this_spd->pfn_base + this_spd->pfn_extent); */
 			return -EINVAL;
 		}
@@ -3737,7 +3740,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		 * writing all of the pages itself).
 		 */
 		if (pgtbl_add_entry(spd->spd_info.pg_tbl, daddr, page)) {
-			/* printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n",  */
+			/* printk("cos: mmap grant into %d @ %x -- could not add entry to page table.\n", */
 			/*        dspd_id, (unsigned int)daddr); */
 			return -EINVAL;
 		}
@@ -3790,6 +3793,7 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 	short int op, flags, dspd_id;
 	int ret = 0;
 	struct spd *spd, *this_spd;
+	spd = this_spd = NULL;
 
 	/* printk("In mmap_introspect...\n"); */
 	/* decode arguments, could be zero */
@@ -3797,13 +3801,20 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 	flags    = op_flags_dspd>>16 & 0x000000FF;
 	dspd_id  = op_flags_dspd & 0x0000FFFF;
 	this_spd = spd_get_by_index(spdid);
-	spd      = spd_get_by_index(dspd_id);
+
+	assert(this_spd);
+	if (dspd_id > 0) spd = spd_get_by_index(dspd_id);	
+
+	/* printk("cos: mmap introspect call for spd %d for spd %d @ vaddr %x\n", */
+	/*        spdid, dspd_id, (unsigned int)daddr); */
 
 	switch(op) {
 	case COS_MMAP_INTROSPECT_FRAME:
 	{
 		paddr_t phy_addr;
 		int frame_num;
+
+		if (!spd) return -EINVAL;
 
 		if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) {
 			/* printk("cos: try find phy frame -- no page table entry found.\n"); */

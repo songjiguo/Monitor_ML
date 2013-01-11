@@ -258,7 +258,7 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 	struct rec_data_mm *rdmm;
 	vaddr_t s_addr;
 	assert(rdmm_list);
-	/* printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id());
 
 	/* print_rdmm_list(rdmm_list); */
 	rdmm = rdmm_list->head;
@@ -275,7 +275,7 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 	rdmm_list->recordable = 1;
 	rdmm_list->fcnt = fcounter;
 	/* printc("set: rdmm_list->fcnt %d, fcounter %d\n",rdmm_list->fcnt, fcounter); */
-	/* printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id());
 	return;
 }
 
@@ -474,8 +474,35 @@ CSTUB_ASM_3(mman_revoke_page, spdid, addr, flags)
        }
 
        record_rem(rdmm_list);
-
 CSTUB_POST
+
+
+/* CSTUB_FN_ARGS_3(int, mman_release_page, spdid_t, spdid, vaddr_t, addr, int, flags) */
+
+/*        struct rec_data_mm_list *rdmm_list; */
+/*        measure_first = 0; */
+/*        rdmm_list = rdmm_list_lookup(addr >> PAGE_SHIFT); */
+/*        assert(rdmm_list); */
+/* redo: */
+/*        if (unlikely(rdmm_list->fcnt != fcounter)) flags = 1; */
+/*        update_info(rdmm_list); */
+/* /\* if (cos_get_thd_id() != 5) printc("<< thd %d call revoke_page  >>\n", cos_get_thd_id()); *\/ */
+
+/* CSTUB_ASM_3(mman_release_page, spdid, addr, flags) */
+
+/*        if (unlikely (fault)){ */
+/* 	       if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) { */
+/* 		       printc("set cap_fault_cnt failed\n"); */
+/* 		       BUG(); */
+/* 	       } */
+
+/*        	       fcounter++; */
+/* 	       /\* printc("revoke: fcounter ++ %d\n", fcounter); *\/ */
+/* 	       flags = 0; */
+/*        	       goto redo; */
+/*        } */
+
+/* CSTUB_POST */
 
 /*****************/
 /* Debug helper  */

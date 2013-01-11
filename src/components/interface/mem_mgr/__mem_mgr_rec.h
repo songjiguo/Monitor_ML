@@ -29,6 +29,7 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags);
  * is allowed to remove the designated page.
  */
 int mman_release_page(spdid_t spd, vaddr_t addr, int flags);
+/* int __mman_release_page(spdid_t spd, vaddr_t addr, int flags); */
 /* remove all descendent mappings of this one (but not this one). */ 
 int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags); 
 int __mman_revoke_page(spdid_t spd, vaddr_t addr, int flags);

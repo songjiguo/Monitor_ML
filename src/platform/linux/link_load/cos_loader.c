@@ -143,7 +143,8 @@ typedef enum {
 	CTORS_S, 
 	DTORS_S, 
 	CRECOV_S, 
-	KMEM_S, 
+	KMEM_CAPS_S, 
+	KMEM_SCHED_S, 
 	CINFO_S, 
 	DATA_S, 
 	BSS_S, 
@@ -196,9 +197,14 @@ struct cos_sections section_info[MAXSEC_S+1] = {
 		.sname      = ".crecov",
 	},
 	{
-		.secid      = KMEM_S,
+		.secid      = KMEM_CAPS_S,
 		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_KMEM | COBJ_SECT_INITONCE,
-		.sname      = ".kmem"
+		.sname      = ".kmem_caps"
+	},
+	{
+		.secid      = KMEM_SCHED_S,
+		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_KMEM,
+		.sname      = ".kmem_sched"
 	},
 	{
 		.secid      = CINFO_S,

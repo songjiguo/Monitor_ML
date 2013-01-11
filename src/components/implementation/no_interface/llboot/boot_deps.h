@@ -226,7 +226,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	/* debug only: avoid endless faults and wait */
 	first++;
-	if(first == 5) {
+	if(first == 30) {
 		printc("has failed %d times\n",first);
 		sched_exit();
 	}
@@ -376,6 +376,7 @@ __vpage2frame(vaddr_t addr) { return (addr - init_hp) / PAGE_SIZE; }
 static vaddr_t
 __mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 {
+	/* printc("deps 1\n"); */
 	if (cos_mmap_cntl(COS_MMAP_GRANT, 0, cos_spd_id(), addr, frame_frontier++)) BUG();
 	if (!init_hp) init_hp = addr;
 	return addr;
@@ -389,6 +390,7 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 	assert(init_hp);
 	fp = __vpage2frame(s_addr);
 	assert(fp >= 0);
+	/* printc("deps 2\n"); */
 	if (cos_mmap_cntl(COS_MMAP_GRANT, 0, d_spd, d_addr, fp)) BUG();
 	return d_addr;
 }

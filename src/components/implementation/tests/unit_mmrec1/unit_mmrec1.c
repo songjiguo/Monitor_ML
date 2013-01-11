@@ -114,6 +114,7 @@ all_in_one()
 
 		/* rdtscll(end); */
 		/* printc("grant-alias-revoke cost %llu\n", end - start); */
+		/* mman_release_page(cos_spd_id(), s_addr[i], 0); */
 	}
 	return;
 }
@@ -137,19 +138,20 @@ cos_init(void)
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 	} else {
-		printc("<<< MM RECOVERY TEST START (thd %d) >>>\n", cos_get_thd_id());
 		timed_event_block(cos_spd_id(), 1);
 		periodic_wake_create(cos_spd_id(), 1);
 		i = 0;
-		while(i++ < 30) {
+		while(i++ < 100) {
+			printc("<<< MM RECOVERY TEST START (thd %d) >>>\n", cos_get_thd_id());
 			/* get_test(); */
 			/* alias_test(); */
 			/* revoke_test(); */
 
 			all_in_one();
+
+			printc("<<< MM RECOVERY TEST DONE!! >>> {%d}\n\n\n", i);
 			periodic_wake_wait(cos_spd_id());
 		}
-		printc("<<< MM RECOVERY TEST DONE!! >>>.........\n\n\n");
 	}
 	
 	return;
