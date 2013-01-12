@@ -21,7 +21,7 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 #include <recovery_upcall.h>
 
 #define MEAS_MEM_COST
-//#define MEAS_REC_RAMFS
+#define MEAS_REC_RAMFS
 
 /* local meta-data to track the components */
 struct spd_local_md {
@@ -375,14 +375,8 @@ boot_spd_thd(spdid_t spdid)
 {
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
 
-	volatile unsigned long long start, end;
-	printc("start measuring the cost of boto_spd_thd (spdid %d)\n", spdid);
-	rdtscll(start);
-
 	/* Create a thread IF the component requested one */
 	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
-	rdtscll(end);
-	printc("COST-- mem op(boot_spd_thd) : %llu\n", end - start);
 
 	/* if ((sched_create_thread_default(spdid, sp.v, 0, 99)) < 0) return -1; /\* test only *\/ */
 	return 0;
@@ -501,7 +495,7 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 
 #ifdef MEAS_MEM_COST
 	rdtscll(end);
-	printc("COST-- mem op(caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start);
+	printc("COST (memOp): %llu\n", end - start);
 #endif
 	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
 

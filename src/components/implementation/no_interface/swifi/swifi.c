@@ -16,8 +16,8 @@ unsigned long counter = 0;
 
 //#define TARGET_COMPONENT 21   /*22 in web server case */
 
-//#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
-#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
+#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
+//#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
 //#define TARGET_COMPONENT  2   /* sched */
 
 #ifndef TARGET_COMPONENT   

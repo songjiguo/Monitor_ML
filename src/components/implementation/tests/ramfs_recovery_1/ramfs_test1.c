@@ -15,6 +15,8 @@
 /* Military Slang: SNAFU, SUSFU, FUBAR, TARFU, BOCHIA */
 /* based on the code from unit test for ramfs */
 
+#define SIZE  4096
+
 #define VERBOSE 1
 #ifdef VERBOSE
 #define printv(fmt,...) printc(fmt, ##__VA_ARGS__)
@@ -97,7 +99,7 @@ void test1(void)
 	td_t t1, t2, t3;
 	long evt1, evt2, evt3;
 	char *params4, *params1, *params2, *params3, *params0, *params99;
-	char *data0, *data1, *data2, *data3;
+	char *data0, *data1, *data2, *data3, *big_data;
 	int ret1, ret2, ret3;
 	char *strl, *strh;
 
@@ -114,6 +116,13 @@ void test1(void)
 	data3 = "lkevinandy";
 	strl = "testmore_l";
 
+	big_data = (char *)malloc(SIZE);
+	
+	/* int i; */
+	/* for (i = 0; i<SIZE ; i++) big_data[i] = 'A'; */
+	/* for (i = 0; i<SIZE ; i++) printc("%c", big_data[i]); */
+	/* printc("\n"); */
+
 	char *merge = "delete";
 
 	/* printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id()); */
@@ -129,12 +138,13 @@ void test1(void)
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
 	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
 	ret3 = twrite_pack(cos_spd_id(), t3, data2, strlen(data2));
+	/* ret3 = twrite_pack(cos_spd_id(), t3, big_data, SIZE); */
 
 	trelease(cos_spd_id(), t1);
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t3);
 
-	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
+	t1 = tsplit(cos_spd_id(), td_root, params1, strlen(params1), TOR_ALL, evt1);
 	t2 = tsplit(cos_spd_id(), td_root, params0, strlen(params0), TOR_ALL, evt2);
 	t3 = tsplit(cos_spd_id(), td_root, params99, strlen(params99), TOR_ALL, evt3);
 
@@ -435,7 +445,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	switch (t) {
 	case COS_UPCALL_EAGER_RECOVERY:
 #if (!LAZY_RECOVERY)
-		printc("eager upcall: thread %d (in spd %ld)\n", cos_get_thd_id(), cos_spd_id());
+		/* printc("eager upcall: thread %d (in spd %ld)\n", cos_get_thd_id(), cos_spd_id()); */
 		eager_recovery_all();
 #endif
 		break;

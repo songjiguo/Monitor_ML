@@ -120,16 +120,17 @@ reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 		return; 	/* root_tid */
 	}
 
-	printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid);
-	volatile unsigned long long start, end;
-	rdtscll(start);
+	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
+	/* volatile unsigned long long start, end; */
+	/* rdtscll(start); */
+
 	/* printc("parent tid %d\n", rd->parent_tid); */
 
 	/* printc("param reinstate %s of length %d\n", rd->param, rd->param_len); */
 	ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid);
 
-	rdtscll(end);
-	printc("reinstate cost: %llu\n", end-start);
+	/* rdtscll(end); */
+	/* printc("reinstate cost: %llu\n", end-start); */
 
 	if (ret < 1) {
 		printc("re-split failed %d\n", tid);
@@ -141,7 +142,7 @@ reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
 #if (!LAZY_RECOVERY)
 	rd->has_rebuilt  = 1;
 #endif
-	printc("already reinstate c_tid %d s_tid %d >>>>>>>>>>\n", rd->c_tid, rd->s_tid);
+	/* printc("just reinstate c_tid %d s_tid %d (rd->fcnt %d) >>>>>>>>>>\n", rd->c_tid, rd->s_tid, rd->fcnt); */
 	return;
 }
 
@@ -154,17 +155,15 @@ update_rd(td_t tid)
 
         rd = rd_lookup(tid);
 	if (!rd) return NULL;
+
+#if (!LAZY_RECOVERY)
+	return rd;
+#endif
 	/* fast path */
 	if (likely(rd->fcnt == fcounter)) return rd;
 
 	/* printc("rd->fcnt %lu fcounter %lu\n",rd->fcnt,fcounter); */
-
-#if (!LAZY_RECOVERY)
-	eager_recovery_all();
-#else
 	reinstate(tid);
-#endif
-
 	/* printc("rebuild fs is done\n\n"); */
 	return rd;
 }
@@ -357,7 +356,6 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 		goto redo;
 	}
 
-        /* printc("ret from ramfs: %d\n",ret); */
         memset(&d->data[0], 0, len);
         cbuf_free(d);
 
@@ -458,6 +456,7 @@ CSTUB_FN_ARGS_5(int, tmerge, spdid_t, spdid, td_t, td, td_t, td_into, char *, pa
 	assert(param[len] == '\0');
 
 redo:
+/* printc("tmerge\n"); */
         rd = update_rd(td);
 	if (!rd) {
 		printc("try to merge a non-existing tor\n");
@@ -501,6 +500,7 @@ CSTUB_FN_ARGS_2(int, trelease, spdid_t, spdid, td_t, tid)
         struct rec_data_tor *rd;
 
 redo:
+/* printc("trelease\n"); */
         rd = update_rd(tid);
 	if (!rd) {
 		printc("try to release a non-existing tor\n");
@@ -519,6 +519,10 @@ CSTUB_ASM_2(trelease, spdid, rd->s_tid)
 	}
         assert(rd);
 
+#if (!LAZY_RECOVERY)
+	REM_LIST(rd, next, prev);
+#endif
+
 CSTUB_POST
 
 CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
@@ -532,6 +536,7 @@ redo:
 	/* if (flag_fail == 1){ */
 	/* 	rdtscll(start); */
 	/* } */
+/* printc("tread\n"); */
         rd = update_rd(tid);
 
 	/* if (flag_fail == 1){ */
@@ -573,6 +578,7 @@ CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
 
 redo:
 
+/* printc("twrite\n"); */
         rd = update_rd(tid);
 	if (!rd) {
 		printc("try to write a non-existing tor\n");

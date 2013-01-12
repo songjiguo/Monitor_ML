@@ -38,7 +38,7 @@ static int aaa = 0;
 td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
 	      tor_flags_t tflags, long evtid, int flag)
 {
-	td_t ret;
+	td_t ret = 0;
 	int fid = 0;
 	int sz = 0;
 	cbuf_t cb_p;
@@ -58,7 +58,10 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	/* printc("unique path (ret tid %d from c_tid %d) ---> %s with size %d\n", ret, tid, path, sz); */
 
 	d = cbuf_alloc(sz, &cb_p);
-	if (!d) return -1;
+	if (!d) {
+		ret = -1;
+		goto done;
+	}
 	memcpy(d, path, sz);
 	
 	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz);
@@ -83,6 +86,7 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	rdtscll(end);
 	/* printc("__tsplit cost: %llu\n", end-start); */
 
+done:
 	UNLOCK();
 	return ret;
 }
@@ -420,8 +424,8 @@ __twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
 
 int cos_init(void)
 {
-	/* unsigned long long start, end; */
-	/* rdtscll(start); */
+	unsigned long long start, end;
+	rdtscll(start);
 	
 	lock_static_init(&fs_lock);
 	torlib_init();
@@ -430,8 +434,8 @@ int cos_init(void)
 	root_torrent.data = &root;
 	root.flags = TOR_READ | TOR_SPLIT;
 	
-	/* rdtscll(end); */
-	/* printc("cost of ramfs init  %llu (thd %d)\n", end - start, cos_get_thd_id()); */
+	rdtscll(end);
+	printc("COST (cos_init): %llu\n", end - start);
 
 	return 0;
 }

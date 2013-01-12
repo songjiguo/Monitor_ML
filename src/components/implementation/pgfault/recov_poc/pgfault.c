@@ -27,11 +27,11 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	unsigned long r_ip; 	/* the ip to return to */
 	int tid = cos_get_thd_id();
 
-	first++;
-	if(first == 10) {
-		printc("plain pgfault has failed %d times\n",first);
-		assert(0);
-	}
+	/* first++; */
+	/* if(first == 10) { */
+	/* 	printc("plain pgfault has failed %d times\n",first); */
+	/* 	assert(0); */
+	/* } */
 
 
 	/* printc("PGFAULT: thd %d faults in spd %d @ %p\n", */
@@ -65,7 +65,7 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 		failure_notif_fail(cos_spd_id(), spdid);
 
 		/* rdtscll(end); */
-		/* printc("rebooting cost: %llu\n", (end-start)); */
+		/* printc("COST(failture_notif): %llu\n", (end-start)); */
 	}
 
 	return 0;
