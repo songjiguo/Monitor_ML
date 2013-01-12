@@ -3711,10 +3711,15 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 	/* printk("cos: mmap cntl call for spd %d for spd %d @ vaddr %x\n", */
 	/*        spdid, dspd_id, (unsigned int)daddr); */
 
+	/* TODO: (Jiguo)
+	   use ENONEMPTY or EEXIST to tell the different situations for fault tolerance
+	 */
 	if (!this_spd || !spd || virtual_namespace_query(daddr) != spd) {
 		printk("cos: invalid mmap cntl call for spd %d for spd %d @ vaddr %x\n",
 		       spdid, dspd_id, (unsigned int)daddr);
-		return -1;
+		/* for now, this means that spd does not exist(e.g, para got flipped) */
+		/* assume the mm has failed */
+		return -ENOENT;
 	}
 
 	switch(op) {
@@ -3729,7 +3734,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 		}
 		page = cos_access_page(mem_id);
 		if (0 == page) {
-			printk("cos: mmap grant -- could not get a physical page.\n");
+			/* printk("cos: mmap grant -- could not get a physical page.\n"); */
 			return -EINVAL;
 		}
 		/*
@@ -3805,7 +3810,7 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 	assert(this_spd);
 	if (dspd_id > 0) spd = spd_get_by_index(dspd_id);	
 
-	/* printk("cos: mmap introspect call for spd %d for spd %d @ vaddr %x\n", */
+	/* if (dspd_id) printk("cos: mmap introspect call for spd %d for spd %d @ vaddr %x\n", */
 	/*        spdid, dspd_id, (unsigned int)daddr); */
 
 	switch(op) {

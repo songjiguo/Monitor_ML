@@ -160,11 +160,12 @@ llboot_thd_done(void)
 		spdid_t rspd  = recover_spd;
 		int     op    = operation;
 		vaddr_t arg  =  recovery_arg;
-				
+		
+		volatile unsigned long long start, end;
+
 		assert(tid == recovery_thd);
 		if (rspd) {             /* need to recover a component */
 #ifdef MEAS_RECOVERY
-			unsigned long long start, end;
 			rdtscll(start);	
 #endif
 			assert(pthd);
@@ -217,6 +218,8 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
 	printc("\nLL: <<0>> thd %d : failed spd %d (this spd %ld)\n\n", cos_get_thd_id(), spdid, cos_spd_id());
+	
+	if (reboot) sched_exit(); /* just a quick way to measure ubenchmark , for MM. Need fix later */
 
 	/* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); /\* remove the brand *\/ */
 
@@ -264,7 +267,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 		/* printc("Try to recover the spd %d (reboot %d)\n", spdid, reboot); */
 
 #if defined(MEAS_REC_MMGR) || defined(MEAS_REC_SCHE)
-		printc("starting measuring rec cost ...\n");
+		printc("starting measuring cos_upcall cost ...(thd %d)\n", cos_get_thd_id());
 		rdtscll(start);
 #endif
 		if (reboot) recovery_upcall(cos_spd_id(), COS_UPCALL_REBOOT, spdid, 0);
@@ -277,7 +280,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 
 #if (LAZY_RECOVERY) && defined(MEAS_REC_MMGR)
 		rdtscll(end);
-		printc("COST(Lazy mm recovery): %llu (thd %d)\n", (end-start), cos_get_thd_id());
+		printc("COST(Lazy mm upcall): %llu (thd %d)\n", (end-start), cos_get_thd_id());
 #endif
 
 /* mm eager recovery, spdid == 3 */
@@ -290,7 +293,9 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 			printc("COST(Eager mm recovery all): %llu\n", (end-start));
 #endif
 			
-			recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 9, 0);
+			/* recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 9, 0); */
+			/* recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 10, 0); */
+			/* recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, 11, 0); */
 		}
 #endif
 		/* after the recovery thread is done, it should switch back to us. */
@@ -462,7 +467,7 @@ int  sched_isroot(void) { return 1; }
 void 
 sched_exit(void)
 {
-	printc("leaving the system, thd %d\n", cos_get_thd_id());
+	printc("leaving the system, thd %d alpha %d\n", cos_get_thd_id(), alpha);
 	while (1) cos_switch_thread(alpha, 0);	
 }
 

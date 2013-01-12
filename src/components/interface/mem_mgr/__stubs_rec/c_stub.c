@@ -252,14 +252,17 @@ record_rem(struct rec_data_mm_list *rdmm_list)
 	assert(!rdmm_list_lookup(rdmm_list->id));
 }
 
-static void
+static int
 record_replay(struct rec_data_mm_list *rdmm_list)
 {
 	struct rec_data_mm *rdmm;
 	vaddr_t s_addr;
+	int cnt = 0;
 	assert(rdmm_list);
-	printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id());
-
+	/* printc("In Cli %ld: ready to replay now...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	/* volatile unsigned long long start_r, end_r; */
+	/* rdtscll(start_r); */
+	
 	/* print_rdmm_list(rdmm_list); */
 	rdmm = rdmm_list->head;
 	s_addr = rdmm_list->s_addr;
@@ -269,14 +272,22 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 		/* printc("replay::<rdmm->s_spd %ld rdmm->s_addr %x rdmm->d_spd %d rdmm->d_addr %x>\n", */
 		/*        cos_spd_id(), (unsigned int)s_addr, rdmm->d_spd, (unsigned int)rdmm->d_addr); */
 		if (rdmm->d_addr != __mman_alias_page_rec(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr)) BUG();
-		/* __mman_alias_page_rec(cos_spd_id(), s_addr, rdmm->d_spd, rdmm->d_addr); */
+		cnt++;		/* count how many objects we have recovered */
 		if (!(rdmm = rdmm->next)) break;
 	}
 	rdmm_list->recordable = 1;
 	rdmm_list->fcnt = fcounter;
 	/* printc("set: rdmm_list->fcnt %d, fcounter %d\n",rdmm_list->fcnt, fcounter); */
-	printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id());
-	return;
+	/* rdtscll(end_r); */
+	
+	/* printc("In Cli %ld: replay done...thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	
+	/* printc("(%d) objects recovery cost %llu (rdmm_list id %d)\n", cnt, end_r - start_r, rdmm_list->id); */
+
+	/* For lazy, only need return void */
+
+	/* printc("cnt %d --- ", cnt); */
+	return cnt;
 }
 
 /*--------------------------------------*/
@@ -288,6 +299,7 @@ record_replay(struct rec_data_mm_list *rdmm_list)
 void
 update_info(struct rec_data_mm_list *rdmm_list)
 {
+	volatile unsigned long long start, end;
 #if (!LAZY_RECOVERY)
 	return;
 #else
@@ -295,7 +307,10 @@ update_info(struct rec_data_mm_list *rdmm_list)
 	if (unlikely(rdmm_list->fcnt != fcounter)) {
 		/* printc(" -- mm crashed before when this spd called it -- thd %d\n", cos_get_thd_id()); */
 		/* printc("rdmm_list->fcnt %d, fcounter %d\n",rdmm_list->fcnt, fcounter); */
+		rdtscll(start);
 		record_replay(rdmm_list);
+		rdtscll(end);
+		printc("single record_replay cost %llu\n", end - start);
 	}
 	return;
 #endif
@@ -305,10 +320,12 @@ update_info(struct rec_data_mm_list *rdmm_list)
 void 
 alias_replay(vaddr_t s_addr)
 {
-	/* printc("In Cli %ld: from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id()); */
+	/* printc("In Alias_Replay %ld (s_addr %p): from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id(), (void *)s_addr); */
 	struct rec_data_mm_list *rdmm_list;
 	rdmm_list = rdmm_list_lookup(s_addr >> PAGE_SHIFT);
-	if (rdmm_list) record_replay(rdmm_list);
+	if (rdmm_list) {
+		record_replay(rdmm_list);
+	}
 	return;
 }
 
@@ -317,6 +334,7 @@ alias_replay(vaddr_t s_addr)
 void 
 eager_replay()
 {
+	int eagert_cnt = 0;
 	/* printc("Eager: Cli %ld: from upcall recovery, thread %d\n", cos_spd_id(), cos_get_thd_id()); */
 	struct rec_data_mm_list *rdmm_list;
 	if (!all_rdmm_list) {
@@ -327,9 +345,10 @@ eager_replay()
 	    rdmm_list != all_rdmm_list;
 	    rdmm_list = FIRST_LIST(rdmm_list, next, prev)) {
 		/* printc("\n[[ Find rdmm_list (%d)]]\n\n", rdmm_list->head->d_spd); */
-		record_replay(rdmm_list);
+		eagert_cnt = eagert_cnt + record_replay(rdmm_list);
 	}
 
+	printc("(cnts %d ) --- ", eagert_cnt);
 	return;
 }
 #endif
@@ -374,12 +393,14 @@ CSTUB_ASM_3(mman_get_page, spdid, addr, flags)
        	       goto redo;
        }
 
+/* printc("ret %d\n", ret);  */
+/* if (ret == 99) goto redo; */
+
 CSTUB_POST
 
 
 CSTUB_FN_ARGS_4(vaddr_t, mman_alias_page, spdid_t, s_spd, vaddr_t, s_addr, spdid_t, d_spd, vaddr_t, d_addr)
 
-        /* if (cos_spd_id() == 7 || cos_spd_id() == 8) printc("s_addr %p -- d_addr %p\n", s_addr, d_addr); */
         volatile unsigned long long start, end;
         struct rec_data_mm_list *rdmm_list;
 

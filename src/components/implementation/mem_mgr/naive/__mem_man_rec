@@ -282,6 +282,7 @@ mapping_lookup(spdid_t spdid, vaddr_t addr)
 	return cvect_lookup(cv->pages, addr >> PAGE_SHIFT);
 }
 
+static struct mapping *recovery_rebuild_mapping(spdid_t s_spd, vaddr_t s_addr);
 /* IMPORTANT: do not make assumption that virtual addresses are all different */
 /*            Across components, vaddr could be same in the future */
 
@@ -343,14 +344,28 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to, int ro
 	ret = cos_mmap_cntl(COS_MMAP_GRANT, mm_flag, dest, to, frame_index(f));
 #endif
 	if (ret) {
-                /* inv will return -1 if spd/this_spd is not valid, in this case, we do not need to introspect anymore */
-		/* printc("555 ret %d\n", ret); */
-		if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, dest, to, 0) != frame_index(f)) {
-			printc("found mismatch here\n");
-			goto no_mapping;
+		/* printc("ret %d ENOENT %d\n", ret, -ENOENT); */
+		/* if (ret == -ENOMEM) goto failed; /\* e.g, the passed spdid is flipped, we need restart mm *\/ */
+		/* /\* printc("555 ret %d\n", ret); *\/ */
+		/* if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, dest, to, 0) != frame_index(f)) { */
+		/* 	printc("found mismatch here\n"); */
+		/* 	goto no_mapping; */
+		/* } */
+
+		if (ret == -ENOENT) {
+			/* printc("maybe has crashed before... s_addr %p (spd %d) mapping (thd %d)\n", (void *)to, dest,cos_get_thd_id()); */
+			assert(0);
+			/* if(cv) cvas_deref(cv); */
+			/* m->flags = 555; /\* need restart, for ubenchmark only. Need fix later *\/ */
+			/* assert(m); */
+			/* return m; */
+		} else {
+			if (cos_mmap_introspect(COS_MMAP_INTROSPECT_FRAME, 0, dest, to, 0) != frame_index(f)) {
+				printc("found mismatch here\n");
+				goto no_mapping;
+			}	
 		}
 	}
-
 	/* printc("6\n"); */
 
 	mapping_init(m, dest, to, p, f);
@@ -456,7 +471,7 @@ mapping_del(struct mapping *m)
 /**********************************/
 
 static void recovery_upcalls_helper(spdid_t spd, vaddr_t addr, int flags);
-static struct mapping *recovery_rebuild_mapping(spdid_t s_spd, vaddr_t s_addr);
+/* static struct mapping *recovery_rebuild_mapping(spdid_t s_spd, vaddr_t s_addr); */
 
 static int get_test = 0;
 static int alias_test = 0;
@@ -487,6 +502,8 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	struct mapping *m = NULL;
 	vaddr_t ret = -1;
 
+	int limit_cnt = 100;
+	
 	/* if (spd != 5) printc("mman_get_page (spd %d)....addr %p\n", spd,(unsigned int)addr); */
 	/* if (spd == 7) printc("mman_get_page....addr %x\n", (unsigned int)addr); */
 	if (spd == 7) get_test++;
@@ -509,6 +526,7 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	/* printc("kevin, spd %d  addr %p\n", spd, addr); */
 	m = mapping_crt(NULL, f, spd, addr, 1);
 	if (!m) goto dealloc;
+
 	f->c.m = m;
 
 	assert(EMPTY_LIST(m, next, prev));
@@ -786,28 +804,26 @@ recovery_upcalls_helper(spdid_t spd, vaddr_t addr, int flags)
 {
 	struct mapping *m, *n, *p;
 	int thd;
-	/* volatile unsigned long long start, end; */
+	volatile unsigned long long start, end;
 
-	/* LOCK(); */
 	/* printc("[.....entering upcall helper........] thd %d\n", cos_get_thd_id()); */
 
 	thd = cos_get_thd_id();
-	/* rdtscll(start); */
 	m = mapping_lookup(spd, addr); /* m should exist */
 	assert(m);
 
 	n = FIRST_LIST(m, next, prev);
 	while (n && n != m) {
 		/* printc("<<upcall to n->spdid %d, n->addr %x thd %d>>\n", n->spdid, (unsigned int)n->addr, cos_get_thd_id()); */
+		rdtscll(start);
 		recovery_upcall(cos_spd_id(), COS_UPCALL_RECOVERY, n->spdid, n->addr);
 		p = FIRST_LIST(n, next, prev);
 		REM_LIST(n, next, prev);
 		n = p;
+		rdtscll(end);
+		printc("upcall_helper cost %llu\n", end - start);
 	}
 
-	/* rdtscll(end); */
-	/* printc("cost %llu\n", end - start); */
-	/* UNLOCK(); */
 	/* printc("leaving upcall helper......... thd %d\n", cos_get_thd_id()); */
 }
 

@@ -1600,6 +1600,7 @@ void sched_exit(void)
 //	cos_switch_thread_release(init->id, 0);
 	while (1) {
 		cos_sched_clear_events();
+		printc("3, init->id %d\n", init->id);
 		cos_switch_thread(init->id, 0);
 	}
 	BUG();
@@ -1731,7 +1732,11 @@ int sched_root_init(void)
 		printc("switch thread failed with %d\n", ret);
 	}
 
+	printc("we are about to exit %d\n", cos_get_thd_id());
 	parent_sched_exit();
+	
+	/* cos_switch_thread(1, 0); /\* test only *\/ */
+	
 	assert(0);
 
 	return 0;

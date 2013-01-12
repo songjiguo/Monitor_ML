@@ -199,6 +199,7 @@ struct cos_sections section_info[MAXSEC_S+1] = {
 	{
 		.secid      = KMEM_CAPS_S,
 		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_KMEM | COBJ_SECT_INITONCE,
+		/* .cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_KMEM, */
 		.sname      = ".kmem_caps"
 	},
 	{

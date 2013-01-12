@@ -20,8 +20,8 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 
 #include <recovery_upcall.h>
 
-//#define MEAS_MEM_COST
-#define MEAS_REC_RAMFS
+#define MEAS_MEM_COST
+//#define MEAS_REC_RAMFS
 
 /* local meta-data to track the components */
 struct spd_local_md {
@@ -240,9 +240,6 @@ boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, i
 	/* Where are we in the destination address space? */
 	vaddr_t prev_daddr, init_daddr;
 
-	unsigned long long start, end;
-	rdtscll(start);
-
 	start_addr = local_md[spdid].page_start;
 	init_daddr = cobj_sect_get(h, 0)->vaddr;
 
@@ -275,9 +272,6 @@ boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, i
 			boot_process_cinfo(h, spdid, boot_spd_end(h), start_addr + (comp_info-init_daddr), comp_info);
 		}
 	}
-
-	rdtscll(end);
-	printc("COST-- mem op(map populate spdid %d) : %llu\n", spdid, end - start);
 
  	return 0;
 }
@@ -505,12 +499,12 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 	/* So this can be avoided during the reinitialzation */
 	/* if (boot_spd_caps(md->h, failed)) BUG();  /\* do this first ??? *\/ */
 
-	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
-
 #ifdef MEAS_MEM_COST
 	rdtscll(end);
 	printc("COST-- mem op(caller %d : reboot the failed component %d) : %llu\n", caller, failed, end - start);
 #endif
+	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
+
 	/* ramfs eager recovery */
 #if (!LAZY_RECOVERY)
 	if (failed == 14){	/* hard coded, 14 = ramfs */

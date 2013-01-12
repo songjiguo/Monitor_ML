@@ -9,6 +9,9 @@
 
 #include <unit_mmrec2.h>
 
+
+#define BEST_TEST
+
 #define TOTAL_AMNT 128
 
 #define PAGE_NUM 10
@@ -25,7 +28,7 @@ revoke_test()
 {
 	int i;
 	vaddr_t addr = 0;
-	/* printc("\n<<< REVOKE TEST BEGIN! >>>\n"); */
+	printc("\n<<< REVOKE TEST BEGIN! >>>\n");
 
 #ifdef TEN2TEN  		/* 10 to 10 */
 	for (i = 0; i<PAGE_NUM; i++) {
@@ -41,7 +44,7 @@ revoke_test()
 	/* printc("s_addr %p\n", addr); */
 	mman_revoke_page(cos_spd_id(), addr, 0);
 #endif
-	/* printc("<<< REVOKE TEST END! >>>\n\n"); */
+	printc("<<< REVOKE TEST END! >>>\n\n");
 	return;
 }
 
@@ -50,7 +53,7 @@ alias_test()
 {
 	int i;
 	vaddr_t addr = 0;
-	/* printc("\n<<< ALIAS TEST BEGIN! >>>\n"); */
+	printc("\n<<< ALIAS TEST BEGIN! >>>\n");
 	for (i = 0; i<PAGE_NUM; i++) {
 		d_addr[i] = mm_test2();
 
@@ -67,9 +70,12 @@ alias_test()
 		/* printc("cost %llu\n", end - start); */
 		
 	}
-	/* mm_test2_34(); */
+
+#ifdef BEST_TEST
+	mm_test2_34();
+#endif
 	
-	/* printc("<<< ALIAS TEST END! >>>\n\n"); */
+	printc("<<< ALIAS TEST END! >>>\n\n");
 	return;
 }
 
@@ -78,7 +84,7 @@ static void
 get_test()
 {
 	int i;
-	/* printc("\n<<< GET TEST BEGIN! >>>\n"); */
+	printc("\n<<< GET TEST BEGIN! >>>\n");
 	for (i = 0; i<PAGE_NUM; i++) {
 		s_addr[i] = (vaddr_t)cos_get_vas_page();
 		if (unlikely(!s_addr[i])) {
@@ -91,7 +97,7 @@ get_test()
 		/* rdtscll(end); */
 		/* printc("cost %llu\n", end - start); */
 	}
-	/* printc("<<< GET TEST END! >>>\n\n"); */
+	printc("<<< GET TEST END! >>>\n\n");
 	return;
 }
 
@@ -107,7 +113,6 @@ all_in_one()
 
 	for (i = 0; i<PAGE_NUM; i++) {
 		/* rdtscll(start); */
-
 		mman_get_page(cos_spd_id(), s_addr[i], 0);
 		mman_alias_page(cos_spd_id(), s_addr[i], cos_spd_id()+1, d_addr[i]);
 		mman_revoke_page(cos_spd_id(), s_addr[i], 0);
@@ -138,16 +143,18 @@ cos_init(void)
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 	} else {
-		timed_event_block(cos_spd_id(), 1);
+		timed_event_block(cos_spd_id(), 50);
 		periodic_wake_create(cos_spd_id(), 1);
 		i = 0;
-		while(i++ < 100) {
+		while(i++ < 80) { /* 80 x 10 x 4k  < 4M */
 			printc("<<< MM RECOVERY TEST START (thd %d) >>>\n", cos_get_thd_id());
-			/* get_test(); */
-			/* alias_test(); */
-			/* revoke_test(); */
+			get_test();
+#ifdef BEST_TEST
+			alias_test();
+			revoke_test();
+#endif
 
-			all_in_one();
+			/* all_in_one(); */
 
 			printc("<<< MM RECOVERY TEST DONE!! >>> {%d}\n\n\n", i);
 			periodic_wake_wait(cos_spd_id());
@@ -168,7 +175,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		/* printc("EAGER!!! UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id()); */
 		eager_replay();
 #else
-		/* printc("UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id()); */
+		printc("UNIT_MMREC 1 upcall: thread %d\n", cos_get_thd_id());
 		alias_replay((vaddr_t)arg3);
 #endif
 		break;
