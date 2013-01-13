@@ -193,7 +193,7 @@ CSTUB_FN_ARGS_2(int, sched_wakeup, spdid_t, spdid, unsigned short int, dep_thd)
 
         int crash_flag = 0;
 redo:
-	/* printc("thread %d calls << sched_wakeup >>\n",cos_get_thd_id()); */
+/* printc("thread %d calls << sched_wakeup thd %d>>\n",cos_get_thd_id(),dep_thd); */
 #ifdef MEASU_SCHED_INTERFACE_WAKEUP
                rdtscll(start);
 #endif

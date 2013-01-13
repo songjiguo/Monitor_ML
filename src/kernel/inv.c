@@ -2952,6 +2952,12 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 		ret = sched_thread_cnts(spd, 0);
 		break;
 	}
+	case COS_SCHED_BES_THD_EXIST:
+	{
+		assert(spd_is_scheduler(spd));
+		if (sched_thread_lookup(spd, thd_id, 0, 1)) ret = 1;
+		break;
+	}
 	case COS_SCHED_BES_THD_GET:
 	{
 		assert(spd_is_scheduler(spd));

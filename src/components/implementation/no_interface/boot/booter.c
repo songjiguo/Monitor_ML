@@ -21,7 +21,7 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 #include <recovery_upcall.h>
 
 #define MEAS_MEM_COST
-#define MEAS_REC_RAMFS
+//#define MEAS_REC_RAMFS
 
 /* local meta-data to track the components */
 struct spd_local_md {

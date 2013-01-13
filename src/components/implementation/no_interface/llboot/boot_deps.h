@@ -32,8 +32,8 @@ printc(char *fmt, ...)
 //#define MEAS_FRM_OP
 //#define MEAS_NOTIF_COST_2
 
-//#define MEAS_REC_SCHE
-#define MEAS_REC_MMGR
+#define MEAS_REC_SCHE
+//#define MEAS_REC_MMGR
 
 #define cos_idle_thd  4	        /* idle thread*/
 #define cos_timer_thd 7  	/* timer thread */
@@ -219,7 +219,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	/* printc("LL: recovery_thd %d, alpha %d, init_thd %d\n", recovery_thd, alpha, init_thd); */
 	printc("\nLL: <<0>> thd %d : failed spd %d (this spd %ld)\n\n", cos_get_thd_id(), spdid, cos_spd_id());
 	
-	if (reboot) sched_exit(); /* just a quick way to measure ubenchmark , for MM. Need fix later */
+	/* if (reboot) sched_exit(); /\* just a quick way to measure ubenchmark , for MM only. Need fix later *\/ */
 
 	/* cos_brand_cntl(COS_BRAND_REMOVE_THD, 0, 0, 0); /\* remove the brand *\/ */
 

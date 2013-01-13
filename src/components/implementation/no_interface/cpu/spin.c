@@ -24,7 +24,7 @@
 #ifdef SCHEDULER_TEST
 #include <res_spec.h>
 
-int high, low;
+int high, low, best, best2;
 static int num = 0;
 
 volatile unsigned long long start, end;
@@ -33,7 +33,10 @@ void cos_init(void *arg)
 {
 	int i = 4;
 	static int first = 0;
+	static int second = 0;
 	union sched_param sp;
+
+	unsigned long long best_num = 0;
 
 	if(first == 0){
 		first = 1;
@@ -49,21 +52,25 @@ void cos_init(void *arg)
 		/* low = sched_create_thd(cos_spd_id(), sp.v, 99, 0); */
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 25;
+		best = sched_create_thd(cos_spd_id(), sp.v, 0, 0); /* best effort thread test */
+
 		/* sp.c.type = SCHEDP_PRIO; */
 		/* sp.c.value = 25; */
-		/* sched_create_thd(cos_spd_id(), sp.v, 0, 0); /\* best effort thread test *\/ */
+		/* best2 = sched_create_thd(cos_spd_id(), sp.v, 0, 0); /\* best effort thread test *\/ */
 
 	} else {
-		/* if (cos_get_thd_id() == 12){ */
-		/* 	unsigned long long ttt = 0; */
-		/* 	printc("\n <<< Besting: thd %d running >>>\n", cos_get_thd_id()); */
-		/* 	timed_event_block(cos_spd_id(), 1); */
-		/* 	while(ttt++ < 10){ */
-		/* 		printc("best thread %d @ %llu\n", ttt); */
-		/* 	} */
-		/* } */
+		if (cos_get_thd_id() == best || cos_get_thd_id() == best2){
+			if (second++ < 5) printc("I am the best effort thread %d\n", cos_get_thd_id());
+			timed_event_block(cos_spd_id(), 30);
+			while(1) {
+				if (best_num%50000000 == 0) printc("\n <<< Besting: thd %d running >>>\n", cos_get_thd_id());
+				best_num++;
+			}
+		}
 		if (cos_get_thd_id() == high || cos_get_thd_id() == low){
-			/* printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id()); */
+			printc("\n <<< Testing: thd %d running >>>\n", cos_get_thd_id());
 			timed_event_block(cos_spd_id(), 1);
 			periodic_wake_create(cos_spd_id(), 5);
 			i = 0;
@@ -87,7 +94,7 @@ void cos_init(void *arg)
 				/* periodic_wake_wait(cos_spd_id()); */
 			}
 			
-			/* printc("THE ending......thd %d\n", cos_get_thd_id()); */
+			printc("THE ending......thd %d\n", cos_get_thd_id());
 		}
 
 		/* unsigned long kkk = 0; */

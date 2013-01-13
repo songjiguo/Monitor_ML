@@ -628,9 +628,11 @@ static void fp_create_spd_thd(void *d)
 	BUG();
 }
 
+/* type: 0 hrt, 1 best */
 static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t fn, void *d, 
-						unsigned short int desired_thd, int parm);
+						unsigned short int desired_thd, int parm, int type);
 
+#define MEAS_BEST:
 static void fp_idle_loop(void *d)
 {
 	printc("thread %d upcall into idle loop\n",cos_get_thd_id());
@@ -650,13 +652,20 @@ static void fp_idle_loop(void *d)
 		/* Here we check if there are any best effort threads
 		 * need to be restored */
 
+#if (!LAZY_RECOVERY)
+		volatile unsigned long long start, end;
+		int total_best_nums = 0;
 		/* Remember: this is done only when the scheduler is idle */
-		/* printc("passed reboot: %d\n", (int)reboot); */
+		/* if (reboot) printc("passed reboot: %d\n", (int)reboot); */
 		if (unlikely((int)reboot)) {
+#ifdef MEAS_BEST
+			rdtscll(start);
+#endif
 			thd_nums = cos_sched_introspect(COS_SCHED_BES_THD_NUMBERS, cos_spd_id(), 0); 
-			/* printc("rebuild all best effort threads\n"); */
+			total_best_nums = thd_nums;
+			printc("rebuild all best effort threads (by thd %d)\n", cos_get_thd_id());
 			while(thd_nums) {
-				/* printc("thd_num is %d\n", thd_nums); */
+				printc("thd_num is %d\n", thd_nums);
 			 
 				ret    = cos_sched_introspect(COS_SCHED_BES_THD_GET, thd_nums, 0);
 				thd_id = ret >> 16;
@@ -666,16 +675,22 @@ static void fp_idle_loop(void *d)
 
 				fn    = (void *)cos_sched_introspect(COS_SCHED_BES_THD_FN, cos_spd_id(), thd_id);
 				dest  = (void *)cos_sched_introspect(COS_SCHED_BES_THD_DEST, cos_spd_id(), thd_id);
-				/* printc("rebooting best effort: thread %d with prio %d\n", thd_id, prio); */
+				printc("rebooting best effort: thread %d with prio %d\n", thd_id, prio);
 				sp[0].c.type = SCHEDP_PRIO;
 				sp[0].c.value = prio;
 
 				/* 99 are those killed threads, will not be recovered */
-				if (prio ==25) sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
+				if (prio ==25) sched_setup_thread_arg(&sp, fn, dest, thd_id, 1, 1);
 				thd_nums--;
 			}
 			reboot = 0; /* ready for the next failure/recovery on best effort threads */
+#ifdef MEAS_BEST
+			rdtscll(end);
+			printc("COST (total %d best rec thds) : %llu\n", total_best_nums, end - start);
+#endif
+
 		}
+#endif
 		/* Unfortunately, we can't make this strong an
 		 * assertion.  Instead, we really can only assert that
 		 * non-upcall-complete events shouldn't happen
@@ -830,7 +845,10 @@ int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id)
 	cos_sched_lock_take();
 	/* printc("helper:thread %d waking up thread %d\n", cos_get_thd_id(), thd_id); */
 	thd = sched_get_mapping(thd_id);
-	if (!thd) BUG();
+
+	/* if (!thd) sched_exit();	/\* assume no fault on the recovery path?? *\/ */
+	/* if (!thd) BUG(); */
+	if (!thd) goto done;
 
 	if (!sched_thd_blocked(thd)) {
 		/* printc("thread %d is not blocked since crashed before\n", thd->id); */
@@ -838,8 +856,9 @@ int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id)
 		cos_sched_lock_take();
 	}
 	/* printc("ok, %d wakeup %d now\n", cos_get_thd_id(), thd_id); */
+
+done:	
 	cos_sched_lock_release();
-	
 	return 0;
 }
 
@@ -1267,7 +1286,7 @@ static struct sched_thd *__sched_setup_thread_no_policy(int tid)
 }
 
 static int 
-create_thread_fn(int fn, int d, unsigned short int desired_thd)
+create_thread_fn(int fn, int d, unsigned short int desired_thd, int type)
 {
 	int ret_id = 0;
 	int exist = 0;
@@ -1277,8 +1296,12 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 		ret_id = cos_create_thread(fn, d, 0);
 		assert(0 != ret_id);
 	} else {
+		/* printc("desired_thd %d type %d\n", desired_thd, type); */
 		ret_id = desired_thd;
-		exist = cos_sched_introspect(COS_SCHED_THD_EXIST, d, desired_thd);
+		if (type == 1) 	/* best effor thread */
+			exist = cos_sched_introspect(COS_SCHED_BES_THD_EXIST, d, desired_thd);
+		else if(type == 0) /* hard real time thread */
+			exist = cos_sched_introspect(COS_SCHED_THD_EXIST, d, desired_thd);
 		if (unlikely(!exist)) {
 			/* printc("still create the thread\n"); */
 			ret_id = cos_create_thread(fn, d, 0);
@@ -1292,13 +1315,14 @@ create_thread_fn(int fn, int d, unsigned short int desired_thd)
 extern int parent_sched_child_thd_crt(spdid_t spdid, spdid_t dest_spd);
 
 static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t fn, void *d, 
-						unsigned short int desired_thd, int parm)
+						unsigned short int desired_thd, int parm, int type)
 {
 	int tid;
 	struct sched_thd *new;
 
 	/* can we reuse an already created (but since killed) thread? */
-	if (!EMPTY_LIST(&graveyard, prio_next, prio_prev)) {
+	if (!desired_thd && !EMPTY_LIST(&graveyard, prio_next, prio_prev)) {
+	/* if (!EMPTY_LIST(&graveyard, prio_next, prio_prev)) { */
 		assert(fn == fp_create_spd_thd); /* can't do the timer here */
 		assert(d != NULL);
 		new = FIRST_LIST(&graveyard, prio_next, prio_prev);
@@ -1309,7 +1333,7 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 		/* printc("use an already created thd %d\n", new->id); */
 	} else {
 		tid = (sched_is_root())                                    ?
-			create_thread_fn((int)fn, (int)d, desired_thd) :
+			create_thread_fn((int)fn, (int)d, desired_thd, type) :
 			parent_sched_child_thd_crt(cos_spd_id(), (spdid_t)(int)d);
 		assert(0 != tid);
 
@@ -1343,7 +1367,7 @@ sched_create_thread(spdid_t spdid, struct cos_array *data)
 	cos_sched_lock_take();
 	curr = sched_get_current();
 	metric_str = (char *)data->mem;
-	new = sched_setup_thread_arg((char *)metric_str, fp_create_spd_thd, d, 0, 0);
+	new = sched_setup_thread_arg((char *)metric_str, fp_create_spd_thd, d, 0, 0, 0);
 	cos_sched_lock_release();
 	printc("sched %d: created thread %d in spdid %d (requested by %d)\n",
 	       (unsigned int)cos_spd_id(), new->id, spdid, curr->id);
@@ -1374,7 +1398,7 @@ sched_create_thd(spdid_t spdid, u32_t sched_param0, u32_t sched_param1, unsigned
 	curr = sched_get_current();
 	assert(curr);
 
-	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, d, desired_thd, 1);
+	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, d, desired_thd, 1, 0);
 	cos_sched_lock_release();
 	printc("sched %d: {CREATE:} created thread %d in spdid %d (requested by %d)\n",
 	       (unsigned int)cos_spd_id(), new->id, spdid, curr->id);
@@ -1452,7 +1476,7 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	/* 	thd_nums--; */
 	/* } */
 
-	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, desired_thd, 1);
+	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, desired_thd, 1, 0);
 	/* printc("just created new default thread %d (this thread %d -- dest spd %d)\n", new->id, cos_get_thd_id(), (int)t); */
 	/* printc("desired thread is %d dest spd %d\n", desired_thd, t); */
 	/* printc("sched_create_thread_default calls sst\n"); */
@@ -1844,7 +1868,7 @@ static struct sched_thd *fp_create_timer(void)
 
 	bid = sched_setup_brand(cos_spd_id());
 	assert(sched_is_root());
-	timer = sched_setup_thread_arg(&sp, fp_timer, (void*)bid, 0, 1);
+	timer = sched_setup_thread_arg(&sp, fp_timer, (void*)bid, 0, 1, 0);
 	if (NULL == timer) BUG();
 	if (0 > sched_add_thd_to_brand(cos_spd_id(), bid, timer->id)) BUG();
 	printc("Timer thread has id %d with priority %s.(bid %d)\n", timer->id, "t", bid);
@@ -1866,14 +1890,14 @@ sched_init_create_threads(int boot_threads)
 
 	/* create the idle thread */
 	printc("create idle thread, thd %d\n", cos_get_thd_id());
-	idle = sched_setup_thread_arg(&sp, fp_idle_loop, NULL, 0, 1);
+	idle = sched_setup_thread_arg(&sp, fp_idle_loop, NULL, 0, 1, 0);
 	assert(idle);
 	printc("Idle thread has id %d with priority %s.\n", idle->id, "i");
 
 	if (!boot_threads) return;
 
 	sp[0].c.type = SCHEDP_INIT;
-	t = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)(int)BOOT_SPD, 0, 1);
+	t = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)(int)BOOT_SPD, 0, 1, 0);
 	assert(t);
 	printc("Initialization thread has id %d.\n", t->id);
 }
@@ -1990,7 +2014,7 @@ int sched_root_init(int reboot)
 			sp[0].c.value = prio;
 
 			/* 99 are those killed threads */
-			if (prio != 99) rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1);
+			if (prio != 99) rec_thd = sched_setup_thread_arg(&sp, fn, dest, thd_id, 1, 0);
 			/* printc("rec_thd flags 2 %d\n", rec_thd->flags); */
 
 			if (type == SCHEDP_IDLE) idle = rec_thd;

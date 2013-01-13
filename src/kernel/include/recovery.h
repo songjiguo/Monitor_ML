@@ -36,12 +36,14 @@ sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums, int type)
 		cnt = spd->scheduler_bes_threads->thd_cnts;
 	}
 
+	/* printk("cos: lookup thread %d in spd %d list (cnt %d)\n", thd_id, spd_get_index(spd), cnt); */
 	i = cnt - thd_nums;
 	
 	if (thd_id > 0) {
 		while(cnt) {
 			/* if (thd->thread_id == thd_id) return find_thd(spd, thd); */
 			if (thd->thread_id == thd_id) return thd;
+			/* printk("thd id on thread list %d\n", thd->thread_id); */
 			thd = thd->sched_prev;
 			cnt--;
 		}
@@ -75,7 +77,7 @@ sched_thread_add(struct spd *spd, int thd_id, int type)
 	}
 
 	if (spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
-		/* printk("cos: add thread %d onto spd %d list\n", thd_id, spd_get_index(spd)); */
+		printk("cos: add thread %d onto spd %d list (type %d)\n", thd_id, spd_get_index(spd), type);
 		if (type == 0) { /* hard real time tasks */
 			if (!spd->scheduler_hrt_threads) {
 				/* initialize the list head */
@@ -89,7 +91,7 @@ sched_thread_add(struct spd *spd, int thd_id, int type)
 				thd->sched_next->sched_prev = thd;
 			}
 			spd->scheduler_hrt_threads->thd_cnts++;
-			/* printk("HRT thread number %d\n", spd->scheduler_hrt_threads->thd_cnts); */
+			printk("HRT thread number %d\n", spd->scheduler_hrt_threads->thd_cnts);
 		} else {	/* best effort tasks */
 			if (!spd->scheduler_bes_threads) {
 				/* initialize the list head */
@@ -103,7 +105,7 @@ sched_thread_add(struct spd *spd, int thd_id, int type)
 				thd->sched_next->sched_prev = thd;
 			}
 			spd->scheduler_bes_threads->thd_cnts++;
-			/* printk("BEST thread number %d\n", spd->scheduler_bes_threads->thd_cnts); */
+			printk("BEST thread number %d\n", spd->scheduler_bes_threads->thd_cnts);
 		}
 	}
 	

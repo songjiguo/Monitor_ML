@@ -12,9 +12,9 @@ extern int sched_block_helper(spdid_t spdid, unsigned short int dependency_thd);
 
 int __sg_sched_wakeup(spdid_t spdid, unsigned short int thd_id, int crash_flag)
 {
-	/* printc("in scheduler server wakeup interface\n"); */
 	if (unlikely(crash_flag)) {
-		sched_wakeup_helper(spdid, thd_id);
+		/* printc("in scheduler server wakeup interface thd_id %d crash_flag %d\n", thd_id, crash_flag); */
+		return sched_wakeup_helper(spdid, thd_id);
 	}
 	return sched_wakeup(spdid, thd_id);
 }

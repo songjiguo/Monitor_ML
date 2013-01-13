@@ -53,7 +53,7 @@
  * versions of interfaces, such as mmgr, schduler, cbuf, torrent. To
  * use it, run python set_symbolic_link.py under composite/tools */
 
-#define RECOVERY_ENABLE 0               // 1 will enable the fault notification in Composite kernel
+#define RECOVERY_ENABLE 1               // 1 will enable the fault notification in Composite kernel
 /* for ramfs (eager recovery), set recovery_enable to 0 */
 /* for mm (eager recovery), set recovery_enable to 0 or 1? */
 /* for scheduler, this does not make difference, so set it as 1 when scheduler */
