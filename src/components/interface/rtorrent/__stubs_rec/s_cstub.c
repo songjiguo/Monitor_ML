@@ -2,14 +2,14 @@
 
 struct __sg_tsplit_data {
 	td_t tid;
-	int flag;
+	/* int flag; */
 	tor_flags_t tflags;
 	long evtid;
 	int len[2];
 	char data[0];
 };
 
-td_t __sg_tsplit(spdid_t spdid, cbuf_t cb, int len, int flag)
+td_t __sg_tsplit(spdid_t spdid, cbuf_t cb, int len, void *recovery)
 {
 	struct __sg_tsplit_data *d;
 
@@ -22,8 +22,10 @@ td_t __sg_tsplit(spdid_t spdid, cbuf_t cb, int len, int flag)
 	if (unlikely(d->len[0] >= d->len[1])) return -3;
 	if (unlikely(((int)(d->len[1] + sizeof(struct __sg_tsplit_data))) != len)) return -4;
 
+	/* s_torid =  __tsplit(spdid, d->tid, &d->data[0], */
+	/* 		    d->len[1] - d->len[0], d->tflags, d->evtid, d->flag); */
 	s_torid =  __tsplit(spdid, d->tid, &d->data[0],
-			    d->len[1] - d->len[0], d->tflags, d->evtid, d->flag);
+			    d->len[1] - d->len[0], d->tflags, d->evtid, recovery);
 	/* printc("new obtained torretn id %d\n", s_torid); */
 	return s_torid;
 }

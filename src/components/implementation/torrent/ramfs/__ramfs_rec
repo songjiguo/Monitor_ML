@@ -33,10 +33,14 @@ struct fsobj root;
 
 #define MIN_DATA_SZ 256
 
+
+/* need track fid and the path */
+
+
 static int aaa = 0;
 
 td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, int flag)
+	      tor_flags_t tflags, long evtid, void *recovery)
 {
 	td_t ret = 0;
 	int fid = 0;
@@ -47,7 +51,7 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	volatile unsigned long long start, end;
 	rdtscll(start);
 
-	if (flag == -10) aaa = 1;	/* control the fault, test purpose only */
+	/* if (flag == -10) aaa = 1;	/\* control the fault, test purpose only *\/ */
 	ret =  tsplit(spdid, tid, param, len, tflags, evtid);
 
 	LOCK();
@@ -72,9 +76,11 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	}
 	cbuf_free(d);
 
+	// add fid and path into some data structure to track them when rebuild
+
 	/* printc("fid %d flag %d\n", fid, flag); */
 	
-	if (unlikely(flag)) { /* recovery */
+	if (unlikely(recovery)) { /* recovery */   // flag not use!!! FIXME
 		if (!all_tor_list || EMPTY_LIST(all_tor_list, next, prev)) build_tor_list(); 
                 /* FIXME: we should really use cbuf to introspect these parameter with 1 invocation */
 
@@ -170,7 +176,10 @@ tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
 	if (!fso->child) {
 		fsobj_rem(fso, fso->parent); 
 		fsobj_free(fso);
-		if (remove_cbuf_path(td)) BUG();
+		/* if (remove_cbuf_path(td)) BUG(); */
+		/*  At this point, re-tsplit should have a;ready rebuilt the list */
+		int t_fid = fid_lookup(td);
+		if (cbuf_rem_record(t_fid)) BUG();
 	} else {
 		/* fso->zombie = 1; */
 		ERR_THROW(-EINVAL, done);
@@ -343,7 +352,9 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	memcpy(fso->data + t->offset, buf, ret);
 	t->offset += ret;
 
-	if (preserve_cbuf_path(cb, td, offset, ret)) BUG();
+	/* at this point, re-tsplit should have been done if there was a fault in ramfs  */
+	int t_fid = fid_lookup(td);
+	if (preserve_cbuf_path(cb, td, offset, ret, t_fid)) BUG();
 done:	
 	UNLOCK();
 	return ret;

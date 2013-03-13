@@ -23,6 +23,10 @@
 #define CVECT_FREE(x) free_page(x)
 #include <cvect.h>
 
+#if ! defined MAX_RECUR_LEVEL || MAX_RECUR_LEVEL < 1
+#define MAX_RECUR_LEVEL 20
+#endif
+
 #define RD_PRINT 0
 
 #if RD_PRINT == 1
@@ -31,7 +35,7 @@
 #define print_rd(fmt,...) 
 #endif
 
-static unsigned long fcounter = 0;
+static volatile unsigned long fcounter = 0;
 
 /* recovery data and related utility functions */
 struct rec_data_tor {
@@ -45,7 +49,6 @@ struct rec_data_tor {
 	long		 evtid;
 
 	unsigned long	 fcnt;
-
 #if (!LAZY_RECOVERY)
 	int has_rebuilt;
 	struct rec_data_tor *next, *prev;
@@ -71,10 +74,12 @@ rd_lookup(td_t td)
 { return cvect_lookup(&rec_vect, td); }
 
 static struct rec_data_tor *
-rd_alloc(void)
+rd_alloc(td_t c_tid)    // should pass c_tid
 {
 	struct rec_data_tor *rd;
 	rd = cslab_alloc_rd();
+	assert(rd);
+	cvect_add(&rec_vect, rd, c_tid);
 	return rd;
 }
 
@@ -107,37 +112,47 @@ rd_cons(struct rec_data_tor *rd, td_t tid, td_t ser_tid, td_t cli_tid, char *par
 	return;
 }
 
+static td_t
+rd_replay(struct rec_data_tor *rd, long recur_lvl)
+{
+	assert(rd);
+	return __tsplit(cos_spd_id(), rd->parent_tid, rd->param, recur_lvl, rd->tflags, rd->evtid, (void *)rd);
+}
+
 /* restore the server state */
 static void
-reinstate(td_t tid)  	/* relate the flag to the split/r/w fcnt */
+reinstate(td_t tid, long recur_lvl)  	/* relate the flag to the split/r/w fcnt */
 {
 	td_t ret;
 	struct rec_data_tor *rd;
 
 	/* printc("in reinstate...tid %d\n", tid); */
-	if (!(rd = rd_lookup(tid))) {\
+	// tid could be lost, so use tid_root here FIXME
+	if (!(rd = rd_lookup(tid))) {
 		/* printc("found root...tid %d\n", tid); */
 		return; 	/* root_tid */
 	}
 
-	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
-	/* volatile unsigned long long start, end; */
-	/* rdtscll(start); */
+	if (rd->fcnt == fcounter) return; // Has been rebuilt before. FIXME: should recover as a tree
 
-	/* printc("parent tid %d\n", rd->parent_tid); */
-
-	/* printc("param reinstate %s of length %d\n", rd->param, rd->param_len); */
-	ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid);
-
-	/* rdtscll(end); */
-	/* printc("reinstate cost: %llu\n", end-start); */
+	if (recur_lvl <= 0) assert(0);  /* too many recursion !!*/
+	ret = rd_replay(rd, recur_lvl);
 
 	if (ret < 1) {
 		printc("re-split failed %d\n", tid);
 		BUG();
 	}
-	if (ret > 0) rd->s_tid = ret;  	/* update server side tid */
 	rd->fcnt = fcounter;
+
+	/* if (rd->parent_tid == rd_root) return; // has reached the root, do not recover the root for now */
+	/* printc("<<<<<< thread %d trying to reinstate....tid %d\n", cos_get_thd_id(), rd->c_tid); */
+	/* volatile unsigned long long start, end; */
+	/* rdtscll(start); */
+	/* printc("parent tid %d\n", rd->parent_tid); */
+	/* printc("param reinstate %s of length %d\n", rd->param, rd->param_len); */
+	/* ret = __tsplit(cos_spd_id(), rd->parent_tid, rd->param, rd->param_len, rd->tflags, rd->evtid, rd->c_tid); */
+	/* rdtscll(end); */
+	/* printc("reinstate cost: %llu\n", end-start); */
 
 #if (!LAZY_RECOVERY)
 	rd->has_rebuilt  = 1;
@@ -163,11 +178,12 @@ update_rd(td_t tid)
 	if (likely(rd->fcnt == fcounter)) return rd;
 
 	/* printc("rd->fcnt %lu fcounter %lu\n",rd->fcnt,fcounter); */
-	reinstate(tid);
+	reinstate(tid, MAX_RECUR_LEVEL);
 	/* printc("rebuild fs is done\n\n"); */
 	return rd;
 }
 
+// FIXME: use cmap
 static int
 get_unique(void)
 {
@@ -191,12 +207,13 @@ param_save(char *param, int param_len)
 {
 	char *l_param;
 	
-	if (param_len == 0) return param;
+	assert(param && param_len > 0);
 
 	l_param = malloc(param_len);
 	if (!l_param) {
 		printc("cannot malloc \n");
 		BUG();
+		return NULL;
 	}
 	strncpy(l_param, param, param_len);
 
@@ -234,7 +251,7 @@ eager_recovery_all()
 	     rd = FIRST_LIST(rd, next, prev)){
 		if (!rd->has_rebuilt) {
 			/* printc("found one c %d s %d\n", rd->c_tid, rd->s_tid); */
-			reinstate(rd->c_tid);
+			reinstate(rd->c_tid, MAX_RECUR_LEVEL);
 		}
 	}
 	
@@ -257,7 +274,7 @@ eager_recovery_all()
 
 struct __sg_tsplit_data {
 	td_t tid;	
-	int flag;
+	/* int flag; */
 	tor_flags_t tflags;
 	long evtid;
 	int len[2];
@@ -275,17 +292,19 @@ CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len
 /* printc("<<< In: call recovery tsplit  (thread %d spd %ld) >>>\n", cos_get_thd_id(), cos_spd_id()); */
         if (cos_get_thd_id() == 13) aaa++;   		/* test only */
 /* printc("thread %d aaa is %d\n", cos_get_thd_id(), aaa); */
-        ret = __tsplit(spdid, tid, param, len, tflags, evtid, 0);
+        ret = __tsplit(spdid, tid, param, len, tflags, evtid, NULL);
 
 CSTUB_POST
 
-CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid, td_t, flag)
-
+CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid, void *, rec_rd)
         struct __sg_tsplit_data *d;
-        struct rec_data_tor *rd, *rd_p, *rd_c;
-
+        struct rec_data_tor *rd, *rd_p, *rd_c, *rd_rec;
+        rd = rd_p = rd_c = rd_rec = NULL;
 	char *l_param;
 	cbuf_t cb;
+        long recur_lvl = 0;
+        long l_evtid = 0;
+
         int		sz	   = 0;
         td_t		cli_tid	   = 0;
         td_t		ser_tid	   = 0;
@@ -299,18 +318,28 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
 
         sz = len + sizeof(struct __sg_tsplit_data);
         /* replay on slow path */
-        if (unlikely(flag > 0)) reinstate(tid);
+// option1: pre allocate memory (limit amount mem, stack space!!! -- cflow)
+// option2: no memory, but N^2 in finding all parents 
+        if (unlikely(rec_rd)) {
+		/* on rec path, evtid (already passed by rd) is passed as the recursion depth*/
+		recur_lvl = evtid;
+		rd_rec =  (struct rec_data_tor *) rec_rd;
+		l_evtid = rd_rec->evtid;
+		reinstate(parent_tid, recur_lvl-1);
+	} else {
+		l_evtid = evtid;
+	}
         if ((rd_p = rd_lookup(parent_tid))) parent_tid = rd_p->s_tid;
-
+        if (unlikely(!rd_p)) assert(0);  //passed invalid tid??
 redo:
         d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
 
         /* printc("parent_tid: %d\n", parent_tid); */
         d->tid	       = parent_tid;
-        d->flag        = flag;
+        /* d->flag        = has_failed; */
         d->tflags      = flags;
-	d->evtid       = evtid;
+	d->evtid       = l_evtid;
 	d->len[0]      = 0;
 	d->len[1]      = len;
         /* printc("c: subpath name %s len %d\n", param, len); */
@@ -326,7 +355,7 @@ redo:
 		/* rdtscll(start); */
 	}
 
-CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
+CSTUB_ASM_4(__tsplit, spdid, cb, sz, rec_rd)
 
         if (unlikely(fault)) {
 		fcounter++;
@@ -340,7 +369,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 #if (!LAZY_RECOVERY)
 		eager_recovery_all();
 #else
-		reinstate(tid);
+		reinstate(tid, MAX_RECUR_LEVEL);
 #endif
 		
 		/* printc("rebuild is done, , maybe active uc 12\n\n"); */
@@ -356,16 +385,23 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 		goto redo;
 	}
 
-        memset(&d->data[0], 0, len);
+//memset(&d->data[0], 0, len);  no reason to zero??
         cbuf_free(d);
 
-        if (unlikely(flag > 0 || flag == -1)) return ret;
+        if (unlikely(rec_rd)) {
+		assert(ret > 0);
+		rd_rec->s_tid = ret;  	/* update server side tid */
+		return ret;
+	}
 
         ser_tid = ret;
-        l_param = param_save(param, len);
-        rd = rd_alloc();
-        assert(rd);
+	l_param = NULL;
+	if (len > 0) { // len can be zero
+		l_param = param_save(param, len);
+		assert(l_param);
+	}
 
+	// cmap_get() here. Maybe unlikely needs to be removed
         if (unlikely(rd_lookup(ser_tid))) {
 		cli_tid = get_unique();
 		assert(cli_tid > 0 && cli_tid != ser_tid);
@@ -380,8 +416,9 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 	}
 
         /* client side tid should be guaranteed to be unique now */
-        rd_cons(rd, tid, ser_tid, cli_tid, l_param, len, tflags, evtid);
-	cvect_add(&rec_vect, rd, cli_tid);
+        rd = rd_alloc(cli_tid);   // pass unique client side id here
+        assert(rd);
+        rd_cons(rd, tid, ser_tid, cli_tid, l_param, len, tflags, l_evtid);
 
 #if (!LAZY_RECOVERY)
 	/* only initialize the eager head */

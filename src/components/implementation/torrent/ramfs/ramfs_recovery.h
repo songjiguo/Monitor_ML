@@ -34,8 +34,47 @@ struct tor_list *all_tor_list = NULL;
 
 static int __twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag);
 
+
+static td_t
+tid_lookup(int fid)
+{
+	td_t ret = -1;
+	struct tor_list *item;
+	assert(all_tor_list);
+	
+	for (item = FIRST_LIST(all_tor_list, next, prev);
+	     item != all_tor_list;
+	     item = FIRST_LIST(item, next, prev)){
+		if (fid == item->fid) {
+			ret = item->tid;
+			break;
+		}
+	}
+
+	return ret;
+}
+
+static int
+fid_lookup(int tid)
+{
+	int ret = -1;
+	struct tor_list *item;
+	assert(all_tor_list);
+	
+	for (item = FIRST_LIST(all_tor_list, next, prev);
+	     item != all_tor_list;
+	     item = FIRST_LIST(item, next, prev)){
+		if (tid == item->tid) {
+			ret = item->fid;
+			break;
+		}
+	}
+	return ret;
+}
+
+
 static void
-find_del(int fid)
+fid_find_del(int fid)
 {
 	struct tor_list *item;
 	assert(all_tor_list);
@@ -53,7 +92,7 @@ find_del(int fid)
 }
 
 static void
-fid_update_rebuilt(int fid, int tid)
+fid_update_tid(int fid, int tid)
 {
 	struct tor_list *item;
 	assert(all_tor_list);
@@ -66,6 +105,26 @@ fid_update_rebuilt(int fid, int tid)
 			item->has_rebuilt = 1;
 #endif
 			item->tid = tid;
+		}
+	}
+	
+	return;
+}
+
+static void
+tid_update_fid(int fid, int tid)
+{
+	struct tor_list *item;
+	assert(all_tor_list);
+	
+	for (item = FIRST_LIST(all_tor_list, next, prev);
+	     item != all_tor_list;
+	     item = FIRST_LIST(item, next, prev)){
+		if (tid == item->tid) {
+#if (!LAZY_RECOVERY)
+			item->has_rebuilt = 1;
+#endif
+			item->fid = fid;
 		}
 	}
 	
@@ -123,8 +182,8 @@ restore_tor(int fid, td_t tid)
 
 	/* printc("after meta done: tor->offset %d\n", tor->offset); */
 	tor->offset = 0;
-	/* find_del(fid); */
-	fid_update_rebuilt(fid, tid);
+	/* fid_find_del(fid); */
+	fid_update_tid(fid, tid);   /*  tid is 0 when tor_list was built, so needs to be updated here */
 
 	/* printc("[restore meta done]\n"); */
 done:
@@ -262,9 +321,9 @@ find_fullpath(td_t td)
 }
 
 static int
-preserve_cbuf_path(cbuf_t cb, td_t td, u32_t offset, int len)
+preserve_cbuf_path(cbuf_t cb, td_t td, u32_t offset, int len, int fid)
 {
-	int ret = 0, sz_p, fid = 0;
+	int ret = 0, sz_p;
 	cbuf_t cb_p;
 	char *d, *path;
 
@@ -275,67 +334,68 @@ preserve_cbuf_path(cbuf_t cb, td_t td, u32_t offset, int len)
 		BUG();
 	}
 
-	path = find_fullpath(td);
-	sz_p = strlen(path);
-	/* printc("unique path (when write) ---> %s with size %d\n", path, sz_p); */
+	/* // FIXME: should have only one invocation to the cbuf */
+	/* path = find_fullpath(td); */
+	/* sz_p = strlen(path); */
+	/* /\* printc("unique path (when write) ---> %s with size %d\n", path, sz_p); *\/ */
 
-	d = cbuf_alloc(sz_p, &cb_p);
-	if (!d) {
-		ret = -1;
-		printc("failed to cbuf_alloc\n");
-		goto done;
-	};
-	memcpy(d, path, sz_p);
+	/* d = cbuf_alloc(sz_p, &cb_p); */
+	/* if (!d) { */
+	/* 	ret = -1; */
+	/* 	printc("failed to cbuf_alloc\n"); */
+	/* 	goto done; */
+	/* }; */
+	/* memcpy(d, path, sz_p); */
 
-	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p);
-	assert(fid >= 0);
-	/* printc("existing fid %d\n", fid); */
+	/* fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p); */
+	/* assert(fid >= 0); */
+	/* /\* printc("existing fid %d\n", fid); *\/ */
 
-	cbuf_free(d);
+	/* cbuf_free(d); */
 
+	assert(fid > 0);
 	/* pass the FT relevant info to cbuf manager  */
 	if (cbuf_add_record(cb, len, offset, fid)) {
 		printc("failed to record cbuf\n");
 		ret = -1;
 	}
 
-done:
 	return ret;
 }
 
 
-static int
-remove_cbuf_path(td_t td)
-{
-	int ret = 0, sz_p, fid = 0;
-	cbuf_t cb_p;
-	char *d, *path;
+/* static int */
+/* remove_cbuf_path(td_t td) */
+/* { */
+/* 	int ret = 0, sz_p, fid = 0; */
+/* 	cbuf_t cb_p; */
+/* 	char *d, *path; */
 
-	path = find_fullpath(td);
-	sz_p = strlen(path);
-	/* printc("unique path (when remove path info) ---> %s with size %d\n", path, sz_p); */
+/* 	path = find_fullpath(td); */
+/* 	sz_p = strlen(path); */
+/* 	/\* printc("unique path (when remove path info) ---> %s with size %d\n", path, sz_p); *\/ */
 
-	d = cbuf_alloc(sz_p, &cb_p);
-	if (!d) {
-		ret = -1;
-		printc("failed to cbuf_alloc\n");
-		goto done;
-	};
-	memcpy(d, path, sz_p);
+/* 	d = cbuf_alloc(sz_p, &cb_p); */
+/* 	if (!d) { */
+/* 		ret = -1; */
+/* 		printc("failed to cbuf_alloc\n"); */
+/* 		goto done; */
+/* 	}; */
+/* 	memcpy(d, path, sz_p); */
 
-	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p);
-	assert(fid >= 0);
-	/* printc("existing fid %d\n", fid); */
+/* 	fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p); */
+/* 	assert(fid >= 0); */
+/* 	/\* printc("existing fid %d\n", fid); *\/ */
 
-	cbuf_free(d);
+/* 	cbuf_free(d); */
 
-	/* FIXME: set page RW back?? */
-	/* remove the FT relevant info in cbuf manager, this should be the leaf  */
-	if (cbuf_rem_record(fid)) {
-		printc("failed to remove record\n");
-		ret = -1;
-	}
+/* 	/\* FIXME: set page RW back?? *\/ */
+/* 	/\* remove the FT relevant info in cbuf manager, this should be the leaf  *\/ */
+/* 	if (cbuf_rem_record(fid)) { */
+/* 		printc("failed to remove record\n"); */
+/* 		ret = -1; */
+/* 	} */
 
-done:
-	return ret;
-}
+/* done: */
+/* 	return ret; */
+/* } */
