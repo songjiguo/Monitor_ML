@@ -12,9 +12,6 @@
 
 #include <pgfault.h>
 
-/* Military Slang: SNAFU, SUSFU, FUBAR, TARFU, BOCHIA */
-/* based on the code from unit test for ramfs */
-
 #define SIZE  4096
 
 #define VERBOSE 1
@@ -30,8 +27,8 @@ int high, low;
 
 void test0(void)
 {
-	td_t t1, t2;
-	long evt1, evt2;
+	td_t t1, t2, t3;
+	long evt1, evt2, evt3;
 	char *params1 = "bar";
 	char *params2 = "foo/";
 	char *params3 = "foo/bar";
@@ -40,6 +37,7 @@ void test0(void)
 
 	evt1 = evt_create(cos_spd_id());
 	evt2 = evt_create(cos_spd_id());
+	/* evt3 = evt_create(cos_spd_id()); */
 	assert(evt1 > 0 && evt2 > 0);
 
 
@@ -75,7 +73,7 @@ void test0(void)
 	
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
 	if (ret1 > 0) buffer[ret1] = '\0';
-	/* printv("read %d (%d): %s (%s)\n", ret1, strlen(data1), buffer, data1); */
+	printv("read %d (%d): %s (%s)\n", ret1, strlen(data1), buffer, data1);
 	assert(!strcmp(buffer, data1));
 	assert(ret1 == strlen(data1));
 	buffer[0] = '\0';
@@ -125,19 +123,29 @@ void test1(void)
 
 	char *merge = "delete";
 
-	/* printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id()); */
+	printc("\n<<< TEST 1 START (thread %d)>>>\n", cos_get_thd_id());
 
 	evt1 = evt_create(cos_spd_id());
 	evt2 = evt_create(cos_spd_id());
 	evt3 = evt_create(cos_spd_id());
 
+	volatile unsigned long long start, end;
+	rdtscll(start);
 	t1 = tsplit(cos_spd_id(), td_root, params1, strlen(params1), TOR_ALL, evt1);
+	rdtscll(end);
+	/* printc("tsplit cost: %llu\n", end-start); */
+	rdtscll(start);
 	t2 = tsplit(cos_spd_id(), td_root, params0, strlen(params0), TOR_ALL, evt2);
+	rdtscll(end);
+	/* printc("tsplit cost: %llu\n", end-start); */
+	rdtscll(start);
 	t3 = tsplit(cos_spd_id(), td_root, params99, strlen(params99), TOR_ALL, evt3);
+	rdtscll(end);
+	/* printc("tsplit cost: %llu\n", end-start); */
 
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
 	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
-	ret3 = twrite_pack(cos_spd_id(), t3, data2, strlen(data2));
+	ret3 = twrite_pack(cos_spd_id(), t3, data3, strlen(data3));
 	/* ret3 = twrite_pack(cos_spd_id(), t3, big_data, SIZE); */
 
 	trelease(cos_spd_id(), t1);
@@ -150,20 +158,26 @@ void test1(void)
 
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
 	if (ret1 > 0 && ret1 <= 1023) buffer[ret1] = '\0';
+	/* printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret1, strlen(data1), buffer, data1); */
+	assert(!strcmp(buffer, data1));
 	buffer[0] = '\0';
-
+	
 	ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023);
 	if (ret2 > 0 && ret2 <= 1023) buffer[ret2] = '\0';
+	/* printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret2, strlen(data2), buffer, data2); */
+	assert(!strcmp(buffer, data2));
 	buffer[0] = '\0';
-
+	
 	ret3 = tread_pack(cos_spd_id(), t3, buffer, 1023);
 	if (ret3 > 0 && ret3 <= 1023) buffer[ret3] = '\0';
+	/* printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret3, strlen(data3), buffer, data3); */
+	assert(!strcmp(buffer, data3));
 	buffer[0] = '\0';
 		
 	trelease(cos_spd_id(), t1);
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t3);
-	/* printc("<<< TEST 1 PASSED (thread %d)>>>\n\n", cos_get_thd_id()); */
+	printc("<<< TEST 1 PASSED (thread %d)>>>\n\n", cos_get_thd_id());
 
 	return;
 }
@@ -188,12 +202,15 @@ void test2(void)
 	data3 = "aabbccddeeff0987654321";
 	strl = "testmore";
 
+	printc("\n<<< TEST 2 START (thread %d)>>>\n", cos_get_thd_id());
+
 	evt1 = evt_create(cos_spd_id());
 	evt2 = evt_create(cos_spd_id());
 	evt0 = evt_create(cos_spd_id());
 	assert(evt1 > 0 && evt2 > 0 && evt0 > 0);
 
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
+	printc("t1 %d\n", t1);
 	if (t1 < 1) {
 		printc("  split2 failed %d\n", t1); return;
 	}
@@ -230,32 +247,46 @@ void test2(void)
 		sched_wakeup(cos_spd_id(), high);
 	}
 
+
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
+	printc("t1 %d\n", t1);
+	if (t1 < 1) {
+		printc("  split2 failed %d\n", t1); return;
+	}
+
 	t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2);
+	if (t2 < 1) {
+		printc("  split1 failed %d\n", t2); return;
+	}
+
 	t0 = tsplit(cos_spd_id(), t2, params0, strlen(params0), TOR_ALL, evt0);
-	if (t1 < 1 || t2 < 1 || t0 < 1) {
-		printc("later splits failed\n");
-		return;
+	if (t0 < 1) {
+		printc("  split0 failed %d\n", t0); return;
 	}
 
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
-	if (ret1 > 0) buffer[ret1] = '\0';
+	if (ret1 > 0 && ret1 <= 1023) buffer[ret1] = '\0';
 	printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret1, strlen(data1), buffer, data1);
+	assert(!strcmp(buffer, data1));
 	buffer[0] = '\0';
 	
 	ret2 = tread_pack(cos_spd_id(), t2, buffer, 1023);
-	if (ret2 > 0) buffer[ret2] = '\0';
-	printv("thread %d read %d: %s\n", cos_get_thd_id(), ret2, buffer);
+	if (ret2 > 0 && ret2 <= 1023) buffer[ret2] = '\0';
+	printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret2, strlen(data2), buffer, data2);
+	assert(!strcmp(buffer, data2));
+	buffer[0] = '\0';
+	
+	ret0 = tread_pack(cos_spd_id(), t0, buffer, 1023);
+	if (ret0 > 0 && ret0 <= 1023) buffer[ret0] = '\0';
+	printv("thread %d read %d (%d): %s (%s)\n", cos_get_thd_id(),  ret0, strlen(data0), buffer, data0);
+	assert(!strcmp(buffer, data0));
 	buffer[0] = '\0';
 
-	ret0 = tread_pack(cos_spd_id(), t0, buffer, 1023);
-	if (ret0 > 0) buffer[ret0] = '\0';
-	printv("thread %d read %d: %s\n", cos_get_thd_id(), ret0, buffer);
-	buffer[0] = '\0';
-		
 	trelease(cos_spd_id(), t1);
 	trelease(cos_spd_id(), t2);
 	trelease(cos_spd_id(), t0);
+
+	printc("<<< TEST 2 PASSED (thread %d)>>>\n\n", cos_get_thd_id());
 
 	return;
 }
@@ -423,13 +454,13 @@ void cos_init(void)
 #endif
 
 #ifdef TEST_2
-		if (cos_get_thd_id() == high) sched_block(cos_spd_id(), 0);
-		test2();
+	if (cos_get_thd_id() == high) sched_block(cos_spd_id(), 0);
+	test2();
 #endif
 
 #ifdef TEST_3
-		if (cos_get_thd_id() == high) sched_block(cos_spd_id(), 0);
-		test3();
+	if (cos_get_thd_id() == high) sched_block(cos_spd_id(), 0);
+	test3();
 #endif
 
 	}

@@ -9,7 +9,7 @@
 #include <cos_component.h>
 #include <cos_debug.h>
 #include <print.h>
-
+#include <cos_map.h>
 #include <cos_list.h>
 
 #include <rtorrent.h>
@@ -22,6 +22,8 @@
 #define CVECT_ALLOC() alloc_page()
 #define CVECT_FREE(x) free_page(x)
 #include <cvect.h>
+
+#define USE_CMAP
 
 #if ! defined MAX_RECUR_LEVEL || MAX_RECUR_LEVEL < 1
 #define MAX_RECUR_LEVEL 20
@@ -63,6 +65,7 @@ struct rec_data_tor* eager_list_head = NULL;
 /**********************************************/
 /* slab allocator and cvect for tracking recovery data */
 /**********************************************/
+COS_MAP_CREATE_STATIC(uniq_tids);
 
 CSLAB_CREATE(rd, sizeof(struct rec_data_tor));
 CVECT_CREATE_STATIC(rec_vect);
@@ -71,7 +74,9 @@ void print_rd_info(struct rec_data_tor *rd);
 
 static struct rec_data_tor *
 rd_lookup(td_t td)
-{ return cvect_lookup(&rec_vect, td); }
+{ 
+	return cvect_lookup(&rec_vect, td); 
+}
 
 static struct rec_data_tor *
 rd_alloc(td_t c_tid)    // should pass c_tid
@@ -89,6 +94,44 @@ rd_dealloc(struct rec_data_tor *rd)
 	assert(rd);
 	if (cvect_del(&rec_vect, rd->c_tid)) BUG();
 	cslab_free_rd(rd);
+}
+
+
+static struct rec_data_tor *
+map_rd_lookup(td_t tid)
+{ 
+	return (struct rec_data_tor *)cos_map_lookup(&uniq_tids, tid);
+}
+
+static int
+map_rd_create()
+{
+	struct rec_data_tor *rd = NULL;
+	int map_id = 0;
+	// ramfs return torrent id from 2 (rd_root is 1), and cos_map starts from 0
+	// here want cos_map to return some ids at least from 2 and later
+	while(1) {
+		rd = cslab_alloc_rd();
+		assert(rd);	
+		map_id = cos_map_add(&uniq_tids, rd);
+		/* printc("record added %d\n", map_id); */
+		if (map_id >= 2) break;
+		rd->s_tid = -1;  // -1 means that this is a dummy record
+	}
+	assert(map_id >= 2);
+	return map_id;	
+}
+
+static void
+map_rd_delete(td_t tid)
+{
+	assert(tid >= 0);
+	struct rec_data_tor *rd;
+	rd = map_rd_lookup(tid);
+	assert(rd);
+	cslab_free_rd(rd);
+	cos_map_del(&uniq_tids, tid);
+	return;
 }
 
 static void 
@@ -128,16 +171,19 @@ reinstate(td_t tid, long recur_lvl)  	/* relate the flag to the split/r/w fcnt *
 
 	/* printc("in reinstate...tid %d\n", tid); */
 	// tid could be lost, so use tid_root here FIXME
+	if (tid == td_root) return;
+#ifndef USE_CMAP	
 	if (!(rd = rd_lookup(tid))) {
+#else
+	if (!(rd = map_rd_lookup(tid))) {
+#endif
 		/* printc("found root...tid %d\n", tid); */
 		return; 	/* root_tid */
 	}
-
 	if (rd->fcnt == fcounter) return; // Has been rebuilt before. FIXME: should recover as a tree
-
 	if (recur_lvl <= 0) assert(0);  /* too many recursion !!*/
-	ret = rd_replay(rd, recur_lvl);
 
+	ret = rd_replay(rd, recur_lvl);
 	if (ret < 1) {
 		printc("re-split failed %d\n", tid);
 		BUG();
@@ -167,8 +213,13 @@ static struct rec_data_tor *
 update_rd(td_t tid)
 {
         struct rec_data_tor *rd;
-
+	volatile unsigned long long start, end;
+	rdtscll(start);
+#ifndef USE_CMAP
         rd = rd_lookup(tid);
+#else
+        rd = map_rd_lookup(tid);
+#endif
 	if (!rd) return NULL;
 
 #if (!LAZY_RECOVERY)
@@ -180,27 +231,30 @@ update_rd(td_t tid)
 	/* printc("rd->fcnt %lu fcounter %lu\n",rd->fcnt,fcounter); */
 	reinstate(tid, MAX_RECUR_LEVEL);
 	/* printc("rebuild fs is done\n\n"); */
+	rdtscll(end);
+	printc("recovery_rd cost: %llu\n", end-start);
+
 	return rd;
 }
 
-// FIXME: use cmap
-static int
-get_unique(void)
-{
-	unsigned int i;
-	cvect_t *v;
+/* // This is not used anymore, has changed to cos_map */
+/* static int */
+/* get_unique(void) */
+/* { */
+/* 	unsigned int i; */
+/* 	cvect_t *v; */
 
-	v = &rec_vect;
+/* 	v = &rec_vect; */
 
-	/* 1 is already assigned to the td_root */
-	for(i = 2 ; i < CVECT_MAX_ID ; i++) {
-		if (!cvect_lookup(v, i)) return i;
-	}
+/* 	/\* 1 is already assigned to the td_root *\/ */
+/* 	for(i = 2 ; i < CVECT_MAX_ID ; i++) { */
+/* 		if (!cvect_lookup(v, i)) return i; */
+/* 	} */
 	
-	if (!cvect_lookup(v, CVECT_MAX_ID)) return CVECT_MAX_ID;
+/* 	if (!cvect_lookup(v, CVECT_MAX_ID)) return CVECT_MAX_ID; */
 
-	return -1;
-}
+/* 	return -1; */
+/* } */
 
 static char*
 param_save(char *param, int param_len)
@@ -296,12 +350,14 @@ CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len
 
 CSTUB_POST
 
+static int first = 0;
+
 CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len, tor_flags_t, tflags, long, evtid, void *, rec_rd)
-        struct __sg_tsplit_data *d;
+        struct __sg_tsplit_data *d = NULL;
         struct rec_data_tor *rd, *rd_p, *rd_c, *rd_rec;
         rd = rd_p = rd_c = rd_rec = NULL;
-	char *l_param;
-	cbuf_t cb;
+	char *l_param = NULL;
+	cbuf_t cb = 0;
         long recur_lvl = 0;
         long l_evtid = 0;
 
@@ -311,6 +367,11 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
         tor_flags_t	flags	   = tflags;
         td_t		parent_tid = tid;
 
+        if (first == 0) {
+		cos_map_init_static(&uniq_tids);
+		first = 1;
+	}
+
         /* printc("len %d param %s\n", len, param); */
 	unsigned long long start, end;
         assert(param && len >= 0);
@@ -318,8 +379,9 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
 
         sz = len + sizeof(struct __sg_tsplit_data);
         /* replay on slow path */
-// option1: pre allocate memory (limit amount mem, stack space!!! -- cflow)
-// option2: no memory, but N^2 in finding all parents 
+        // option1: pre allocate memory (limit amount mem, stack space!!! -- cflow)
+        // option2: no memory, but N^2 in finding all parents 
+        // For now, use MAX_RECUR_LEVEL to limit the max recursion depth
         if (unlikely(rec_rd)) {
 		/* on rec path, evtid (already passed by rd) is passed as the recursion depth*/
 		recur_lvl = evtid;
@@ -329,15 +391,21 @@ CSTUB_FN_ARGS_7(td_t, __tsplit, spdid_t, spdid, td_t, tid, char *, param, int, l
 	} else {
 		l_evtid = evtid;
 	}
+
+#ifndef USE_CMAP
         if ((rd_p = rd_lookup(parent_tid))) parent_tid = rd_p->s_tid;
-        if (unlikely(!rd_p)) assert(0);  //passed invalid tid??
+#else
+        if ((rd_p = map_rd_lookup(parent_tid)) && rd_p->s_tid > 1 ) {
+		parent_tid = rd_p->s_tid;
+		/* printc("update parent_tid %d\n", parent_tid); */
+	}
+#endif
+        if ((parent_tid > 1) && unlikely(!rd_p)) assert(0);  //if parent_tid > 1, there must a record exist already
 redo:
         d = cbuf_alloc(sz, &cb);
 	if (!d) return -1;
 
-        /* printc("parent_tid: %d\n", parent_tid); */
         d->tid	       = parent_tid;
-        /* d->flag        = has_failed; */
         d->tflags      = flags;
 	d->evtid       = l_evtid;
 	d->len[0]      = 0;
@@ -400,7 +468,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, rec_rd)
 		l_param = param_save(param, len);
 		assert(l_param);
 	}
-
+#ifndef USE_CMAP
 	// cmap_get() here. Maybe unlikely needs to be removed
         if (unlikely(rd_lookup(ser_tid))) {
 		cli_tid = get_unique();
@@ -414,11 +482,16 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, rec_rd)
 	} else {
 		cli_tid = ser_tid;
 	}
-
+	
         /* client side tid should be guaranteed to be unique now */
         rd = rd_alloc(cli_tid);   // pass unique client side id here
+#else
+	cli_tid = map_rd_create();
+	rd = map_rd_lookup(cli_tid);
+#endif
         assert(rd);
         rd_cons(rd, tid, ser_tid, cli_tid, l_param, len, tflags, l_evtid);
+	/* printc("After create rd: rd->c_tid %d rd->s_tid %d rd->parent_tid %d\n",rd->c_tid, rd->s_tid, rd->parent_tid); */
 
 #if (!LAZY_RECOVERY)
 	/* only initialize the eager head */
@@ -522,7 +595,11 @@ CSTUB_ASM_3(tmerge, spdid, cb, sz)
 	}
 
 	cbuf_free(d);
+#ifndef USE_CMAP
+        if (!ret) map_rd_delete(rd->c_tid); /* this must be a leaf */
+#else
         if (!ret) rd_dealloc(rd); /* this must be a leaf */
+#endif
 
 #if (!LAZY_RECOVERY)
 	REM_LIST(rd, next, prev);
@@ -643,7 +720,6 @@ void
 print_rd_info(struct rec_data_tor *rd)
 {
 	assert(rd);
-	return;
 	print_rd("rd->parent_tid %d  ",rd->parent_tid);
 	print_rd("rd->s_tid %d  ",rd->s_tid);
 	print_rd("rd->c_tid %d  ",rd->c_tid);

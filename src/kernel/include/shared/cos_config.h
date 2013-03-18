@@ -10,13 +10,13 @@
 #define SCHED_PRINTOUT_PERIOD  16
 #define COMPONENT_ASSERTIONS   1 // activate assertions in components?
 
-#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
+//#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
 
 /* 
  * Should Composite run as highest priority?  Should NOT be set if
  * using networking (cnet).  Set if you want Composite run at the highest prio
  */
-//#define LINUX_HIGHEST_PRIORITY 1
+#define LINUX_HIGHEST_PRIORITY 1
 
 // cos kernel settings
 #define COS_PRINT_MEASUREMENTS 1
@@ -60,7 +60,7 @@
 
 /* For now, set INITONCE in cos_laoder and comment out boot_spd_caps in booter/fail function */
 /* to avoid the overhead of re-capability. Need fix later */
-#define LAZY_RECOVERY   0               // 1 will enable the lazy recovery, 0 for eager recovery
+#define LAZY_RECOVERY   1               // 1 will enable the lazy recovery, 0 for eager recovery
 #define SWIFI_ENABLE    1		// 1 will enable the fault injection (swifi component)
 
 #endif /* COS_CONFIG_H */

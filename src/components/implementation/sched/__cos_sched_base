@@ -1732,7 +1732,7 @@ int sched_root_init(void)
 		printc("switch thread failed with %d\n", ret);
 	}
 
-	printc("we are about to exit %d\n", cos_get_thd_id());
+	/* printc("we are about to exit %d\n", cos_get_thd_id()); */
 	parent_sched_exit();
 	
 	/* cos_switch_thread(1, 0); /\* test only *\/ */

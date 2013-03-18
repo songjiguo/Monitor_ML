@@ -59,7 +59,8 @@ fid_lookup(int tid)
 {
 	int ret = -1;
 	struct tor_list *item;
-	assert(all_tor_list);
+	if (!all_tor_list) return ret;
+	/* assert(all_tor_list); */
 	
 	for (item = FIRST_LIST(all_tor_list, next, prev);
 	     item != all_tor_list;
@@ -91,9 +92,10 @@ fid_find_del(int fid)
 	return;
 }
 
-static void
+static int
 fid_update_tid(int fid, int tid)
 {
+	int ret = 0;
 	struct tor_list *item;
 	assert(all_tor_list);
 	
@@ -105,10 +107,11 @@ fid_update_tid(int fid, int tid)
 			item->has_rebuilt = 1;
 #endif
 			item->tid = tid;
+			ret = 1;
 		}
 	}
 	
-	return;
+	return ret;
 }
 
 static void
@@ -162,6 +165,7 @@ restore_tor(int fid, td_t tid)
 	assert(tor);
 	/* printc("before meta done: tor->offset %d\n", tor->offset); */
 
+	/* printc("restore_tor:::fid is %d tid %d\n", fid, tid); */
 	if (fid_lookup_rebuilt(fid)) goto done;
 
 	total_cbs = cbuf_c_introspect(cos_spd_id(), fid, 0, CBUF_INTRO_TOT);
@@ -230,40 +234,6 @@ find_restore(int tid)
 /* 	return; */
 /* } */
 
-static void
-build_tor_list()
-{
-	int total_tor = 0, nth_fid = 0;
-	int fid;
-	struct tor_list *item;
-
-	total_tor = cbuf_c_introspect(cos_spd_id(), 0, 0, CBUF_INTRO_TOT_TOR);
-	/* printc("total file number %d\n", total_tor); */
-
-	while(total_tor--) {
-		nth_fid++;
-		fid   = cbuf_c_introspect(cos_spd_id(), 0, nth_fid, CBUF_INTRO_FID);
-		item  = (struct tor_list *)malloc(sizeof(struct tor_list));
-		if (!item) assert(0);
-		
-		item->fid = fid;
-		item->tid = 0;
-#if (!LAZY_RECOVERY)
-		item->has_rebuilt = 0;
-#endif
-		INIT_LIST(item, next, prev);
-		
-		if (!all_tor_list) { /* initialize the head */
-			all_tor_list = (struct tor_list *)malloc(sizeof(struct tor_list));
-			INIT_LIST(all_tor_list, next, prev);
-		}
-		
-		ADD_LIST(all_tor_list, item, next, prev);
-		
-		/* printc("FID: %d\n", fid); */
-	}
-	return;
-}
 
 static char *
 get_unique_path(struct fsobj *fsp)
@@ -320,10 +290,40 @@ find_fullpath(td_t td)
 	return name;
 }
 
-static int
-preserve_cbuf_path(cbuf_t cb, td_t td, u32_t offset, int len, int fid)
+
+static void
+add_tor_list(int fid, int tid)
 {
-	int ret = 0, sz_p;
+	struct tor_list *item;
+
+	if (!all_tor_list) { /* initialize the head */
+		all_tor_list = (struct tor_list *)malloc(sizeof(struct tor_list));
+		INIT_LIST(all_tor_list, next, prev);
+	}
+
+	assert(all_tor_list);
+	if (!fid_update_tid(fid, tid)) {
+
+		item  = (struct tor_list *)malloc(sizeof(struct tor_list));
+		if (!item) assert(0);
+		
+		item->fid = fid;
+		item->tid = tid;
+#if (!LAZY_RECOVERY)
+		item->has_rebuilt = 0;
+#endif
+		INIT_LIST(item, next, prev);
+		
+		ADD_LIST(all_tor_list, item, next, prev);
+	}
+	/* printc("FID: %d\n", fid); */
+	return;
+}
+
+static int
+reserve_cbuf_fid(cbuf_t cb, td_t td, u32_t offset, int len, int fid)
+{
+	int ret = 0, sz_p = 0;
 	cbuf_t cb_p;
 	char *d, *path;
 
@@ -334,31 +334,13 @@ preserve_cbuf_path(cbuf_t cb, td_t td, u32_t offset, int len, int fid)
 		BUG();
 	}
 
-	/* // FIXME: should have only one invocation to the cbuf */
-	/* path = find_fullpath(td); */
-	/* sz_p = strlen(path); */
-	/* /\* printc("unique path (when write) ---> %s with size %d\n", path, sz_p); *\/ */
-
-	/* d = cbuf_alloc(sz_p, &cb_p); */
-	/* if (!d) { */
-	/* 	ret = -1; */
-	/* 	printc("failed to cbuf_alloc\n"); */
-	/* 	goto done; */
-	/* }; */
-	/* memcpy(d, path, sz_p); */
-
-	/* fid = uniq_map_lookup(cos_spd_id(), cb_p, sz_p); */
-	/* assert(fid >= 0); */
-	/* /\* printc("existing fid %d\n", fid); *\/ */
-
-	/* cbuf_free(d); */
-
-	assert(fid > 0);
 	/* pass the FT relevant info to cbuf manager  */
 	if (cbuf_add_record(cb, len, offset, fid)) {
 		printc("failed to record cbuf\n");
 		ret = -1;
 	}
+	
+	add_tor_list(fid, td); 
 
 	return ret;
 }

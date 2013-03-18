@@ -27,6 +27,7 @@ int fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *i
 	unsigned long r_ip; 	/* the ip to return to */
 	int tid = cos_get_thd_id();
 
+	/* assert(0); */
 	/* first++; */
 	/* if(first == 10) { */
 	/* 	printc("plain pgfault has failed %d times\n",first); */
