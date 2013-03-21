@@ -245,8 +245,12 @@ static int http_get_request(struct http_request *r)
 
 	/* printc("http_get_request...(thd %d)\n", cos_get_thd_id()); */
 	if (0 > r->content_id) {
+		/* rdtscll(start); */
 		r->content_id = server_tsplit(cos_spd_id(), td_root, r->path, 
 					      r->path_len, TOR_READ, r->c->evt_id);
+		/* rdtscll(end); */
+		/* printc("https:server_tsplit cost %llu\n", end-start); */
+
 		/* printc("after ramfs tsplit id %ld (thd %d)\n", r->content_id, cos_get_thd_id()); */
 		if (r->content_id < 0) return r->content_id;
 		ret = 0;
@@ -417,7 +421,12 @@ static void http_free_request(struct http_request *r)
 	if (c->pending_reqs == r) {
 		c->pending_reqs = (r == next) ? NULL : next;
 	}
+
+	/* rdtscll(start); */
 	server_trelease(cos_spd_id(), r->content_id);
+	/* rdtscll(end); */
+	/* printc("https:server_trelease cost %llu\n", end-start); */
+
 	conn_refcnt_dec(c);
 	__http_free_request(r);
 }
@@ -618,7 +627,10 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 			local_resp = cbuf_alloc(sz, &cb);
 			if (!local_resp) BUG();
 
+			/* rdtscll(start); */
 			ret = server_tread(cos_spd_id(), r->content_id, cb, sz);
+			/* rdtscll(end); */
+			/* printc("https:server_tread cost %llu\n", end-start); */
 			if (ret < 0) {
 				cbuf_free(local_resp);
 				printc("https get reply returning %d.\n", ret);
@@ -789,7 +801,10 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
-	/* printc("https twrite (thd %d) >>>\n", cos_get_thd_id()); */
+	unsigned long long start, end;
+
+	printc("https twrite (thd %d)>>>\n", cos_get_thd_id());
+	rdtscll(start);
 
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
@@ -809,6 +824,9 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	unlock_connection(c);
 	ret = sz;
 done:
+	rdtscll(end);
+	/* printc("%llu\n", end-start); */
+		
 	return ret;
 unlock:
 	UNLOCK();
@@ -935,7 +953,7 @@ unlock:
 
 #define HTTP_REPORT_FREQ 100
 
-static int ala = 0;
+/* static int ala = 0; */
 
 void cos_init(void *arg)
 {
@@ -956,7 +974,7 @@ void cos_init(void *arg)
 			periodic_wake_wait(cos_spd_id());
 			printc("HTTP conns %ld, reqs %ld (thd %d)\n", http_conn_cnt, http_req_cnt, cos_get_thd_id());
 			http_conn_cnt = http_req_cnt = 0;
-			if (ala++ == 10) assert(0);
+			/* if (ala++ == 10) assert(0); */
 		}
 	}
 

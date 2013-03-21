@@ -1276,7 +1276,7 @@ static int cos_net_evt_loop(void)
 	while (1) {
 		int sz;
 
-		printc("cos_net: evt_loop spinning %d\n", cos_get_thd_id());
+		/* printc("cos_net: evt_loop spinning %d\n", cos_get_thd_id()); */
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
 		/* printc("cos_net: calling tread\n"); */

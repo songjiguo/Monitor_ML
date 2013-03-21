@@ -365,7 +365,7 @@ mapping_del(struct mapping *m)
 /**********************************/
 void some_delay()  		/* only used to compared with FT-version when injection presents */
 {
-/* #ifdef SWIFI_ENABLE */
+/* #if  (SWIFI_ENABLE == 1) */
 /* 	unsigned int ccc = 0; */
 /* 	while(ccc++ < 100000) {;}; */
 /* #endif */

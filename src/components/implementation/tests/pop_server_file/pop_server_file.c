@@ -35,6 +35,8 @@ void pop_cgi(void)
 
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
 	/* ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2)); */
+	trelease(cos_spd_id(), t1);
+
 	printc("\n<<<pop done!!>>>\n\n");
 	return;
 }

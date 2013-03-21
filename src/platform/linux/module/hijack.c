@@ -1662,7 +1662,7 @@ thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 	struct invocation_cap *flt_notif_cap_entry;
 	struct spd *notif_spd;
 
-#if RECOVERY_ENABLE
+#if (RECOVERY_ENABLE == 1)
 	thd_frame = thd_invstk_top(thd);
 
 	fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
@@ -1747,7 +1747,7 @@ int host_attempt_brand(struct thread *brand)
 			if (next != cos_current) {
 				/* update the fault counter (recovery) */
 				thd_frame = thd_invstk_top(cos_current);
-#if RECOVERY_ENABLE
+#if (RECOVERY_ENABLE == 1)
 				thd_frame->curr_fault.cnt = thd_frame->spd->fault.cnt;
 #endif
 

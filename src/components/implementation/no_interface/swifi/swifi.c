@@ -14,9 +14,9 @@ unsigned long counter = 0;
 
 /* #define TEST_LOCAL */
 
-//#define TARGET_COMPONENT 21   /*22 in web server case */
+#define TARGET_COMPONENT 21   /*22 in web server case */
 
-#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
+//#define TARGET_COMPONENT 14   /* ramfs (turn off some_delay in mm!!!), also have the client just looping */
 //#define TARGET_COMPONENT  3   /* mm (turn on some_delay in mm, should not turn on when normal operation) */
 //#define TARGET_COMPONENT  2   /* sched */
 
@@ -43,7 +43,7 @@ int fault_inject()
 		spdid = cos_thd_cntl(COS_THD_FIND_SPD_TO_FLIP, tid, TARGET_COMPONENT, 0);
 		if (spdid == -1 || tid == 4) continue;
 		counter++;
-		/* printc("<<%lu>> flip the register in component %d (tid %d)!!!\n", counter, TARGET_COMPONENT, tid); */
+		printc("<<%lu>> flip the register in component %d (tid %d)!!!\n", counter, TARGET_COMPONENT, tid);
 		cos_regs_read(tid, spdid, &r);
 		/* cos_regs_print(&r); */
 		flip_all_regs(&r);
@@ -61,6 +61,7 @@ void cos_init(void)
 	int rand;
 	int num = 0;
 
+	return;  //just not create any thread here
 	if(first == 0){
 		first = 1;
 		sp.c.type = SCHEDP_PRIO;
@@ -73,7 +74,7 @@ void cos_init(void)
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 #endif
 	} else {
-#ifdef SWIFI_ENABLE
+#if (SWIFI_ENABLE == 1)
 		if (cos_get_thd_id() == high) {
 			printc("\nfault injector %ld (high %d thd %d)\n", cos_spd_id(), high, cos_get_thd_id());
 			timed_event_block(cos_spd_id(), 30);

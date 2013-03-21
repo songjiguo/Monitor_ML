@@ -1501,7 +1501,7 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 
 	break_preemption_chain(curr);
 
-	printk("COS: in brand_completion_switch_to  curr %d\n", thd_get_id(curr));
+	/* printk("COS: in brand_completion_switch_to  curr %d\n", thd_get_id(curr)); */
 	curr->flags &= ~THD_STATE_ACTIVE_UPCALL;
 	curr->flags |= THD_STATE_READY_UPCALL;
 	/* 
@@ -1522,7 +1522,7 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 	 * UPDATE: this has been dealt with by adding the
 	 * BREAK_PREEMPTION_CHAIN flag to sched_cntl.
 	 */
-	printk("brand_completion_switch_to: remove preemption thd %d\n", thd_get_id(prev));
+	/* printk("brand_completion_switch_to: remove preemption thd %d\n", thd_get_id(prev)); */
 	switch_thread_context(curr, prev);
 
 	/* This might not be true if we are a brand that was just
@@ -1553,7 +1553,7 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 	if (brand->pending_upcall_requests) {
 		event_record("brand complete, self pending upcall executed", thd_get_id(curr), 0);
 		report_upcall("c", curr);
-		printk("curr %d just process!!!\n", thd_get_id(curr));
+		/* printk("curr %d just process!!!\n", thd_get_id(curr)); */
 		return sched_tailcall_pending_upcall(curr, cspd);
 	}
 
@@ -1588,7 +1588,7 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 
 		event_record("brand complete, upcall scheduler", thd_get_id(curr), 0);
 
-		printk("curr %d upcall scheduler\n", thd_get_id(curr));
+		/* printk("curr %d upcall scheduler\n", thd_get_id(curr)); */
 		cos_meas_event(COS_MEAS_BRAND_COMPLETION_UC);
 		//cos_meas_event(COS_MEAS_FINISHED_BRANDS);
 		return &curr->regs;

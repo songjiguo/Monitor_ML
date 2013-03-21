@@ -832,7 +832,7 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 
 static void some_delay()  		/* only used for SWIFI */
 {
-/* #ifdef SWIFI_ENABLE */
+/* #if (SWIFI_ENABLE == 1) */
 /* 	volatile unsigned int ccc = 0; */
 /* 	while(ccc++ < 100000) {;}; */
 /* #endif */

@@ -418,7 +418,7 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 	fp_add_thd(t, prio);
 
 	/* printc("thread %d prio is %d\n", t->id, prio); */
-#ifdef RECOVERY_ENABLE
+#if (RECOVERY_ENABLE == 1)
 	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
 		/* if (prio != 29) { */
                 

@@ -56,7 +56,7 @@
  * all. By doing this, we can eliminate the fault_counter from all
  * thread and spd data structure */
 
-#if RECOVERY_ENABLE == 1
+#if (RECOVERY_ENABLE == 1)
 struct fault_counter {
 	unsigned long cnt;
 };
