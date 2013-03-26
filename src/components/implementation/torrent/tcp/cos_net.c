@@ -63,6 +63,12 @@
 #include <net_portns.h>
 #include <timed_blk.h>
 
+
+unsigned long long start, end;
+//#define MEAS_TREAD
+//#define MEAS_TWRITE
+//#define MEAS_TSPLIT
+
 cos_lock_t net_lock;
 
 #define NET_LOCK_TAKE()    \
@@ -1269,7 +1275,16 @@ static int cos_net_evt_loop(void)
 	assert(event_thd > 0);
 	/* printc("cos_net: calling tsplit\n"); */
 	printc("cos_net_evt_loop thd %d init\n", cos_get_thd_id());
+
+#ifdef MEAS_TSPLIT
+	rdtscll(start);
+#endif
 	ip_td = parent_tsplit(cos_spd_id(), td_root, "", 0, TOR_ALL, -1);
+#ifdef MEAS_TSPLIT
+	rdtscll(end);
+	printc("tnet_tip_tsplit %llu\n", end-start);
+#endif
+
 	assert(ip_td > 0);
 	printc("network uc %d starting\n", cos_get_thd_id());
 	alloc_sz = sizeof(struct cos_array) + MTU;
@@ -1280,7 +1295,14 @@ static int cos_net_evt_loop(void)
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
 		/* printc("cos_net: calling tread\n"); */
+#ifdef MEAS_TREAD
+		rdtscll(start);
+#endif
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
+#ifdef MEAS_TREAD
+		rdtscll(end);
+		printc("tnet_tip_tread %llu (thd %d)\n", end-start, cos_get_thd_id());
+#endif
 		if (likely(sz > 0)) {
 		/* assert(sz > 0); */
 			cos_net_interrupt(data, sz);
@@ -1331,8 +1353,15 @@ static err_t cos_net_stack_send(struct netif *ni, struct pbuf *p, struct ip_addr
 		p = p->next;
 	}
 
-	
+#ifdef MEAS_TWRITE
+	rdtscll(start);
+#endif
 	sz = parent_twrite(cos_spd_id(), ip_td, cb, tot_len);
+#ifdef MEAS_TWRITE
+	rdtscll(end);
+	printc("tnet_tip_twrite %llu\n", end-start);
+#endif
+
 	if (sz <= 0) {
 		printc("<<transmit returns %d -> %d>>\n", sz, tot_len);
 	}

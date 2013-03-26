@@ -27,6 +27,18 @@ extern int from_tread(spdid_t spdid, td_t td, int cbid, int sz);
 extern int from_twrite(spdid_t spdid, td_t td, int cbid, int sz);
 #include <sched.h>
 
+unsigned long long start, end;
+//#define MEAS_TREAD
+//#define MEAS_TWRITE
+//#define MEAS_TSPLIT
+//#define MEAS_TRELEASE
+
+//#define MEAS_FROM_TREAD
+//#define MEAS_FROM_TWRITE
+//#define MEAS_FROM_TSPLIT
+//#define MEAS_FROM_TRELEASE
+
+
 static cos_lock_t sc_lock;
 #define LOCK() if (lock_take(&sc_lock)) BUG();
 #define UNLOCK() if (lock_release(&sc_lock)) BUG();
@@ -164,7 +176,15 @@ accept_new(int accept_fd)
 		/* if (aaa++ % 1000 == 0) printc("conn: accept_new spinning %d\n", cos_get_thd_id()); */
 		feid = evt_get();
 		assert(feid > 0);
+#ifdef MEAS_FROM_TSPLIT
+		rdtscll(start);
+#endif
 		from = from_tsplit(cos_spd_id(), accept_fd, "", 0, TOR_RW, feid);
+#ifdef MEAS_FROM_TSPLIT
+		rdtscll(end);
+		printc("conn_tnet_tsplit %llu\n", end-start);
+#endif
+
 		assert(from != accept_fd);
 		if (-EAGAIN == from) {
 			evt_put(feid);
@@ -176,7 +196,16 @@ accept_new(int accept_fd)
 		/* printc("https evt_get\n"); */
 		teid = evt_get();
 		assert(teid > 0);
+
+#ifdef MEAS_TSPLIT
+		rdtscll(start);
+#endif
 		to = tsplit(cos_spd_id(), td_root, "", 0, TOR_RW, teid);
+#ifdef MEAS_TSPLIT
+		rdtscll(end);
+		printc("conn_http_tsplit %llu\n", end-start);
+#endif
+
 		if (to < 0) {
 			BUG();
 		}
@@ -200,7 +229,15 @@ from_data_new(struct tor_conn *tc)
 		/* if (bbb++ % 1000 == 0) printc("conn: from_data_new spinning %d\n", cos_get_thd_id()); */
 		buf = cbuf_alloc(BUFF_SZ, &cb);
 		assert(buf);
+
+#ifdef MEAS_FROM_TREAD
+		rdtscll(start);
+#endif
 		amnt = from_tread(cos_spd_id(), from, cb, BUFF_SZ-1);
+#ifdef MEAS_FROM_TREAD
+		rdtscll(end);
+		printc("conn_tnet_tr %llu (thd %d)\n", end-start, cos_get_thd_id());
+#endif
 		if (0 == amnt) break;
 		else if (-EPIPE == amnt) {
 			goto close;
@@ -209,11 +246,20 @@ from_data_new(struct tor_conn *tc)
 			BUG();
 		}
 		assert(amnt <= BUFF_SZ);
+
+#ifdef MEAS_TWRITE
+		rdtscll(start);
+#endif
 		if (amnt != (ret = twrite(cos_spd_id(), to, cb, amnt))) {
 			printc("conn_mgr: write failed w/ %d on fd %d\n", ret, to);
 			goto close;
 
 		}
+#ifdef MEAS_TWRITE
+		rdtscll(end);
+		printc("conn_http_twr %llu\n", end-start);
+#endif
+
 		cbuf_free(buf);
 	}
 done:
@@ -244,7 +290,15 @@ to_data_new(struct tor_conn *tc)
 		/* if (ccc++ % 1000 == 0) printc("conn: to data new %d spinning \n", cos_get_thd_id()); */
 		if (!(buf = cbuf_alloc(BUFF_SZ, &cb))) BUG();
 		/* printc("conn_mgr: tread\n"); */
+		
+#ifdef MEAS_TREAD
+		rdtscll(start);
+#endif
 		amnt = tread(cos_spd_id(), to, cb, BUFF_SZ-1);
+#ifdef MEAS_TREAD
+		rdtscll(end);
+		printc("conn_http_tr %llu (thd %d)\n", end-start, cos_get_thd_id());
+#endif
 		if (0 == amnt) break;
 		else if (-EPIPE == amnt) {
 			goto close;
@@ -253,11 +307,20 @@ to_data_new(struct tor_conn *tc)
 			BUG();
 		}
 		assert(amnt <= BUFF_SZ);
+
+#ifdef MEAS_FROM_TWRITE
+		rdtscll(start);
+#endif
 		if (amnt != (ret = from_twrite(cos_spd_id(), from, cb, amnt))) {
 			printc("conn_mgr: write failed w/ %d of %d on fd %d\n", 
 			       ret, amnt, to);
 			goto close;
 		}
+#ifdef MEAS_FROM_TWRITE
+		rdtscll(end);
+		printc("conn_tnet_twr %llu\n", end-start);
+#endif
+
 		cbuf_free(buf);
 	}
 done:

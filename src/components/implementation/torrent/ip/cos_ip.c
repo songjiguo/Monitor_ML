@@ -20,6 +20,13 @@
 #include <cos_synchronization.h>
 #include <cbuf.h>
 
+
+unsigned long long start, end;
+//#define MEAS_TREAD
+//#define MEAS_TWRITE
+//#define MEAS_TSPLIT
+//#define MEAS_TRELEASE
+
 extern td_t parent_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
 /* extern td_t parent___tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, int flag); */
 extern void parent_trelease(spdid_t spdid, td_t tid);
@@ -56,11 +63,19 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	td_t ret = -ENOMEM, ntd;
 	struct torrent *t;
 
-	/* printc("cos_ip: tsplit\n"); */
+	/* printc("cos_ip: tsplit (thd %d)\n", cos_get_thd_id()); */
 	/* printc("spdid %d tid, %d param %s len %d tflags %d evtid %d\n", spdid, tid, param, len, tflags, evtid); */
 	if (tid != td_root) return -EINVAL;
 	/* ntd = parent___tsplit(cos_spd_id(), tid, param, len, tflags, evtid, 0); */
+#ifdef MEAS_TSPLIT
+	rdtscll(start);
+#endif
 	ntd = parent_tsplit(cos_spd_id(), tid, param, len, tflags, evtid);
+#ifdef MEAS_TSPLIT
+	rdtscll(end);
+	printc("tip_tif_tsplit %llu\n", end-start);
+#endif
+
 	if (ntd <= 0) ERR_THROW(ntd, err);
 
 	t = tor_alloc((void*)ntd, tflags);
@@ -88,7 +103,16 @@ trelease(spdid_t spdid, td_t td)
 	t = tor_lookup(td);
 	if (!t) goto done;
 	ntd = (td_t)t->data;
+
+#ifdef MEAS_TRELEASE
+	rdtscll(start);
+#endif
 	parent_trelease(cos_spd_id(), ntd);
+#ifdef MEAS_TRELEASE
+	rdtscll(end);
+	printc("tip_tif_trelease %llu\n", end-start);
+#endif
+
 	tor_free(t);
 done:
 	return;
@@ -129,7 +153,16 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	nbuf = cbuf_alloc(sz, &ncbid);
 	assert(nbuf);
 	memcpy(nbuf, buf, sz);
+
+#ifdef MEAS_TWRITE
+	rdtscll(start);
+#endif
 	ret = parent_twrite(cos_spd_id(), ntd, ncbid, sz);
+#ifdef MEAS_TWRITE
+	rdtscll(end);
+	printc("tip_tif_twrite %llu\n", end-start);
+#endif
+
 	cbuf_free(nbuf);
 done:
 	return ret;
@@ -158,7 +191,15 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	if (!buf) ERR_THROW(-EINVAL, done);
 	nbuf = cbuf_alloc(sz, &ncbid);
 	assert(nbuf);
+#ifdef MEAS_TREAD
+	rdtscll(start);
+#endif
 	ret = parent_tread(cos_spd_id(), ntd, ncbid, sz);
+#ifdef MEAS_TREAD
+	rdtscll(end);
+	printc("tip_tif_tread %llu (thd %d)\n", end-start, cos_get_thd_id());
+#endif
+
 	if (ret < 0) goto free;
 	/* printc("cos_ip: tread 2\n"); */
 	memcpy(buf, nbuf, ret);

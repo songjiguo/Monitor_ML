@@ -57,6 +57,11 @@
 #include <torlib.h>
 #include <cbuf.h>
 
+unsigned long long start, end;
+//#define MEAS_EVENT_WAIT_WHOLE
+//#define MEAS_INT_WAIT
+//#define MEAS_INT_PROCESS
+
 #define NUM_WILDCARD_BUFFS 256 //64 //32
 #define UDP_RCV_MAX (1<<15)
 /* 
@@ -88,8 +93,8 @@ typedef struct {
 	cos_lock_t l;
 	struct buff_page used_pages, avail_pages;
 } rb_meta_t;
-static rb_meta_t rb1_md_wildcard, rb2_md;
-static ring_buff_t rb1, rb2;
+static rb_meta_t rb1_md_wildcard;
+static ring_buff_t rb1;
 static unsigned short int wildcard_brand_id;
 
 //cos_lock_t uniq_map_lock;
@@ -98,6 +103,23 @@ struct thd_map {
 };
 
 COS_VECT_CREATE_STATIC(tmap);
+
+//////////////////////////
+//Jiguo: for tracking
+/* Meta-data for the circular track queues */
+typedef struct {
+	unsigned int rb_head, rb_tail, curr_buffs, max_buffs, tot_principal, max_principal;
+	ring_buff_track_t *rb;
+	cos_lock_t l;
+	struct buff_page used_pages, avail_pages;
+} rb_meta_track_t;
+static rb_meta_track_t rb2_md;
+static ring_buff_track_t rb_timing_track;
+struct thd_map_track {
+	rb_meta_track_t *uc_rb;
+};
+COS_VECT_CREATE_STATIC(tmap_track);
+////////////////////////////
 
 cos_lock_t netif_lock;
 
@@ -149,6 +171,45 @@ static int rem_thd_map(unsigned short int tid)
 
 	return 0;
 }
+
+///////////////////////////////////
+/* Jiguo: This structure allows an upcall thread to find its associated ring
+ * buffers for tracking
+ */
+static struct thd_map_track *get_thd_map_track(unsigned short int thd_id)
+{
+	return cos_vect_lookup(&tmap_track, thd_id);
+}
+
+static int add_thd_map_track(unsigned short int ucid, rb_meta_track_t *rbm)
+{
+	struct thd_map_track *tm;
+
+	tm = malloc(sizeof(struct thd_map_track));
+	if (NULL == tm) return -1;
+
+	tm->uc_rb = rbm;
+	if (0 > cos_vect_add_id(&tmap_track, tm, ucid)) {
+		free(tm);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int rem_thd_map_track(unsigned short int tid)
+{
+	struct thd_map_track *tm;
+
+	tm = cos_vect_lookup(&tmap_track, tid);
+	if (NULL == tm) return -1;
+	free(tm);
+	if (cos_vect_del(&tmap_track, tid)) return -1;
+
+	return 0;
+}
+//////////////////////////////////////
+
 
 
 /*********************** Ring buffer, and memory management: ***********************/
@@ -235,6 +296,7 @@ static int rb_retrieve_buff(rb_meta_t *r, unsigned int **buf, int *max_len)
 	if (/*r->rb_*/tail == r->rb_head) {
 		goto err;
 	}
+
 	rbb = &rb->packets[tail];
 	status = rbb->status;
 	if (status != RB_USED && status != RB_ERR) {
@@ -254,6 +316,7 @@ err:
 	lock_release(&r->l);
 	return -1;
 }
+
 
 static struct buff_page *alloc_buff_page(void)
 {
@@ -336,6 +399,149 @@ static void release_rb_buff(rb_meta_t *r, void *b)
 	BUG();
 }
 
+///////////////////////////////
+// Jiguo: For tracking
+
+static void rb_init_track(rb_meta_track_t *rbm, ring_buff_track_t *rb)
+{
+	int i;
+
+	for (i = 0 ; i < RB_SIZE_TRACK ; i++) {
+		rb->packets[i].time_stamp = 0;
+	}
+	memset(rbm, 0, sizeof(rb_meta_track_t));
+	rbm->rb_head       = 0;
+	rbm->rb_tail       = RB_SIZE_TRACK-1;
+	rbm->rb            = rb;
+//	rbm->curr_buffs    = rbm->max_buffs     = 0; 
+//	rbm->tot_principal = rbm->max_principal = 0;
+	lock_static_init(&rbm->l);
+	INIT_LIST(&rbm->used_pages, next, prev);
+	INIT_LIST(&rbm->avail_pages, next, prev);
+}
+
+static int rb_add_buff_track(rb_meta_track_t *r, void *buf, int len)
+{
+	ring_buff_track_t *rb = r->rb;
+	unsigned int head;
+	struct rb_buff_track_t *rbb;
+
+	assert(rb);
+	lock_take(&r->l);
+	head = r->rb_head;
+	assert(head < RB_SIZE_TRACK);
+	rbb = &rb->packets[head];
+
+	/* Buffer's full! */
+	if (head == r->rb_tail) {
+		goto err;
+	}
+	rbb->time_stamp = 0;   // reset the time_stamp
+	r->rb_head = (r->rb_head + 1) & (RB_SIZE_TRACK-1);
+	lock_release(&r->l);
+
+	return 0;
+err:
+	lock_release(&r->l);
+	return -1;
+}
+
+static int rb_retrieve_buff_track(rb_meta_track_t *r)
+{
+	ring_buff_track_t *rb;
+	unsigned int tail;
+	struct rb_buff_track_t *rbb;
+	unsigned long long process_t;
+
+	rdtscll(process_t);
+
+	assert(r);
+	lock_take(&r->l);
+	rb = r->rb;
+	assert(rb);
+	assert(r->rb_tail < RB_SIZE_TRACK);
+	tail = (r->rb_tail + 1) & (RB_SIZE_TRACK-1);
+	assert(tail < RB_SIZE_TRACK);
+
+	if (tail == r->rb_head) {
+		printc("Nothing to retrieve\n");
+		goto err;
+	}
+
+	rbb = &rb->packets[tail];
+	/* printc("process_t : %llu -- arrival_t :  %llu\n", process_t, rbb->time_stamp); */
+	printc("cost  %llu\n", process_t - rbb->time_stamp);
+
+	r->rb_tail = tail;
+
+	lock_release(&r->l);
+	return 0;
+err:
+	lock_release(&r->l);
+	return -1;
+}
+
+
+static void *alloc_rb_buff_track(rb_meta_track_t *r)
+{
+	struct buff_page *p;
+	int i;
+	void *ret = NULL;
+
+	lock_take(&r->l);
+	if (EMPTY_LIST(&r->avail_pages, next, prev)) {
+		if (NULL == (p = alloc_buff_page())) {
+			lock_release(&r->l);
+			return NULL;
+		}
+		ADD_LIST(&r->avail_pages, p, next, prev);
+	}
+	p = FIRST_LIST(&r->avail_pages, next, prev);
+	assert(p->amnt_buffs < NP_NUM_BUFFS);
+	for (i = 0 ; i < NP_NUM_BUFFS ; i++) {
+		if (p->buff_used[i] == 0) {
+			p->buff_used[i] = 1;
+			ret = p->buffs[i];
+			p->amnt_buffs++;
+			break;
+		}
+	}
+	assert(NULL != ret);
+	if (p->amnt_buffs == NP_NUM_BUFFS) {
+		REM_LIST(p, next, prev);
+		ADD_LIST(&r->used_pages, p, next, prev);
+	}
+	lock_release(&r->l);
+	return ret;
+}
+
+static void release_rb_buff_track(rb_meta_track_t *r, void *b)
+{
+	struct buff_page *p;
+	int i;
+
+	assert(r && b);
+
+	p = (struct buff_page *)(((unsigned long)b) & ~(4096-1));
+
+	lock_take(&r->l);
+	for (i = 0 ; i < NP_NUM_BUFFS ; i++) {
+		if (p->buffs[i] == b) {
+			p->buff_used[i] = 0;
+			p->amnt_buffs--;
+			REM_LIST(p, next, prev);
+			ADD_LIST(&r->avail_pages, p, next, prev);
+			lock_release(&r->l);
+			return;
+		}
+	}
+	/* b must be malformed such that p (the page descriptor) is
+	 * not at the start of its page */
+	BUG();
+}
+
+//////////////////////////////////////////
+
 #include <sched.h>
 
 static int cos_net_create_net_brand(unsigned short int port, rb_meta_t *rbm)
@@ -346,6 +552,15 @@ static int cos_net_create_net_brand(unsigned short int port, rb_meta_t *rbm)
 		prints("net: could not setup recv ring.\n");
 		return -1;
 	}
+
+	//////////////////////
+	// Jiguo: Want to track the cost of processing each packet, from its arrival to its processed
+	if (cos_buff_mgmt(COS_BM_RECV_RING_TRACK, rb_timing_track.packets, sizeof(rb_timing_track.packets), wildcard_brand_id)) {
+		prints("net: could not setup tracking ring.\n");
+		return -1;
+	}
+	/////////////////////
+
 	return 0;
 }
 
@@ -431,6 +646,19 @@ static int interrupt_process(void *d, int sz, int *recv_len)
 
 	tm = get_thd_map(ucid);
 	assert(tm);
+
+	//////////////////////////////
+	// Jiguo: For tracking
+	struct thd_map_track *tm_track;
+	tm_track = get_thd_map_track(ucid);
+	assert(tm_track);
+
+	if (rb_retrieve_buff_track(tm_track->uc_rb)) {
+		prints("net: could not retrieve track info from ring.\n");
+		goto err;
+	}
+	//////////////////////////////
+
 	if (rb_retrieve_buff(tm->uc_rb, &buff, &max_len)) {
 		prints("net: could not retrieve buffer from ring.\n");
 		goto err;
@@ -447,6 +675,14 @@ static int interrupt_process(void *d, int sz, int *recv_len)
 	if (rb_add_buff(tm->uc_rb, buff, MTU)) {
 		prints("net: could not add buffer to ring.");
 	}
+
+	//////////////////////////////
+	// Jiguo: For tracking, recycle the buffer
+	if (rb_add_buff_track(tm_track->uc_rb, buff, MTU)) {
+		prints("net: could not add buffer to ring.");
+	}
+	//////////////////////////////
+
 	return 0;
 
 err_replace_buff:
@@ -496,6 +732,13 @@ int netif_event_create(spdid_t spdid)
 	NET_LOCK_TAKE();
 	if (sched_add_thd_to_brand(cos_spd_id(), wildcard_brand_id, ucid)) BUG();
 	add_thd_map(ucid, /*0 wildcard port ,*/ &rb1_md_wildcard);
+
+	///////////////////////
+	// Jiguo: tracking
+	add_thd_map_track(ucid, &rb2_md);
+	// remove above later
+	///////////////////////
+
 	NET_LOCK_RELEASE();
 	/* printc("created net uc %d associated with brand %d\n", ucid, wildcard_brand_id); */
 
@@ -508,6 +751,12 @@ int netif_event_release(spdid_t spdid)
 	
 	NET_LOCK_TAKE();
 	rem_thd_map(cos_get_thd_id());
+	
+	//////////////////////
+	// Jiguo: for tracking
+	rem_thd_map_track(cos_get_thd_id());
+	//////////////////////
+
 	NET_LOCK_RELEASE();
 
 	return 0;
@@ -519,12 +768,29 @@ int netif_event_wait(spdid_t spdid, char *mem, int sz)
 
 	if (sz < MTU) return -EINVAL;
 
+#ifdef MEAS_INT_WAIT
+	rdtscll(start);
+#endif
 	interrupt_wait();
+#ifdef MEAS_INT_WAIT
+	rdtscll(end);
+	printc("tif: interrupt_wait %llu\n", end-start);
+#endif
+
+#ifdef MEAS_INT_PROCESS
+	rdtscll(start);
+#endif
 	NET_LOCK_TAKE();
-	// just return if nothing is found for SWIFI
+	// just return if nothing is found for SWIFI, ?? why? do not remember...
 	/* if (interrupt_process(mem, sz, &ret_sz)) BUG(); */
+
 	interrupt_process(mem, sz, &ret_sz);
 	NET_LOCK_RELEASE();
+
+#ifdef MEAS_INT_PROCESS
+	rdtscll(end);
+	printc("tif: interrupt_process %llu\n", end-start);
+#endif
 
 	return ret_sz;
 }
@@ -626,7 +892,15 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	if (!(t->flags & TOR_WRITE)) ERR_THROW(-EACCES, done);
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
+#ifdef MEAS_EVENT_WAIT_WHOLE
+	rdtscll(start);
+#endif
 	ret = netif_event_wait(spdid, buf, sz);
+#ifdef MEAS_EVENT_WAIT_WHOLE
+	rdtscll(end);
+	printc("tif: netif_event_wait %llu (thd %d)\n", end-start, cos_get_thd_id());
+#endif
+
 done:
 	return ret;
 }
@@ -646,7 +920,11 @@ static int init(void)
 	cos_vect_init_static(&tmap);
 	
 	rb_init(&rb1_md_wildcard, &rb1);
-	rb_init(&rb2_md, &rb2);
+
+	/////////////////////////
+	// Jiguo: For tracking
+	rb_init_track(&rb2_md, &rb_timing_track);
+	/////////////////////////
 
 	/* Setup the region from which headers will be transmitted. */
 	if (cos_buff_mgmt(COS_BM_XMIT_REGION, &xmit_headers, sizeof(xmit_headers), 0)) {
@@ -664,6 +942,19 @@ static int init(void)
 			prints("net: could not populate the ring with buffer");
 		}
 	}
+
+	/////////////////////////
+	// Jiguo: For tracking
+	for (i = 0 ; i < NUM_WILDCARD_BUFFS ; i++) {
+		if(!(b = alloc_rb_buff_track(&rb2_md))) {
+			prints("net: could not allocate the ring buffer.");
+		}
+		if(rb_add_buff_track(&rb2_md, b, MTU)) {
+			prints("net: could not populate the ring with buffer");
+		}
+	}
+	/////////////////////////
+
 	NET_LOCK_RELEASE();
 
 	return 0;

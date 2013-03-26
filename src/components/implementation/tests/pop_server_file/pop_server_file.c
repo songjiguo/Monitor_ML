@@ -37,6 +37,10 @@ void pop_cgi(void)
 	/* ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2)); */
 	trelease(cos_spd_id(), t1);
 
+	printc("unsigned long long length %d\n", sizeof(unsigned long long));
+	printc("unsigned long length %d\n", sizeof(unsigned long));
+	printc("unsigned int length %d\n", sizeof(unsigned int));
+	printc("unsigned short int length %d\n", sizeof(unsigned short int));
 	printc("\n<<<pop done!!>>>\n\n");
 	return;
 }

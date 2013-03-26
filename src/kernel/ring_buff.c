@@ -30,7 +30,14 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 	vaddr_t kaddr;
 	unsigned short int status, len;
 	struct spd *bspd;
-	
+
+	ring_buff_track_t *rb_track;
+	unsigned long long arrival_t;
+	rdtscll(arrival_t);
+	/* printk("INT arrival @ %llu\n", arrival_t); */
+
+
+	/* printk("cos:rb_retrieve_buff\n");	 */
 	assert(brand);
 	rb = brand->k_rb;
 	if (!rb) {
@@ -64,6 +71,19 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 	rb->packets[position].status = RB_USED;
 	brand->rb_next = (position+1) & (RB_SIZE-1);
 
+//////////////////////////////////////////////////////////////////////
+/* Jiguo: Add a tracking RB to track the packet timestamp  */
+	rb_track = brand->k_rb_track;
+	if (!rb_track) {
+		return -1;
+	}
+
+	int position_track;
+	position_track = brand->rb_next_track;
+	rb_track->packets[position_track].time_stamp = arrival_t;
+	brand->rb_next_track = (position_track+1) & (RB_SIZE_TRACK-1);
+//////////////////////////////////////////////////////////////////////
+
 	return 0;
 }
 
@@ -75,6 +95,19 @@ int rb_setup(struct thread *brand, ring_buff_t *user_rb, ring_buff_t *kern_rb)
 	brand->u_rb = user_rb;
 	brand->k_rb = kern_rb;
 	brand->rb_next = 0;
-	
+
 	return 0;
 }
+
+//////////////////////////////////////////////////////////////////////
+// track the package only
+int rb_setup_track(struct thread *brand, ring_buff_track_t *user_rb, ring_buff_track_t *kern_rb)
+{
+	assert(brand && user_rb && kern_rb);
+	brand->u_rb_track = user_rb;
+	brand->k_rb_track = kern_rb;
+	brand->rb_next_track = 0;
+
+	return 0;
+}
+//////////////////////////////////////////////////////////////////////

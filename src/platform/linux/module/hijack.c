@@ -1822,7 +1822,6 @@ int host_attempt_brand(struct thread *brand)
 #endif
 				/* printk("brand %d next thd %d\n", brand->thread_id, next->thread_id); */
 				if (unlikely(interrupt_fault_detect(next))) {
-				/* if (thd_get_id(cos_current) == 11) {  // test 8 for spin, 11 for pong */
 					/* Peter: detect fault on interrupt path */
 					thd_interrupt_fault_notif(next, regs);
 #ifdef MEAS_INT_FAULT_DETECT

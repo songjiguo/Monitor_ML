@@ -163,6 +163,17 @@ typedef struct {
 	} __attribute__((packed)) packets[RB_SIZE];
 } __attribute__((aligned(4096))) ring_buff_t ;
 
+//////////////////////////////
+// Jiguo: For tracking
+#define RB_SIZE_TRACK (4096 / 8) /* 4096 / sizeof(struct rb_buff_t), or 512 */
+typedef struct {
+	struct rb_buff_track_t {
+		unsigned long long time_stamp;
+	} __attribute__((packed)) packets[RB_SIZE_TRACK];
+} __attribute__((aligned(4096))) ring_buff_track_t ;
+
+
+
 #define XMIT_HEADERS_GATHER_LEN 32 
 struct gather_item {
 	void *data;
@@ -179,7 +190,8 @@ struct cos_net_xmit_headers {
 enum {
 	COS_BM_XMIT,
 	COS_BM_XMIT_REGION,
-	COS_BM_RECV_RING
+	COS_BM_RECV_RING,
+	COS_BM_RECV_RING_TRACK
 };
 
 /*

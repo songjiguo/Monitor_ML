@@ -113,6 +113,9 @@ struct thread {
 	ring_buff_t *u_rb, *k_rb;
 	int rb_next; 		/* Next address entry */
 
+	ring_buff_track_t *u_rb_track, *k_rb_track;
+	int rb_next_track; 		/* Next address entry */
+
 	/* End Brand & Upcall fields */
 
 	/* flags & (THD_STATE_UPCALL|THD_STATE_BRAND) != 0: */

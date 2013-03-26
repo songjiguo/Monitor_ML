@@ -35,6 +35,11 @@
 #include <periodic_wake.h>
 #include <sched.h>
 
+unsigned long long start, end;
+//#define MEAS_TREAD
+//#define MEAS_TSPLIT
+//#define MEAS_TRELEASE
+
 static cos_lock_t h_lock;
 #define LOCK() if (lock_take(&h_lock)) BUG();
 #define UNLOCK() if (lock_release(&h_lock)) BUG();
@@ -245,12 +250,15 @@ static int http_get_request(struct http_request *r)
 
 	/* printc("http_get_request...(thd %d)\n", cos_get_thd_id()); */
 	if (0 > r->content_id) {
-		/* rdtscll(start); */
+#ifdef MEAS_TSPLIT	
+			rdtscll(start);
+#endif
 		r->content_id = server_tsplit(cos_spd_id(), td_root, r->path, 
 					      r->path_len, TOR_READ, r->c->evt_id);
-		/* rdtscll(end); */
-		/* printc("https:server_tsplit cost %llu\n", end-start); */
-
+#ifdef MEAS_TSPLIT			
+			rdtscll(end);
+			printc("h_ss %llu\n", end-start);
+#endif
 		/* printc("after ramfs tsplit id %ld (thd %d)\n", r->content_id, cos_get_thd_id()); */
 		if (r->content_id < 0) return r->content_id;
 		ret = 0;
@@ -422,10 +430,14 @@ static void http_free_request(struct http_request *r)
 		c->pending_reqs = (r == next) ? NULL : next;
 	}
 
-	/* rdtscll(start); */
+#ifdef MEAS_TRELEASE
+	rdtscll(start);
+#endif
 	server_trelease(cos_spd_id(), r->content_id);
-	/* rdtscll(end); */
-	/* printc("https:server_trelease cost %llu\n", end-start); */
+#ifdef MEAS_TRELEASE
+	rdtscll(end);
+	printc("h_strelease %llu\n", end-start);
+#endif
 
 	conn_refcnt_dec(c);
 	__http_free_request(r);
@@ -627,10 +639,14 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 			local_resp = cbuf_alloc(sz, &cb);
 			if (!local_resp) BUG();
 
-			/* rdtscll(start); */
+#ifdef MEAS_TREAD			
+			rdtscll(start);
+#endif
 			ret = server_tread(cos_spd_id(), r->content_id, cb, sz);
-			/* rdtscll(end); */
-			/* printc("https:server_tread cost %llu\n", end-start); */
+#ifdef MEAS_TREAD			
+			rdtscll(end);
+			printc("h_sr %llu\n", end-start);
+#endif
 			if (ret < 0) {
 				cbuf_free(local_resp);
 				printc("https get reply returning %d.\n", ret);
@@ -801,10 +817,8 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
-	unsigned long long start, end;
-
-	printc("https twrite (thd %d)>>>\n", cos_get_thd_id());
-	rdtscll(start);
+	/* printc("https twrite (thd %d)>>>\n", cos_get_thd_id()); */
+	/* rdtscll(start); */
 
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
@@ -824,8 +838,8 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	unlock_connection(c);
 	ret = sz;
 done:
-	rdtscll(end);
-	/* printc("%llu\n", end-start); */
+	/* rdtscll(end); */
+	/* printc("https twrite cost: %llu\n", end-start); */
 		
 	return ret;
 unlock:

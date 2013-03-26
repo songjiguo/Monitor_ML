@@ -1453,12 +1453,36 @@ sched_tailcall_pending_upcall_thd(struct thread *uc, struct composite_spd *curr)
 {
 	struct thread *brand = uc->thread_brand;
 	struct composite_spd *cspd;
+	unsigned long long saved_t, curr_t;
 
 	assert(brand && brand->pending_upcall_requests > 0);
 	assert(uc->flags & THD_STATE_ACTIVE_UPCALL && 
 	       !(uc->flags & THD_STATE_READY_UPCALL));
 
+	rdtscll(curr_t);
 	brand->pending_upcall_requests--;
+
+	/* ////////////////////////// */
+	/* // Jiguo: For tracking on tailcall_pending type */
+	/* ring_buff_track_t *rb_track; */
+	/* struct rb_buff_track_t rbb; */
+	/* unsigned int tail; */
+	/* rb_track = brand->k_rb_track; */
+	/* if (!rb_track) { */
+	/* 	return -1; */
+	/* } */
+	/* /\* printk("tail_trak %d\n", rb_track->tail_track); *\/ */
+	/* assert(rb_track->tail_track < RB_SIZE_TRACK); */
+
+	/* tail = (rb_track->tail_track) & (RB_SIZE_TRACK-1); */
+	/* /\* tail = rb_track->tail_track; *\/ */
+	/* assert(tail < RB_SIZE_TRACK); */
+
+	/* saved_t = rb_track->packets[tail].time_stamp; */
+	/* printk("cos:(path 1, tail %d) saved t %llu\n", tail, saved_t); */
+	/* /\* printk("pending_upcall_requests %d (%llu)\n", brand->pending_upcall_requests, saved_t); *\/ */
+	/* /\* printk("cos: tail_pending cost  %llu (tail %d)\n", curr_t - saved_t, tail); *\/ */
+	/* ////////////////////////// */
 
 	cspd = (struct composite_spd*)thd_get_thd_spdpoly(uc);
 	upcall_execute(uc, cspd, NULL, curr);
@@ -1563,7 +1587,6 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 	 * do.
 	 */
 
-	/* in case of fault :  */
 	prev = curr->interrupted_thread;
 	if (NULL == prev) {
 		struct thd_sched_info *tsi, *prev_tsi;
@@ -1588,7 +1611,7 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 
 		event_record("brand complete, upcall scheduler", thd_get_id(curr), 0);
 
-		/* printk("curr %d upcall scheduler\n", thd_get_id(curr)); */
+		/* printk("scheduler decides:curr %d upcall scheduler\n", thd_get_id(curr)); */
 		cos_meas_event(COS_MEAS_BRAND_COMPLETION_UC);
 		//cos_meas_event(COS_MEAS_FINISHED_BRANDS);
 		return &curr->regs;
@@ -1596,10 +1619,35 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 
 	event_record("brand completion, switch to interrupted thread", thd_get_id(curr), thd_get_id(prev));
 
-	/* printk("3 curr %d prev %d\n", thd_get_id(curr), thd_get_id(prev)); */
+	/* printk("go to the prev: curr %d prev %d\n", thd_get_id(curr), thd_get_id(prev)); */
 	brand_completion_switch_to(curr, prev);
 	*preempt = 1;
 	report_upcall("i", curr);
+
+	/* ////////////////////////// */
+	/* // Jiguo: For tracking on returning to prev */
+	/* ring_buff_track_t *rb_track; */
+	/* struct rb_buff_track_t rbb; */
+	/* unsigned int tail; */
+	/* unsigned long long saved_t, curr_t; */
+	/* rdtscll(curr_t); */
+	/* rb_track = brand->k_rb_track; */
+	/* if (!rb_track) { */
+	/* 	return -1; */
+	/* } */
+	/* printk("tail_trak %d\n", rb_track->tail_track); */
+	/* assert(rb_track->tail_track < RB_SIZE_TRACK); */
+
+	/* tail = (rb_track->tail_track+1) & (RB_SIZE_TRACK-1); */
+	/* /\* tail = rb_track->tail_track; *\/ */
+	/* assert(tail < RB_SIZE_TRACK); */
+
+	/* saved_t = rb_track->packets[tail].time_stamp; */
+	/* printk("cos:(path 3, tail %d) saved t %llu\n", tail, saved_t); */
+	/* /\* printk("cos: go to prev: %d (%llu)\n", brand->pending_upcall_requests, saved_t); *\/ */
+	/* /\* printk("cos: go to prev cost  %llu (tail %d)\n", curr_t - saved_t, tail); *\/ */
+	/* ////////////////////////// */
+
 
 	return &prev->regs;
 }
@@ -1669,6 +1717,8 @@ cos_syscall_brand_upcall_cont(int spd_id, int thread_id_flags, int arg1, int arg
 	struct spd *curr_spd;
 	short int thread_id, flags;
 
+	printk("cos: Attempting to brand upcall\n");
+
 	thread_id = thread_id_flags>>16;
 	flags = thread_id_flags & 0x0000FFFF;
 
@@ -1705,9 +1755,7 @@ cos_syscall_brand_upcall_cont(int spd_id, int thread_id_flags, int arg1, int arg
 #ifdef BRAND_UL_LATENCY
 	glob_hack_arg = arg1;
 #endif
-	printk("brand_thd %d, curr_thd %d",thread_id, thd_get_id(curr_thd));
 	next_thd = brand_next_thread(brand_thd, curr_thd, 2);
-	printk("next_thd %d",thd_get_id(next_thd));
 	
 	if (next_thd == curr_thd) {
 		curr_thd->regs.ax = 0;
@@ -2025,12 +2073,15 @@ extern int rb_retrieve_buff(struct thread *brand, int desired_len,
 			    void **found_buf, int *found_len);
 extern int rb_setup(struct thread *brand, ring_buff_t *user_rb, ring_buff_t *kern_rb);
 
+extern int rb_setup_track(struct thread *brand, ring_buff_t *user_rb, ring_buff_t *kern_rb);
+
 int cos_net_try_brand(struct thread *t, void *data, int len)
 {
 	void *buff;
 	int l;
 	unsigned int *lenp;
 
+	/* printk("cos:cos_net_try_brand\n"); */
 	cos_meas_event(COS_MEAS_PACKET_BRAND);
 
 	/* 
@@ -2294,6 +2345,43 @@ cos_syscall_buff_mgmt_cont(int spd_id, void *addr, unsigned int thd_id, unsigned
 			printk("cos: buff mgmt -- could not setup the ring buffer.\n");
 			return -1;
 		}
+
+		break;
+	}
+	/* Set the location of a user-level ring buffer, for timing track purpose */
+	case COS_BM_RECV_RING_TRACK:
+	{
+		struct thread *b;
+
+		/*
+		 * Currently, the ring buffer must be aligned on a
+		 * page, and be a page long
+		 */
+		if ((unsigned long)addr & ~PAGE_MASK || len != PAGE_SIZE) {
+			printk("cos: buff mgmt -- recv ring @ %p (%d) not on page boundary.\n", addr, len);
+			return -1;
+		}
+		if (NULL == (b = thd_get_by_id(thd_id))) {
+			printk("cos: buff mgmt could not find brand thd %d.\n",
+		       (unsigned int)thd_id);
+			return -1;
+		}
+		if (b->flags & THD_STATE_UPCALL) {
+			assert(b->thread_brand);
+			b = b->thread_brand;
+		}
+		if (!(b->flags & THD_STATE_BRAND ||
+		      b->flags & THD_STATE_HW_BRAND)) {
+			printk("cos: buff mgmt attaching ring buffer to thread not a brand: %d\n",
+			       (unsigned int)thd_id);
+			return -1;
+		}
+
+		if (rb_setup_track(b, (ring_buff_t*)addr, (ring_buff_t*)kaddr)) {
+			printk("cos: buff mgmt -- could not setup the ring buffer.\n");
+			return -1;
+		}
+
 		break;
 	}
 	default:
@@ -2746,6 +2834,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 		assert(!(upcall->flags & THD_STATE_READY_UPCALL));
 		cos_meas_event(COS_MEAS_BRAND_PEND);
 		cos_meas_stats_start(COS_MEAS_STATS_UC_PEND_DELAY, 0);
+		/* printk("pending ++\n"); */
 		brand->pending_upcall_requests++;
 
 		event_record("brand activated, but upcalls active", thd_get_id(preempted), thd_get_id(upcall));
@@ -2860,7 +2949,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	
 	event_record("upcall not immediately executed (less urgent), continue previous thread", 
 		     thd_get_id(preempted), thd_get_id(upcall));
-	/* printk("%d w\n", thd_get_id(upcall)); */
+	/* printk("%d wwww\n", thd_get_id(upcall)); */
 
 	report_upcall("d", upcall);
 
