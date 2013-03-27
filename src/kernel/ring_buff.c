@@ -36,7 +36,6 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 	rdtscll(arrival_t);
 	/* printk("INT arrival @ %llu\n", arrival_t); */
 
-
 	/* printk("cos:rb_retrieve_buff\n");	 */
 	assert(brand);
 	rb = brand->k_rb;
@@ -80,8 +79,10 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 
 	int position_track;
 	position_track = brand->rb_next_track;
+	/* printk("Arrival: postion %d\n", brand->rb_next_track); */
 	rb_track->packets[position_track].time_stamp = arrival_t;
 	brand->rb_next_track = (position_track+1) & (RB_SIZE_TRACK-1);
+	/* printk(":Arrival: postion %d (RB_SIZE_TRACK %d)\n", brand->rb_next_track, RB_SIZE_TRACK); */
 //////////////////////////////////////////////////////////////////////
 
 	return 0;

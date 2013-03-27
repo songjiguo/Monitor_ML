@@ -1459,30 +1459,34 @@ sched_tailcall_pending_upcall_thd(struct thread *uc, struct composite_spd *curr)
 	assert(uc->flags & THD_STATE_ACTIVE_UPCALL && 
 	       !(uc->flags & THD_STATE_READY_UPCALL));
 
-	rdtscll(curr_t);
+	/* rdtscll(curr_t); */
 	brand->pending_upcall_requests--;
 
-	/* ////////////////////////// */
-	/* // Jiguo: For tracking on tailcall_pending type */
-	/* ring_buff_track_t *rb_track; */
-	/* struct rb_buff_track_t rbb; */
-	/* unsigned int tail; */
-	/* rb_track = brand->k_rb_track; */
-	/* if (!rb_track) { */
-	/* 	return -1; */
-	/* } */
-	/* /\* printk("tail_trak %d\n", rb_track->tail_track); *\/ */
-	/* assert(rb_track->tail_track < RB_SIZE_TRACK); */
-
-	/* tail = (rb_track->tail_track) & (RB_SIZE_TRACK-1); */
-	/* /\* tail = rb_track->tail_track; *\/ */
-	/* assert(tail < RB_SIZE_TRACK); */
-
-	/* saved_t = rb_track->packets[tail].time_stamp; */
-	/* printk("cos:(path 1, tail %d) saved t %llu\n", tail, saved_t); */
-	/* /\* printk("pending_upcall_requests %d (%llu)\n", brand->pending_upcall_requests, saved_t); *\/ */
-	/* /\* printk("cos: tail_pending cost  %llu (tail %d)\n", curr_t - saved_t, tail); *\/ */
-	/* ////////////////////////// */
+	//////////////////////////
+	// Jiguo: For tracking on tailcall_pending type
+	ring_buff_track_t *rb_track;
+	struct rb_buff_track_t rbb;
+	unsigned int tail;
+	if (thd_get_id(brand) == 13) {
+		rb_track = brand->k_rb_track;
+		if (!rb_track) {
+			return -1;
+		}
+		/* printk("curr_tail%d\n", rb_track->curr_tail); */
+		assert(rb_track->curr_tail < RB_SIZE_TRACK);
+		tail = (rb_track->curr_tail + 1) & (RB_SIZE_TRACK-1);
+		assert(tail < RB_SIZE_TRACK);
+		
+		/* saved_t = rb_track->packets[tail].time_stamp; */
+		/* printk("before update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+		rb_track->packets[tail].meas_mode = MEAS_COMPLET_EXEC_PENDING;
+		/* printk("after update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+		/* printk("tail_pending process\n"); */
+		/* printk("cos:(path 1, tail %d) saved t %llu\n", tail, saved_t); */
+		/* printk("pending_upcall_requests %d ", brand->pending_upcall_requests); */
+		/* printk("cos:(path 1)\n"); */
+	}
+	//////////////////////////
 
 	cspd = (struct composite_spd*)thd_get_thd_spdpoly(uc);
 	upcall_execute(uc, cspd, NULL, curr);
@@ -1587,11 +1591,13 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 	 * do.
 	 */
 
+	unsigned long long saved_t, curr_t;
 	prev = curr->interrupted_thread;
 	if (NULL == prev) {
 		struct thd_sched_info *tsi, *prev_tsi;
 		struct spd *dest;
 		int i;
+		rdtscll(curr_t);
 
 		prev_tsi = thd_get_sched_info(brand, 0);
 		assert(prev_tsi->scheduler);
@@ -1614,41 +1620,63 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 		/* printk("scheduler decides:curr %d upcall scheduler\n", thd_get_id(curr)); */
 		cos_meas_event(COS_MEAS_BRAND_COMPLETION_UC);
 		//cos_meas_event(COS_MEAS_FINISHED_BRANDS);
+
+		//////////////////////////
+		/* // Jiguo: For tracking on upcall scheduler */
+		/* ring_buff_track_t *rb_track; */
+		/* struct rb_buff_track_t rbb; */
+		/* unsigned int tail; */
+
+		/* rb_track = brand->k_rb_track; */
+		/* if (!rb_track) { */
+		/* 	return -1; */
+		/* } */
+		/* /\* printk("curr_tail%d\n", rb_track->curr_tail); *\/ */
+		/* assert(rb_track->curr_tail < RB_SIZE_TRACK); */
+
+		/* tail = (rb_track->curr_tail + 1) & (RB_SIZE_TRACK-1); */
+		/* assert(tail < RB_SIZE_TRACK); */
+
+		/* saved_t = rb_track->packets[tail].time_stamp; */
+		/* printk("cos:(path 2, tail %d) saved t %llu\n", tail, saved_t); */
+		/* /\* /\\* printk("pending_upcall_requests %d (%llu)\n", brand->pending_upcall_requests, saved_t); *\\/ *\/ */
+		/* printk("cos: let scheduler decide cost  %llu (tail %d)\n", curr_t - saved_t, tail); */
+		/* printk("cos:(path 2)\n"); */
+		//////////////////////////
+
+
 		return &curr->regs;
 	}
 
 	event_record("brand completion, switch to interrupted thread", thd_get_id(curr), thd_get_id(prev));
 
-	/* printk("go to the prev: curr %d prev %d\n", thd_get_id(curr), thd_get_id(prev)); */
 	brand_completion_switch_to(curr, prev);
 	*preempt = 1;
 	report_upcall("i", curr);
-
+	
 	/* ////////////////////////// */
-	/* // Jiguo: For tracking on returning to prev */
+	/* // Jiguo: For tracking on prev */
 	/* ring_buff_track_t *rb_track; */
 	/* struct rb_buff_track_t rbb; */
 	/* unsigned int tail; */
-	/* unsigned long long saved_t, curr_t; */
-	/* rdtscll(curr_t); */
+	/* printk("go to the prev: curr %d prev %d\n", thd_get_id(curr), thd_get_id(prev)); */
 	/* rb_track = brand->k_rb_track; */
 	/* if (!rb_track) { */
 	/* 	return -1; */
 	/* } */
-	/* printk("tail_trak %d\n", rb_track->tail_track); */
-	/* assert(rb_track->tail_track < RB_SIZE_TRACK); */
-
-	/* tail = (rb_track->tail_track+1) & (RB_SIZE_TRACK-1); */
-	/* /\* tail = rb_track->tail_track; *\/ */
+	/* /\* printk("curr_tail%d\n", rb_track->curr_tail); *\/ */
+	/* assert(rb_track->curr_tail < RB_SIZE_TRACK); */
+	
+	/* tail = (rb_track->curr_tail + 1) & (RB_SIZE_TRACK-1); */
 	/* assert(tail < RB_SIZE_TRACK); */
-
+	
 	/* saved_t = rb_track->packets[tail].time_stamp; */
 	/* printk("cos:(path 3, tail %d) saved t %llu\n", tail, saved_t); */
-	/* /\* printk("cos: go to prev: %d (%llu)\n", brand->pending_upcall_requests, saved_t); *\/ */
-	/* /\* printk("cos: go to prev cost  %llu (tail %d)\n", curr_t - saved_t, tail); *\/ */
-	/* ////////////////////////// */
-
-
+	/* /\* /\\* printk("pending_upcall_requests %d (%llu)\n", brand->pending_upcall_requests, saved_t); *\\/ *\/ */
+	/* printk("cos: prev  cost  %llu (tail %d)\n", curr_t - saved_t, tail); */
+	/* printk("cos:(path 3)\n"); */
+	/* /\* ////////////////////////// *\/ */
+	
 	return &prev->regs;
 }
 
@@ -2822,6 +2850,18 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	assert(upcall);
 	assert(upcall->thread_brand == brand);
 
+	//////////////////////////
+	// Jiguo: Tracking
+	ring_buff_track_t *rb_track;
+	struct rb_buff_track_t rbb;
+	unsigned int tail;
+
+	/* printk("\n\nbrand_next: preempted %d  -- brand upcall %d \n", thd_get_id(preempted), thd_get_id(upcall)); */
+	/* printk("brand %d  its upcall %d \n", thd_get_id(brand), thd_get_id(upcall)); */
+	// timer: 7 (brand 6)
+	// network: 12 (brand 13)
+	//////////////////////////
+
 	/* 
 	 * If the upcall is already active, the scheduler's already
 	 * know what they're doing, and has chosen to run preempted.
@@ -2834,7 +2874,6 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 		assert(!(upcall->flags & THD_STATE_READY_UPCALL));
 		cos_meas_event(COS_MEAS_BRAND_PEND);
 		cos_meas_stats_start(COS_MEAS_STATS_UC_PEND_DELAY, 0);
-		/* printk("pending ++\n"); */
 		brand->pending_upcall_requests++;
 
 		event_record("brand activated, but upcalls active", thd_get_id(preempted), thd_get_id(upcall));
@@ -2848,6 +2887,25 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 //		update_thd_evt_state(upcall, COS_SCHED_EVT_BRAND_PEND, 1);
 //		cos_meas_event(COS_MEAS_PENDING_HACK);
 		report_upcall("p", upcall);
+
+		//////////////////////////
+		// Jiguo: Tracking
+		if (thd_get_id(brand) == 13) {
+			rb_track = brand->k_rb_track;
+			if (!rb_track) {
+				return -1;
+			}
+			assert(rb_track->curr_tail < RB_SIZE_TRACK);
+			tail = (rb_track->curr_tail + 1) & (RB_SIZE_TRACK-1);
+			assert(tail < RB_SIZE_TRACK);
+			
+			/* printk("before update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+			rb_track->packets[tail].meas_mode = MEAS_ARRIVAL_ADDPENDING;
+			/* printk("after update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+			/* printk("pending ++ both active (requests %d)\n", brand->pending_upcall_requests); */
+			/* printk("return to %d \n", thd_get_id(preempted)); */
+		}
+		//////////////////////////
 
 		return preempted;
 	}
@@ -2937,6 +2995,25 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 		report_upcall("u", upcall);
 		cos_meas_event(COS_MEAS_BRAND_UC);
 		cos_meas_stats_end(COS_MEAS_STATS_UC_EXEC_DELAY, 1);
+		//////////////////////////
+		// Jiguo: Tracking Network Interrupt
+		if (thd_get_id(brand) == 13) {
+			rb_track = brand->k_rb_track;
+			if (!rb_track) {
+				return -1;
+			}
+			assert(rb_track->curr_tail < RB_SIZE_TRACK);
+			tail = (rb_track->curr_tail + 1) & (RB_SIZE_TRACK-1);
+			assert(tail < RB_SIZE_TRACK);
+			
+			/* printk("before update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+			rb_track->packets[tail].meas_mode = MEAS_ARRIVAL_IMMEDIATE_UPCALL;
+			/* printk("after update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+			/* printk("preempted %d  -- brand upcall %d \n", thd_get_id(preempted), thd_get_id(upcall)); */
+			/* printk("higher urgency!!!\n"); */
+		}
+		//////////////////////////
+
 		return upcall;
 	} 
 		
@@ -2949,8 +3026,25 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	
 	event_record("upcall not immediately executed (less urgent), continue previous thread", 
 		     thd_get_id(preempted), thd_get_id(upcall));
-	/* printk("%d wwww\n", thd_get_id(upcall)); */
 
+	//////////////////////////
+	// Jiguo: Tracking
+	if (thd_get_id(brand) == 13) {
+		rb_track = brand->k_rb_track;
+		if (!rb_track) {
+		return -1;
+		}
+		assert(rb_track->curr_tail < RB_SIZE_TRACK);
+		tail = (rb_track->curr_tail + 1) & (RB_SIZE_TRACK-1);
+		assert(tail < RB_SIZE_TRACK);
+		
+		/* printk("before update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+		rb_track->packets[tail].meas_mode = MEAS_ARRIVAL_CONTINUE_PREV;
+		/* printk("after update meas_mode: %d\n", rb_track->packets[tail].meas_mode); */
+		/* printk(" upcall not immediate -- goto preempted %d \n", thd_get_id(preempted)); */
+	}
+	//////////////////////////
+		
 	report_upcall("d", upcall);
 
 	cos_meas_event(COS_MEAS_BRAND_DELAYED);

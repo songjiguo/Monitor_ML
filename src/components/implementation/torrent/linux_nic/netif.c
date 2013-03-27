@@ -408,7 +408,10 @@ static void rb_init_track(rb_meta_track_t *rbm, ring_buff_track_t *rb)
 
 	for (i = 0 ; i < RB_SIZE_TRACK ; i++) {
 		rb->packets[i].time_stamp = 0;
+		rb->packets[i].meas_mode = 0;
 	}
+	rb->curr_tail  = 0;
+
 	memset(rbm, 0, sizeof(rb_meta_track_t));
 	rbm->rb_head       = 0;
 	rbm->rb_tail       = RB_SIZE_TRACK-1;
@@ -453,7 +456,14 @@ static int rb_retrieve_buff_track(rb_meta_track_t *r)
 	struct rb_buff_track_t *rbb;
 	unsigned long long process_t;
 
-	rdtscll(process_t);
+	/* static unsigned int count_a = 0; */
+	/* static unsigned long sum_a  = 0; */
+	/* static unsigned int count_b = 0; */
+	/* static unsigned long sum_b  = 0; */
+	/* static unsigned int count_c = 0; */
+	/* static unsigned long sum_c  = 0; */
+	/* static unsigned int count_d = 0; */
+	/* static unsigned long sum_d  = 0; */
 
 	assert(r);
 	lock_take(&r->l);
@@ -468,11 +478,47 @@ static int rb_retrieve_buff_track(rb_meta_track_t *r)
 		goto err;
 	}
 
+	rdtscll(process_t);
 	rbb = &rb->packets[tail];
-	/* printc("process_t : %llu -- arrival_t :  %llu\n", process_t, rbb->time_stamp); */
-	printc("cost  %llu\n", process_t - rbb->time_stamp);
 
-	r->rb_tail = tail;
+	/* printc("thread %d is reading from RB\n",cos_get_thd_id()); */
+	switch (rbb->meas_mode) {
+	case MEAS_ARRIVAL_ADDPENDING:
+		/* count_a++; */
+		/* sum_a += process_t - rbb->time_stamp; */
+		printc("(appending)cost: %llu\n", process_t - rbb->time_stamp);
+		break;
+	case MEAS_ARRIVAL_IMMEDIATE_UPCALL:
+		/* count_b++; */
+		/* sum_b += process_t - rbb->time_stamp; */
+		printc("(immediate)cost: %llu\n", process_t - rbb->time_stamp);
+		break;
+	case MEAS_ARRIVAL_CONTINUE_PREV:
+		/* count_c++; */
+		/* sum_c += process_t - rbb->time_stamp; */
+		printc("(continue_prev)cost: %llu\n", process_t - rbb->time_stamp);
+		break;
+	case MEAS_COMPLET_EXEC_PENDING:
+		/* count_d++; */
+		/* sum_d += process_t - rbb->time_stamp; */
+		printc("(exec pending)cost: %llu\n", process_t - rbb->time_stamp);
+		break;
+	default:
+		break;
+	}
+
+	/* if ( rbb->meas_mode == MEAS_ARRIVAL_ADDPENDING ) { */
+	/* /\* if ( rbb->meas_mode == MEAS_ARRIVAL_IMMEDIATE_UPCALL ) { *\/ */
+	/* /\* if ( rbb->meas_mode == MEAS_ARRIVAL_CONTINUE_PREV ) { *\/ */
+	/* 	/\* printc("measure mode %d\n", rbb->meas_mode); *\/ */
+	/* 	/\* printc("process_t : %llu -- arrival_t :  %llu\n", process_t, rbb->time_stamp); *\/ */
+	/* 	/\* printc("recorded arrival_t :  %llu (tail %d)\n", rbb->time_stamp, tail); *\/ */
+	/* 	/\* printc("recorded process_t :  %llu\n", process_t); *\/ */
+	/* 	printc("(appending)cost: %llu\n", process_t - rbb->time_stamp); */
+	/* } */
+
+	rb->curr_tail = tail;
+	r->rb_tail    = tail;
 
 	lock_release(&r->l);
 	return 0;
@@ -555,7 +601,7 @@ static int cos_net_create_net_brand(unsigned short int port, rb_meta_t *rbm)
 
 	//////////////////////
 	// Jiguo: Want to track the cost of processing each packet, from its arrival to its processed
-	if (cos_buff_mgmt(COS_BM_RECV_RING_TRACK, rb_timing_track.packets, sizeof(rb_timing_track.packets), wildcard_brand_id)) {
+	if (cos_buff_mgmt(COS_BM_RECV_RING_TRACK, &rb_timing_track, sizeof(rb_timing_track), wildcard_brand_id)) {
 		prints("net: could not setup tracking ring.\n");
 		return -1;
 	}

@@ -1613,6 +1613,7 @@ static struct sched_thd *fp_create_timer(void)
 				   {.c = {.type = SCHEDP_NOOP}}};
 
 	bid = sched_setup_brand(cos_spd_id());
+	printc("brand to timer: %d\n", bid);
 	assert(sched_is_root());
 	timer = sched_setup_thread_arg(&sp, fp_timer, (void*)bid, 1);
 	if (NULL == timer) BUG();

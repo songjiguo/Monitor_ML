@@ -18,7 +18,7 @@ cp:
 
 clean:
 	rm cos_loader
-	rmmod trans
+#	rmmod trans
 	rmmod cnet
 	rmmod cos
 
@@ -29,7 +29,7 @@ build: tar
 	nice -n -20 insmod cos.ko
 	@sleep 0.1
 	insmod cnet.ko
-	insmod trans.ko
+#	insmod trans.ko
 	./cnet_user
 
 tar:

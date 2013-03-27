@@ -165,14 +165,25 @@ typedef struct {
 
 //////////////////////////////
 // Jiguo: For tracking
-#define RB_SIZE_TRACK (4096 / 8) /* 4096 / sizeof(struct rb_buff_t), or 512 */
+
+enum {
+	MEAS_ARRIVAL_ADDPENDING = 5,
+	MEAS_ARRIVAL_IMMEDIATE_UPCALL,
+	MEAS_ARRIVAL_CONTINUE_PREV,
+	MEAS_COMPLET_EXEC_PENDING,
+	MEAS_COMPLET_UPCALL_SCHED,
+	MEAS_COMPLET_INTERRUPTED_THD
+};
+
+#define RB_SIZE_TRACK (4096/ 16) /* 4096 / sizeof(struct rb_buff_t), or 256 */
 typedef struct {
+	unsigned int curr_tail;
 	struct rb_buff_track_t {
 		unsigned long long time_stamp;
-	} __attribute__((packed)) packets[RB_SIZE_TRACK];
+		unsigned int meas_mode;
+	}packets[RB_SIZE_TRACK];
 } __attribute__((aligned(4096))) ring_buff_track_t ;
-
-
+//////////////////////////////
 
 #define XMIT_HEADERS_GATHER_LEN 32 
 struct gather_item {
