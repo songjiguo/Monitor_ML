@@ -347,10 +347,11 @@ enum {
 	COS_THD_INVFRM_SET_IP,
 	COS_THD_INVFRM_SP,	/* get the stack pointer in an inv frame  */
 	COS_THD_INVFRM_SET_SP,
+	COS_THD_HOME_SPD,  //Jiguo: used to find home spd
 	/* 
 	 * For SWIFI only
 	 */
-	COS_THD_FIND_SPD_TO_FLIP,        
+	COS_THD_FIND_SPD_TO_FLIP,
 	/* 
 	 * For the following GET methods, the argument is 0 to get the
 	 * register of a _preempted thread_, or 1 to get the fault

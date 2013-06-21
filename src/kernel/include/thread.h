@@ -209,6 +209,11 @@ static inline struct thd_invocation_frame *thd_invstk_nth(struct thread *thd, in
 	return &thd->stack_base[idx];
 }
 
+static inline struct thd_invocation_frame *thd_invstk_base(struct thread *thd)
+{
+	return &thd->stack_base[0];
+}
+
 static inline void thd_invstk_move_nth(struct thread *thd, int nth, int rem)
 {
 	struct thd_invocation_frame *if_keep, *if_rem;

@@ -118,7 +118,7 @@ struct inv_ret_struct {
 
 static vaddr_t 
 thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd);
-static struct pt_regs *thd_ret_fault_notif(struct thread *thd);
+static struct pt_regs *thd_ret_fault_notif(struct thread *thd, struct spd *dest_spd);
 static void thd_switch_fault_notif(struct thread *thd);
 
 /* 
@@ -158,7 +158,7 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 	dest_spd = cap_entry->destination;
 	curr_spd = cap_entry->owner;
 
-	/* printk("a lots invocation....from %d to %d\n", spd_get_index(curr_spd), spd_get_index(dest_spd)); */
+	/* printk("a lots invocation(thd %d)....from %d to %d\n", thd->thread_id, spd_get_index(curr_spd), spd_get_index(dest_spd)); */
 
 	if (unlikely(!dest_spd || curr_spd == CAP_FREE || curr_spd == CAP_ALLOCATED_UNUSED)) {
 		printk("cos: Attempted use of unallocated capability.\n");
@@ -182,6 +182,8 @@ ipc_walk_static_cap(struct thread *thd, unsigned int capability, vaddr_t sp,
 	if (unlikely(!thd_spd_in_composite(curr_frame->current_composite_spd, curr_spd))) {
 		printk("cos: Error, incorrect capability (Cap %d has spd %d, stk @ %d has %d).\n",
 		       capability, spd_get_index(curr_spd), thd->stack_ptr, spd_get_index(curr_frame->spd));
+		printk("cos: Error, thread is %d (dest spd %d)\n", thd->thread_id, spd_get_index(dest_spd));
+
 		print_stack(thd);
 		/* 
 		 * FIXME: do something here like throw a fault to be
@@ -290,7 +292,6 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 		*regs_restore = &curr->fault_regs;
 		return NULL;
 	}
-	/* printk("%d: ->%d\n", thd_get_id(curr), spd_get_index(curr_frame->spd)); */
 
 #ifdef MEAS_RET_FAULT_DETECT
 	unsigned long long start, end;
@@ -298,8 +299,10 @@ pop(struct thread *curr, struct pt_regs **regs_restore)
 #endif
 	if (unlikely(fault_ret = pop_fault_detect(inv_frame, curr_frame))){
 		/* KEVIN fill *regs_restore */
+		/* printk("%d: ->%d\n", thd_get_id(curr), spd_get_index(curr_frame->spd)); */
+		/* printk("pop: detected fault\n"); */
 		pop_fault_update(inv_frame, curr_frame);
-		*regs_restore = thd_ret_fault_notif(curr);
+		*regs_restore = thd_ret_fault_notif(curr, curr_frame->spd);
 #ifdef MEAS_RET_FAULT_DETECT
 		rdtscll(end);
 		printk("cos: ret notification cost %llu\n", (end-start));
@@ -325,6 +328,7 @@ __fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_
 	else {
 		s = virtual_namespace_query(regs->ip);
 		/* corrupted ip? */
+
 		if (unlikely(!s)) {
 			curr_frame = thd_invstk_top(thd);
 			s = curr_frame->spd;
@@ -395,10 +399,10 @@ thd_ipc_fault_notif(struct thread *thd, struct spd *dest_spd)
 }
 
 static struct pt_regs *
-thd_ret_fault_notif(struct thread *thd)
+thd_ret_fault_notif(struct thread *thd, struct spd *dest_spd)
 {
 	/* printk("[[[[[[ cos: Fault is detected on POP ]]]]]]\n"); */
-	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
+	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, dest_spd);
 	return &thd->regs;
 }
 
@@ -406,7 +410,7 @@ static void
 thd_switch_fault_notif(struct thread *thd)
 {
 	struct thd_invocation_frame *thd_frame;
-	/* printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd)); */
+	printk("[[[[[[ cos: Fault is detected on CONTEXT SWITCH to thread %d]]]]]]\n", thd_get_id(thd));
 	thd_frame = thd_invstk_top(thd);
 
 	__fault_ipc_invoke(thd, 0, 0, &thd->regs, COS_FLT_FLT_NOTIF, NULL);
@@ -712,6 +716,16 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 			if (arg1 == spd_get_index(tif->spd)) return arg1;
 		}
 		return -1;
+	}
+	case COS_THD_HOME_SPD:
+	{
+		struct thd_invocation_frame *tif;
+		struct spd *i_spd;
+
+		tif = thd_invstk_base(thd);
+		if (NULL == tif) return 0;
+		i_spd = tif->spd;
+		return spd_get_index(i_spd);
 	}
 	case COS_THD_FIND_SPD_TO_FLIP:
 	{
@@ -1160,8 +1174,9 @@ cos_syscall_switch_thread_cont(int spd_id, unsigned short int rthd_id,
 	/* success for this current thread */
 	curr->regs.ax = COS_SCHED_RET_SUCCESS;
 
-	/* if (thd_get_id(thd) == 12 || thd_get_id(curr) == 12) */
-		/* printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
+	/* if (thd_get_id(thd) == 11 || thd_get_id(curr) == 11) */
+	/* 	printk("ocs: switch(curr spd %d) --- curr %d thd %d\n", spd_id, thd_get_id(curr), thd_get_id(thd)); */
+
 	event_record("switch_thread", thd_get_id(curr), thd_get_id(thd));
 
 #ifdef MEAS_TCS_FAULT_DETECT

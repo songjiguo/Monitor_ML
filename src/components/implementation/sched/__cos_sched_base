@@ -771,6 +771,33 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 	report_event(THD_WAKE);
 }
 
+// Jiguo: to wake up threads from the same spd
+int sched_wakeup_spd_all(spdid_t spdid)
+{
+	/* printc("spd passed in is %d\n", spdid); */
+	struct sched_thd *t, *next;
+
+	cos_sched_lock_take();
+	// iterate all blocked threads that are blocked in spd
+	// wake up one by one
+
+	for (t = FIRST_LIST(&blocked, prio_next, prio_prev) ;
+	     t != &blocked ;
+	     t = next) {
+		next = FIRST_LIST(t, prio_next, prio_prev);
+		if (t->blocking_component == spdid) {
+			/* printc("New:thd %d blocked in spd %d\n", t->id, t->blocking_component); */
+			cos_sched_lock_release();
+			sched_wakeup(t->blocking_component, t->id);
+			cos_sched_lock_take();
+		}
+	}
+
+	cos_sched_lock_release();
+
+	return 0;
+}
+
 /* 
  * FIXME: should verify that the blocks and wakes come from the same
  * component.  This is the external interface.
@@ -778,7 +805,7 @@ static void fp_wakeup(struct sched_thd *thd, spdid_t spdid)
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	struct sched_thd *thd;
-	
+
 	cos_sched_lock_take();
 
 	/* unsigned long ll = 0; */
@@ -986,12 +1013,15 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 				goto unblock;
 			}
 		} else {
+			/* printc("no depden 1 block here (thd %d)\n", cos_get_thd_id());5B */
 			sched_switch_thread(0, BLOCK_LOOP);
+			/* printc("no depden 2 block here (thd %d)\n", cos_get_thd_id()); */
 			cos_sched_lock_take();
 			if (!first) { report_event(RETRY_BLOCK); }
 		}
 		first = 0;
 	}
+
 	assert(thd->wake_cnt == 1);
 	/* The amount of time we've blocked */
 	ret = ticks - thd->block_time - 1;
@@ -1000,6 +1030,7 @@ done:
 	assert(thd->wake_cnt == 1);
 	assert(!sched_thd_dependent(thd));
 	cos_sched_lock_release();
+	/* printc("no depden 3 block here (thd %d)\n", cos_get_thd_id()); */
 	return ret; 
 warn:
 	printc("Blocking while holding lock!!!\n");
@@ -1010,6 +1041,23 @@ unblock:
 	ret = -1;
 	goto done;
 
+}
+
+// Jiguo: check if the thread is holding the critical section, so when
+// fault, it is possible to release the critical section 
+int sched_cs_state(spdid_t spdid)
+{
+	struct sched_thd *curr;
+	int ret = 0;
+
+	cos_sched_lock_take();
+	curr = sched_get_current();
+	assert(curr);
+
+	ret = sched_crit_sect_holder(spdid, curr);
+
+	cos_sched_lock_release();
+	return ret;
 }
 
 /* 
@@ -1090,7 +1138,7 @@ static int fp_kill_thd(struct sched_thd *t)
 	cos_sched_lock_take();
 	c = sched_get_current();
 
-	if (!t) printc("kill thread in %d\n", cos_get_thd_id());
+	/* if (!t) printc("kill thread in %d\n", cos_get_thd_id()); */
 	assert(t);
 	assert(!sched_thd_grp(t));
 	t->flags = THD_DYING;
@@ -1775,6 +1823,7 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		((crt_thd_fn_t)arg1)(arg2);
 		break;
 	case COS_UPCALL_DESTROY:
+		/* printc("kill the thread %d\n", cos_get_thd_id()); */
 		fp_kill_thd(sched_get_current());
 		break;
 	case COS_UPCALL_UNHANDLED_FAULT:

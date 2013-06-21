@@ -7,7 +7,7 @@
 #define RUNTIME                5 // seconds
 
 // After how many seconds should schedulers print out their information?
-#define SCHED_PRINTOUT_PERIOD  1
+#define SCHED_PRINTOUT_PERIOD  59
 #define COMPONENT_ASSERTIONS   1 // activate assertions in components?
 
 //#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
@@ -53,10 +53,11 @@
  * versions of interfaces, such as mmgr, schduler, cbuf, torrent. To
  * use it, run python set_symbolic_link.py under composite/tools */
 
-#define RECOVERY_ENABLE 0               // 1 enable the fault notification in Composite kernel, 0 disable
+#define RECOVERY_ENABLE 1               // 1 enable the fault notification in Composite kernel, 0 disable
 /* for ramfs (eager recovery), set recovery_enable to 0 */
 /* for mm (eager recovery), set recovery_enable to 0 or 1? */
 /* for scheduler, this does not make difference, so set it as 1 when scheduler */
+/* for te, we need detect the fault in te for these blocked threads */
 
 /* For now, set INITONCE in cos_laoder and comment out boot_spd_caps in booter/fail function */
 /* to avoid the overhead of re-capability. Need fix later */

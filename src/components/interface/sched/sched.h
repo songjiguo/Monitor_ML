@@ -3,6 +3,10 @@
 
 #include <res_spec.h>
 
+// added to facilitate to wake up all threads calling sched_block from
+// the same spd
+int sched_wakeup_spd_all(spdid_t spdid);
+
 int sched_wakeup_helper(spdid_t spdid, unsigned short int thd_id); /* fault tolerance used only */
 int sched_wakeup(spdid_t spdid, unsigned short int thd_id);
 int sched_block_helper(spdid_t spdid, unsigned short int dependency_thd);
@@ -30,6 +34,8 @@ int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short
 
 int sched_component_take(spdid_t spdid);
 int sched_component_release(spdid_t spdid);
+
+int sched_cs_status(spdid_t spdid); // Jiguo: check if the critical section is being hold
 
 int sched_create_thd_again(unsigned int tid);
 

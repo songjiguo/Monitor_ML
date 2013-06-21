@@ -14,9 +14,6 @@
 #include <torrent.h>
 #include <cstub.h>
 
-extern void *alloc_page(void);
-extern void free_page(void *ptr);
-
 #define CSLAB_ALLOC(sz)   alloc_page()
 #define CSLAB_FREE(x, sz) free_page(x)
 #include <cslab.h>
@@ -304,10 +301,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, flag)
 
         /* client side tid should be guaranteed to be unique now */
         rd_cons(rd, tid, ser_tid, cli_tid, l_param, len, tflags, evtid);
-	if (cvect_add(&rec_vect, rd, cli_tid)) {
-		printc("can not add into cvect\n");
-		BUG();
-	}
+	cvect_add(&rec_vect, rd, cli_tid);
 
         ret = cli_tid;
 	printc("tsplit done!!!\n\n");

@@ -346,6 +346,22 @@ sched_thd_dependency(struct sched_thd *curr)
 	return p == curr ? NULL : p;
 }
 
+
+static inline int sched_crit_sect_holder(spdid_t spdid, struct sched_thd *curr)
+{
+	struct sched_crit_section *cs;
+	assert(spdid < MAX_NUM_SPDS);
+	cs = &sched_spd_crit_sections[spdid];
+	assert(curr);
+	assert(!sched_thd_free(curr));
+	assert(!sched_thd_blocked(curr));
+
+	if (!cs->holding_thd) return 0;
+	if (cs->holding_thd != curr) return 0;
+	return 1;
+}
+
+
 /* 
  * Return the thread that is holding the crit section, or NULL if it
  * is uncontested.  Assuming here we are in a critical section.

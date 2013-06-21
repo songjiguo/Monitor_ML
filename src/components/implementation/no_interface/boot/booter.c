@@ -375,6 +375,7 @@ boot_spd_thd(spdid_t spdid)
 {
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
 
+	/* printc("call create_default_thread in booter(by thd) %d\n", cos_get_thd_id()); */
 	/* Create a thread IF the component requested one */
 	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
 
@@ -464,7 +465,7 @@ void
 failure_notif_wait(spdid_t caller, spdid_t failed)
 {
 	/* wait for the other thread to finish rebooting the component */
-	printc("failure notif wait\n");
+	/* printc("failure notif wait\n"); */
 	LOCK();	
 	UNLOCK();
 }
@@ -473,8 +474,9 @@ failure_notif_wait(spdid_t caller, spdid_t failed)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed)
 {
-	/* printc("failure notif fail\n"); */
+	/* printc("failure notif fail caller %d failed %d\n", caller, failed); */
 	struct spd_local_md *md;
+	/* spdid_t home_spd = 0; */
 
 	volatile unsigned long long start, end;
 
@@ -497,7 +499,11 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 	rdtscll(end);
 	printc("COST (memOp): %llu\n", end - start);
 #endif
+	//Jiguo: check if the failed spd is the home spd of the thread
+	/* home_spd = cos_thd_cntl(COS_THD_INV_FRAME, cos_get_thd_id(), 2, 0); */
+	/* if (home_spd != failed) { */
 	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
+	/* } */
 
 	/* ramfs eager recovery */
 #if (!LAZY_RECOVERY)
@@ -515,8 +521,6 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 	}
 #endif
 	UNLOCK();
-
-
 }
 
 struct deps { short int client, server; };
@@ -592,6 +596,6 @@ void cos_init(void)
 	/* printc("<<<UNLOCK? yes>>>\n"); */
 	boot_deps_run();
 
-	printc("boot thread %d is leaving\n", cos_get_thd_id());
+	/* printc("boot thread %d is leaving\n", cos_get_thd_id()); */
 	return;
 }
