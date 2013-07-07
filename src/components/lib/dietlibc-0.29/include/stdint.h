@@ -43,6 +43,11 @@ typedef uint64_t uint_fast64_t;
      WCHAR_MIN, WCHAR_MAX
      WINT_MIN, WINT_MAX
 */
+// added by jiguo
+#define UINT8_MAX (255)
+#define UINT16_MAX (65535U)
+#define UINT32_MAX (4294967295UL)
+#define UINT64_MAX (18446744073709551615ULL)
 
 #endif	/* C++ && limit macros */
 
