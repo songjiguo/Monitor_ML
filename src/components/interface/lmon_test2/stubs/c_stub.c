@@ -27,7 +27,7 @@ extern vaddr_t lm_init(spdid_t spdid);
 CSTUB_FN_ARGS_1(int, lmon_test2, spdid_t, spdid)
 printc("\n cli (spd %ld) interface\n\n", cos_spd_id());
 if (first == 0) {
-	ck_ring_init(ring, NULL, size);
+	/* ck_ring_init(ring, NULL, size); */
 	lm_init(cos_spd_id());
 	
 	first = 1;

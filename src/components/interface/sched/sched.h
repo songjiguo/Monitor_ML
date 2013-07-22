@@ -41,4 +41,52 @@ int sched_create_thd_again(unsigned int tid);
 
 void sched_active_uc(int thd_id);
 
+
+// Jiguo  -------------->
+// Jiguo: add ck_ring support here to track context switch
+#include <ck_ring_cos.h>
+vaddr_t sched_csring_setup(vaddr_t par1, int par2);
+
+// context tracking
+struct cs_info {
+	int curr_thd;
+	int next_thd;
+	unsigned long long time_stamp;
+};
+
+vaddr_t sched_ring;
+int logsync_process;
+int logmon_spdid;
+
+#ifndef CK_RING_CONTINUOUS
+#define CK_RING_CONTINUOUS
+#endif
+
+#ifndef __CSRING_DEFINED
+#define __CSRING_DEFINED
+CK_RING(cs_info, logcs_ring);
+CK_RING_INSTANCE(logcs_ring) *cs_ring;
+#endif
+
+static inline void moncs_conf(struct cs_info *moncs)
+{
+	unsigned long long ts;
+	moncs->curr_thd = cos_get_thd_id();
+	rdtscll(ts);
+	moncs->time_stamp = ts;
+	return;
+}
+
+static inline void moncs_enqueue(unsigned short int thd_id)
+{
+	struct cs_info moncs;
+	
+	moncs_conf(&moncs);
+	moncs.next_thd = thd_id;
+        while (unlikely(!CK_RING_ENQUEUE_SPSC(logcs_ring, cs_ring, &moncs)));
+	return;
+}
+
+// Jiguo  <--------------
+
 #endif 	    /* !SCHED_H */

@@ -33,3 +33,5 @@ cos_asm_server_stub(sched_active_uc)
 
 // added to wake up all threads calling from the same spd	
 cos_asm_server_stub(sched_wakeup_spd_all)
+// Jiguo: for tracking CS
+cos_asm_server_stub(sched_csring_setup)

@@ -466,7 +466,6 @@ ck_ring_dequeue_spmc(struct ck_ring *ring, void *data)
 CK_CC_INLINE static void
 ck_ring_init(struct ck_ring *ring, void *buffer, unsigned int size)
 {
-
 	memset(buffer, 0, sizeof(void *) * size);
 	ring->size = size;
 	ring->mask = size - 1;
