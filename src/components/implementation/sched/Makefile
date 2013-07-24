@@ -1,4 +1,4 @@
-INTERFACES=sched sched_hier
+INTERFACES=sched sched_hier log_publisher
 DEPENDENCIES=printc sched_hier recovery_upcall mem_mgr
 
 include ../Makefile.subdir

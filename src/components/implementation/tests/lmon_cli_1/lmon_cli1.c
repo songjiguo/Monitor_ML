@@ -7,7 +7,6 @@
 #include <periodic_wake.h>
 #include <timed_blk.h>
 
-#include <logmonitor.h>
 #include <lmon_ser1.h>
 
 int high, low;

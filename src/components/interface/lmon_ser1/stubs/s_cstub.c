@@ -3,8 +3,7 @@
 
 #include <lmon_ser1.h>
 
-#include <ck_ring_cos.h>
-#include <logmonitor.h>
+#include <monitor.h>
 
 extern vaddr_t lm_init(spdid_t spdid);
 

@@ -413,6 +413,10 @@ done:
 	return 0;
 }
 
+// Jiguo: for tracking context switch --->
+#include <cs_monitor.h>
+static int cs_wait_thread;
+// Jiguo End above <--------
 
 /*************** Scheduler Synchronization Fns ***************/
 
@@ -432,27 +436,18 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_next->next_thd_id = thd_id;
 	cos_next->next_thd_flags = flags;
 
-// Jiguo: track context switch ----->
-// how to trigger the logsync_process in logmonitor??	
-	if (cs_ring && cos_get_thd_id() != 7){
-		int thdd = cos_get_thd_id();
-		
-		assert(cs_ring);
-		int capacity, size;
-		
-		size = CK_RING_SIZE(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
-		capacity = CK_RING_CAPACITY(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
-		/* printc("thd %d (next %d) : ring size  %u (cap %u)\n", thdd, thd_id, size, capacity); */
-		if (unlikely (capacity == size)) {
+        // Jiguo: track context switch ----->
+	// 7 is timer thread, should be tracked as well
+	/* if (cs_ring && cos_get_thd_id() != 7) moncs_enqueue(thd_id); */
+	if (cs_ring) {
+		if (unlikely(csring_is_full())) {
 			printc("csRing is full\n\n");
 			cos_sched_lock_release();
-			sched_wakeup(logmon_spdid, logsync_process);
+			sched_wakeup(cos_spd_id(), cs_wait_thread);
 			cos_sched_lock_take();
 		}
 		moncs_enqueue(thd_id);
 	}
-// Jiguo End above <--------
-
 	cos_sched_lock_release();
 
 	/* kernel will read next thread information from cos_next */

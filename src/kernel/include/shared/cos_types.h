@@ -309,6 +309,7 @@ typedef enum {
 	COS_UPCALL_RECOVERY,	   /* for mm recovery */
 	COS_UPCALL_REBOOT,	   /* for sched recovery */
 	COS_UPCALL_EAGER_RECOVERY, /* for compare lazy and eager */
+	COS_UPCALL_LOGMON_PROCESS, /* for log monitor process*/
 	COS_UPCALL_FAILURE_NOTIF,
 	COS_UPCALL_UNHANDLED_FAULT
 } upcall_type_t;

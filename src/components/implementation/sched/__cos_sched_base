@@ -1062,44 +1062,54 @@ int sched_cs_state(spdid_t spdid)
 	return ret;
 }
 
-// Jiguo: track context switch  --->
-/* struct test_init_csring { */
-/* 	CK_RING_INSTANCE(logcs_ring) test; */
-/* }csring_page[PAGE_SIZE/sizeof(CK_RING_INSTANCE(logcs_ring))]; */
+/* <<<<<< Jiguo: track context switch  >>>> */
 
-vaddr_t sched_csring_setup(vaddr_t par1, int par2)
+#include <log_publisher.h>
+
+/* cs_wait_thread: A thread within the scheduler, activated when the
+ * cs_ring is full and do the check/clean
+*/
+
+void sched_logpub_wait()
+{
+	cs_wait_thread = cos_get_thd_id();
+	sched_block(cos_spd_id(), 0);
+
+	return;
+}
+
+vaddr_t sched_logpub_setup(spdid_t spdid, vaddr_t ring_addr)
 {
 	char *addr, *hp;
 	vaddr_t ret = 0;
-
-	if (par2 == 0) {
-		assert(!logmon_spdid);
-		assert(!logsync_process);
-		logmon_spdid = par1;
-		logsync_process = cos_get_thd_id();
-		ret = (vaddr_t)cos_spd_id();
+	
+	cos_sched_lock_take();
+	assert(ring_addr);
+	
+	addr = cos_get_heap_ptr();
+	if (!addr) {
+		printc("fail to allocate a page from the heap\n");
 		goto done;
 	}
-	else if (par2 == 1) {
-		/* printc("csring page addr %p\n", (void *)csring_page); */
-		addr = cos_get_heap_ptr();
-		cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
-		if ((vaddr_t)addr != mman_get_page(cos_spd_id(), (vaddr_t)addr, 0)) assert(0);
-
-		/* printc("cli_ring is @ %p\n", (void *)par1); */
-		/* printc("target spd %d\n", logmon_spdid); */
-		if (unlikely(par1 != mman_alias_page(cos_spd_id(), (vaddr_t)addr, logmon_spdid, par1))) {
-			printc("alias rings (logspd %d) failed.\n", logmon_spdid);
-			ret = 0;
-			goto done;
-		}
-		cs_ring = (CK_RING_INSTANCE(logcs_ring) *)addr;
-		ret = (vaddr_t)addr;
+	cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
+	if ((vaddr_t)addr != mman_get_page(cos_spd_id(), (vaddr_t)addr, 0)) {
+		printc("fail to get a page from mmgr\n");
+		goto done;
 	}
+	
+	if (unlikely(ring_addr != mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, ring_addr))) {
+		printc("alias rings failed.\n");
+		goto done;
+	}
+	cs_ring = (CK_RING_INSTANCE(logcs_ring) *)addr;
+	ret = (vaddr_t)addr;
+	
 done:
+	cos_sched_lock_release();
 	return ret;
 }
 
+/* <<<<<< Jiguo: track context switch END  >>>> */
 
 /* 
  * component_{take|release} constitute the critical section
