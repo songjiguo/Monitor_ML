@@ -8,30 +8,31 @@
 #include <stdint.h>
 #include <monitor.h>
 
-/* printc("cap no is %p\n", (void *)uc->cap_no); */
-/* printc("inv fn addr is %p\n", (void *)uc->invocation_fn); */
-/* printc("cap no is %p\n", (void *)(uc->cap_no >> 16)); */
-/* printc("inv fn addr is %p\n", (void *) (uc->invocation_fn & 0xFFFF0000)); */
-/* printc("event_id %p\n", (void *)mon_evt.event_id); */
+// FIXME: this rb is per interface, not per component 
 
 unsigned long long start, end;
 
-CSTUB_FN_ARGS_1(int, lmon_ser1_test, spdid_t, spdid)
+CSTUB_FN_0(int, lmon_ser1_test)
 
-	int event_id;
-	/* printc("cli (spd %ld) interface -->\n", cos_spd_id()); */
 	if (unlikely(!cli_ring)) {
-		cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id()));
+		if (!(cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id())))) BUG();
 	}
-	assert(cli_ring);
-	event_id = (uc->invocation_fn & 0xFFFF0000) | (uc->cap_no >> 16);
+//FIXME: check if cli_ring has got correct return
+// If not, 1. call the server anyway
+//         2. put assert here
 
-        monevt_enqueue(event_id, 1);
+// FIXME: use cos_cap_cntl t and add GET_SER to get the ser and move this into log mgr
+        /* if(unlikely(!dest_spd)){ */
+	/* 	if ((dest_spd = cos_get_dest_by_cap(COS_GET_DEST_BY_CAP, cos_spd_id(), uc->cap_no)) <= 0) BUG(); */
+	/* 	printc("dest spd %d\n", dest_spd); */
+	/* } */
 
-CSTUB_ASM_2(lmon_ser1_test, spdid, event_id)
+// FIXME: issue, maybe not need this???
+	/* event_id = (uc->invocation_fn & 0xFFFF0000) | (uc->cap_no >> 16); */
 
-	/* printc("cli (spd %ld) interface <--\n", cos_spd_id()); */
-	monevt_enqueue(event_id, 2);
+        monevt_enqueue(uc->cap_no, INV_CLI1);
+CSTUB_ASM_0(lmon_ser1_test)
+        monevt_enqueue(cos_spd_id(), INV_CLI2);
 
 CSTUB_POST
 

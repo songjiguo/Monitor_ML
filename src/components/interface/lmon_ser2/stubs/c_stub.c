@@ -8,24 +8,14 @@
 #include <stdint.h>
 #include <monitor.h>
 
-unsigned long long start, end;
-
-CSTUB_FN_ARGS_1(int, lmon_ser2_test, spdid_t, spdid)
-
-	int event_id;
-	/* printc("cli (spd %ld) interface -->\n", cos_spd_id()); */
+CSTUB_FN_0(int, lmon_ser2_test)
 	if (unlikely(!cli_ring)) {
-		cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id()));
+		if (!(cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id())))) BUG();
 	}
-	assert(cli_ring);
-	event_id = (uc->invocation_fn & 0xFFFF0000) | (uc->cap_no >> 16);
 
-        monevt_enqueue(event_id, 1);
-
-CSTUB_ASM_2(lmon_ser2_test, spdid, event_id)
-
-	/* printc("cli (spd %ld) interface <--\n", cos_spd_id()); */
-	monevt_enqueue(event_id, 2);
+	monevt_enqueue(uc->cap_no, INV_CLI1);
+CSTUB_ASM_0(lmon_ser2_test)
+	monevt_enqueue(cos_spd_id(), INV_CLI2);
 
 CSTUB_POST
 

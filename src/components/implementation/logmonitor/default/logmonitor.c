@@ -17,8 +17,9 @@
 #include <timed_blk.h>
 
 #include <logmonitor.h>
-#include <monitor.h>
+#include <log_mgr.h>
 
+#include <monitor.h>
 #include <cs_monitor.h>
 #include <log_publisher.h>
 
@@ -59,11 +60,14 @@ static void init_thread_trace()
 static void print_evtinfo(struct event_info *entry)
 {
 	assert(entry);
-	printc("event id %p\n", (void *)entry->event_id);
-	printc("call or return? %d\n", entry->call_ret);
+	printc("type %d\n", entry->type);
 	printc("thd id %d\n", entry->thd_id);
-	printc("caller spd %d\n", entry->spd_id);
-	printc("time_stamp %llu\n\n", entry->time_stamp);
+	printc("from spd %d\n", entry->from_spd);
+
+	// FIXME: to_spd info can be pushed into stack an pop when return
+	/* printc("next spd %d\n", entry->dest_info); */
+
+	printc("time_stamp %llu\n", entry->time_stamp);
 	
 	return;
 }
@@ -73,8 +77,8 @@ static void print_csinfo(struct cs_info *csentry)
 {
 	assert(csentry);
 	printc("curr thd id %d\n", csentry->curr_thd);
-	printc("switch to thd id %d\n", csentry->next_thd);
-	printc("time_stamp %llu\n\n", csentry->time_stamp);
+	printc("next thd id %d\n", csentry->next_thd);
+	printc("time_stamp %llu\n", csentry->time_stamp);
 	
 	return;
 }
@@ -111,17 +115,17 @@ static unsigned long long report_tot_wcet(int thd_id)
 }
 
 // total exec time of a thread to the point when the check is being done within a spd
-static unsigned long long report_tot_spd_exec(int thd_id, int spd_id)
+static unsigned long long report_tot_spd_exec(int thd_id, int spdid)
 {
 	struct thd_trace *evt_list;
 
 	assert(thd_id);
-	assert(spd_id >= 0);
+	assert(spdid >= 0);
 
 	evt_list = &thd_trace[thd_id];
-	if (!evt_list->tot_spd_exec[spd_id] || !evt_list->wcet[spd_id]) return 0;
-	printc("thd %d (in spd %d) total exec --> %llu\n", thd_id, spd_id, evt_list->tot_spd_exec[spd_id]);
-	return evt_list->tot_spd_exec[spd_id];
+	if (!evt_list->tot_spd_exec[spdid] || !evt_list->wcet[spdid]) return 0;
+	printc("thd %d (in spd %d) total exec --> %llu\n", thd_id, spdid, evt_list->tot_spd_exec[spdid]);
+	return evt_list->tot_spd_exec[spdid];
 }
 
 // total exec time of a thread to the point when the check is being done
@@ -213,11 +217,6 @@ static int shared_ring_setup(spdid_t spdid) {
         }
         spdmon->cli_ring = cli_ring;
 
-	/* printc("mon:mon_ring addr %p\n", (void *)spdmon->mon_ring); */
-	/* printc("mon:cli ring addr %p\n", (void *)spdmon->cli_ring); */
-
-        /* Initialize the ring buffer. Passing NULL because we use
-         * continuous ring (struct + data region) */
         CK_RING_INIT(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_ring), NULL,
                      get_powerOf2((PAGE_SIZE)/ sizeof(struct event_info)));
 
@@ -240,7 +239,9 @@ err:
 
 
 // set up shared ring buffer between scheduler and log manager
-static int shared_csring_setup() {
+static int 
+shared_csring_setup() 
+{
         vaddr_t mon_csring, sched_csring;
 	char *addr, *hp;
 
@@ -252,109 +253,343 @@ static int shared_csring_setup() {
 
 	lmcs.mon_csring = mon_csring;
 
-	/* printc("mon_spd %d mon_csring addr %p\n", cos_spd_id(), (void *)mon_csring); */
 	sched_csring = sched_logpub_setup(cos_spd_id(), mon_csring);
 	assert(sched_csring);
 
-	/* printc("sched_csring addr %p\n", (void *)sched_csring); */
-		
         lmcs.sched_csring = sched_csring;
-
-	/* printc("mon:mon_ring addr %p\n", (void *)spdmon->mon_ring); */
-	/* printc("mon:cli ring addr %p\n", (void *)spdmon->cli_ring); */
 
         CK_RING_INIT(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)mon_csring), NULL,
                      get_powerOf2((PAGE_SIZE)/ sizeof(struct cs_info)));
 
-	/* if (CK_RING_SIZE(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_ring)) != 0) { */
-	/* 	printc("Ring should be empty: %u (cap %u)\n", */
-	/* 	       CK_RING_SIZE(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_ring)),  */
-	/* 	       CK_RING_CAPACITY(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_ring))); */
-	/* 	BUG(); */
-	/* } */
+	if (CK_RING_SIZE(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_csring)) != 0) {
+		printc("Ring should be empty \n");
+		BUG();
+	}
 
         return 0;
-
 err:
         return -1;
 }
 
-static void walk_thd_events()
+
+static void 
+update_timing_info(struct thd_trace *thd_trace_list, struct event_info *entry, int curr_spd)
 {
-	int i, j, thd_id;
-	int head, tail, size;
-        struct logmon_info *spdmon;
-        vaddr_t mon_ring, cli_ring;
-	CK_RING_INSTANCE(logevts_ring) *wk_evts;
-
-	struct event_info *entry;
-	struct thd_trace *evt_list;
-
 	unsigned long long exec_cal, exec_cal_prev;
 	unsigned long long exec_prev, exec_curr;
+	
+	exec_prev = exec_curr = exec_cal = exec_cal_prev = 0;
+
+	assert(thd_trace_list);
+	assert(entry);
+	
+	if (thd_trace_list->pair == 1) {
+		thd_trace_list->pair = 0;
+		exec_curr = entry->time_stamp;
+		/* printc("entry->thd_id is %d (spd %d)\n", entry->thd_id, i); */
+		exec_cal += exec_curr - exec_prev;
+		
+		thd_trace_list->tot_exec += exec_cal;
+		thd_trace_list->tot_spd_exec[curr_spd] += exec_cal;
+		/* thd_trace_list->tot_wcet += thd_trace_list->wcet[i];// ??? */
+		
+		if (entry->type == INV_SER2) {
+			if (exec_cal > thd_trace_list->wcet[curr_spd]) {
+				thd_trace_list->wcet[curr_spd] = exec_cal;
+			}
+			
+			if (!exec_cal_prev) {
+				thd_trace_list->exec[curr_spd] = exec_cal;
+				exec_cal_prev = exec_cal;
+			}
+			else {
+				thd_trace_list->exec[curr_spd] = (exec_cal + exec_cal_prev) >> 1;
+				exec_cal_prev = exec_cal = 0;
+			}
+		}
+	} else {
+		thd_trace_list->pair = 1;
+		exec_prev = entry->time_stamp;
+	}
+	
+	return;
+}
+
+/********** test functions ***********/
+// test purpose only
+static void 
+print_csrb(CK_RING_INSTANCE(logcs_ring) *csring)
+{
+	struct cs_info cs_entry;
+	assert(csring);
+
+	memset(&cs_entry, 0, sizeof(struct cs_info));
+	while(CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry) == 1) {
+		print_csinfo(&cs_entry);
+	}
+	
+	return;
+}
+
+static void
+print_evtrb(CK_RING_INSTANCE(logevts_ring) *evtring)
+{
+	struct event_info evt_entry;
+	assert(evtring);
+
+	memset(&evt_entry, 0, sizeof(struct event_info));
+	while(CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, &evt_entry) == 1) {
+		print_evtinfo(&evt_entry);
+	}
+	
+	return;
+}
+
+static void
+print_last_stop()
+{
+	int i;
+        struct logmon_info *spdmon;
+	CK_RING_INSTANCE(logevts_ring) *evtring;
+	
+	printc("\n\n all last stops\n");
+
+	for (i = 1; i < MAX_NUM_SPDS; i++) {
+		spdmon = &logmon_info[i];
+		evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
+		if (!evtring) continue;
+		if (spdmon->last_stop) {
+			/* printc("last stop (spd %d) thd %d\n", i, spdmon->last_stop->thd_id); */
+			print_evtinfo(spdmon->last_stop);
+		}
+	}
+	printc("END>>>\n");
+	return;
+}
+
+/********** Above are test functions ***********/
+
+/* the first item should always be the most recent ones that need to be processed */
+static int 
+lookup_currspd(int thdid)
+{
+	int i, ret = 0;
+        struct logmon_info *spdmon;
+	CK_RING_INSTANCE(logevts_ring) *evtring;
+	struct event_info evt_entry;
+	unsigned long long tmp_ts = LLONG_MAX;
+
+	for (i = 1; i < MAX_NUM_SPDS; i++) {
+		spdmon = &logmon_info[i];
+		evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
+		if (!evtring) continue;
+		/* print_evtrb(evtring); */
+		/* continue; */
+
+		if (spdmon->last_stop->thd_id == 0) {
+			if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, &evt_entry)) {
+				/* printc("Nothing to dequeue\n"); */
+				continue;
+			}
+			/* spdmon->last_stop = &evt_entry; // not right!!! */
+			/* printc("dequeue in lookup (spd %d)\n", i); */
+			spdmon->last_stop->thd_id = evt_entry.thd_id;
+			spdmon->last_stop->from_spd = evt_entry.from_spd;
+			spdmon->last_stop->type = evt_entry.type;
+			spdmon->last_stop->dest_info = evt_entry.dest_info;
+			spdmon->last_stop->time_stamp = evt_entry.time_stamp;
+		}
+
+		/* print_evtinfo(spdmon->last_stop); */
+		/* printc("evt_entry->thd_id %d (spd %d)\n", evt_entry->thd_id, i); */
+		printc("last stop (spd %d) thd %d\n", i, spdmon->last_stop->thd_id);
+		if (spdmon->last_stop->thd_id != thdid) continue;
+		if (spdmon->last_stop->time_stamp < tmp_ts) {
+			tmp_ts = spdmon->last_stop->time_stamp;
+			ret = i;
+		}
+	}
+
+	/* printc("thd %d has found ret %d\n", thdid, ret); */
+	return ret;
+}
+
+// Decide what the next spd will be, based on where the execution is within invocation 
+static int
+next_entry_spd(struct event_info *entry)
+{
+	int type, ret = 0;
+
+	assert(entry);
+	type = entry->type;
+	/* printc("type is %d\n", type); */
+
+	if (type == INV_CLI1) {
+		if ((ret = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->dest_info)) <= 0) {
+			printc("can not find ser spd\n");
+			BUG();
+		}
+		/* printc("dest spd %d\n", ret); */
+	} else 	ret = entry->dest_info;
+	
+	return ret;
+}
+
+
+// Question: how to pretend the period of a task?
+// FIXME: race condition on client, lm_init should return if rb exists
+
+// FIXME: move cap_no here to translate the dest_spd
+// FIXME: execution (name) for periodically insert and execute in a spd
+// FIXME: add a periodic task that call logmgr to report (maybe take parameters from run script)
+static void
+walk_through_events()
+{
+	int i, j, thd_id, size;
+        struct logmon_info *spdmon;
+        vaddr_t mon_ring, cli_ring;
+	CK_RING_INSTANCE(logevts_ring) *evts_ring;
+
+	struct event_info entry_curr, entry_next;
+	struct thd_trace *thd_trace_list;
+
+
+	int cs_size;
+	struct cs_info cs_entry_curr, cs_entry_next;
+	int curr_spd;
+	CK_RING_INSTANCE(logcs_ring) *csring;
+
+	memset(&cs_entry_curr, 0, sizeof(struct cs_info));
+	memset(&cs_entry_next, 0, sizeof(struct cs_info));
+	memset(&entry_curr, 0, sizeof(struct event_info));
+	memset(&entry_next, 0, sizeof(struct event_info));
 
 	init_thread_trace();
 
-	for (i = 0; i < MAX_NUM_SPDS; i++) {
-		exec_prev = exec_curr = exec_cal = exec_cal_prev = 0;
+	csring = (CK_RING_INSTANCE(logcs_ring) *)lmcs.mon_csring;
+	assert(csring);
+	cs_size = CK_RING_SIZE(logcs_ring, csring);
+
+	while(cs_size--) {
+
+		/* printc("cs_size %d\n", cs_size); */
+
+		if (cs_entry_next.curr_thd) {
+			cs_entry_curr.curr_thd = cs_entry_next.curr_thd;
+			cs_entry_curr.next_thd = cs_entry_next.next_thd;
+			cs_entry_curr.time_stamp = cs_entry_next.time_stamp;
+		} else {
+			/* print_csrb(csring); */
+			/* assert(0); */
+			if (!CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry_curr)){
+				/* printc("Nothing to dequeue\n"); */
+				// FIXME: ....
+				break;
+			}
+		}
+
+		if (!CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry_next)){
+			/* printc("Nothing to dequeue\n"); */
+			// FIXME: ....
+			break;
+		}
+
+		thd_trace_list = &thd_trace[cs_entry_curr.next_thd];
+		assert(thd_trace_list);
+		// FIXME: 1. go through this only when the thd created
+                //        2. later on, check stack to find which spd start from
+
+		/* print_csinfo(&cs_entry_curr); */
+		/* print_csinfo(&cs_entry_next); */
 		
-		spdmon = &logmon_info[i];
-		wk_evts = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
-		if(!wk_evts) continue;
+		unsigned long long s,e;
+		int cs_thd = cs_entry_curr.next_thd;
+		s = cs_entry_curr.time_stamp;
+		e = cs_entry_next.time_stamp;
 
-		size = CK_RING_SIZE(logevts_ring, wk_evts);
-		/* head = wk_evts->c_head; */
-		/* tail = wk_evts->p_tail; */
-		/* printc("wk: spd id %d (head %d tail %d)\n", i, head, tail); */
-		/* for (j = head; j < tail; j++){ */
-		for (j = 0; j < size; j++){
-			entry = &wk_evts->ring[j];
-			evt_list = &thd_trace[entry->thd_id];
-			if (unlikely(!evt_list->trace_head)) {
-				evt_list->trace_head = (void *)entry;
-				INIT_LIST(entry, next, prev);
-			}
-			else {
-				assert(evt_list->trace_head);
-				struct event_info *entry_tmp;
-				entry_tmp = (struct event_info *)evt_list->trace_head;
-				ADD_LIST(entry_tmp, entry, next, prev);
-			}
-			if (evt_list->pair == 1) {
-				evt_list->pair = 0;
-				exec_curr = entry->time_stamp;
-				/* printc("entry->thd_id is %d (spd %d)\n", entry->thd_id, i); */
-				exec_cal += exec_curr - exec_prev;
+		// find the spd that a thread starts from (home spd or the one left from the last process)
 
-				evt_list->tot_exec += exec_cal;
-				evt_list->tot_spd_exec[i] += exec_cal;
-				/* evt_list->tot_wcet += evt_list->wcet[i];// ??? */
+		printc("(cs next thd %d)\n", cs_entry_curr.next_thd);
+		curr_spd = lookup_currspd(cs_entry_curr.next_thd);
+		if (!curr_spd) {
+			/* printc("can not find curr spd \n"); */
+			continue;
+		}
+		/* print_last_stop(); */
+		/* assert(0); */
 
-				if (entry->call_ret == INV_LOOP_END) {
-					if (exec_cal > evt_list->wcet[i]) {
-						evt_list->wcet[i] = exec_cal;
-					}
-					
-					if (!exec_cal_prev) {
-						evt_list->exec[i] = exec_cal;
-						exec_cal_prev = exec_cal;
-					}
-					else {
-						evt_list->exec[i] = (exec_cal + exec_cal_prev) >> 1;
-						exec_cal_prev = exec_cal = 0;
-					}
-				}
+		while (1) {   // for now, only deal with threads has home spd
+			spdmon = &logmon_info[curr_spd];
+			assert(spdmon);
+
+			if (spdmon->last_stop->thd_id) {
+				/* printc("event from last_stop \n"); */
+				entry_curr.thd_id = spdmon->last_stop->thd_id;
+				entry_curr.from_spd = spdmon->last_stop->from_spd;
+				entry_curr.type = spdmon->last_stop->type;
+				entry_curr.dest_info = spdmon->last_stop->dest_info;
+				entry_curr.time_stamp = spdmon->last_stop->time_stamp;
+				spdmon->last_stop->thd_id = 0;
 			} else {
-				evt_list->pair = 1;
-				exec_prev = entry->time_stamp;
+				evts_ring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
+				if(!evts_ring) break;
+				/* printc("dequeue in walk (spd %d)\n", curr_spd); */
+				if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evts_ring, &entry_curr)) {
+					/* printc("Nothing to dequeue\n"); */
+					break;
+				}
+				/* printc("entry thd %d, cs next thd %d (to spd %d)\n",entry->thd_id, cs_entry->next_thd, entry->to_spd); */
 			}
+			
+			/* printc("<<*****\n"); */
+			/* print_evtinfo(&entry_curr); */
+			/* printc("*****>>\n"); */
+
+			if (entry_curr.time_stamp < s || 
+			    entry_curr.time_stamp >= e || 
+			    entry_curr.thd_id != cs_thd) {
+				/* printc("%llu %llu %llu \n",entry_curr.time_stamp, s,  e); */
+				/* printc("entry thd %d  cs thd %d \n",entry_curr.thd_id, cs_thd); */
+				
+				spdmon->last_stop->thd_id = entry_curr.thd_id;
+				spdmon->last_stop->from_spd = entry_curr.from_spd;
+				spdmon->last_stop->type = entry_curr.type;
+				spdmon->last_stop->dest_info = entry_curr.dest_info;
+				spdmon->last_stop->time_stamp = entry_curr.time_stamp;
+
+				/* printc("update last stop (spd %d) thd %d when break\n", curr_spd, spdmon->last_stop->thd_id); */
+
+				/* printc("break\n"); */
+				break;
+			}
+
+			/* // FIXME: not need maybe? */
+			/* if (unlikely(!thd_trace_list->trace_head)) { */
+			/* 	thd_trace_list->trace_head = (void *)&entry; */
+			/* 	INIT_LIST(&entry, next, prev); */
+			/* } */
+			/* else { */
+			/* 	assert(thd_trace_list->trace_head); */
+			/* 	struct event_info *entry_tmp; */
+			/* 	entry_tmp = (struct event_info *)thd_trace_list->trace_head; */
+			/* 	INIT_LIST(&entry, next, prev); */
+			/* 	ADD_LIST(entry_tmp, &entry, next, prev); */
+			/* } */
+
+			/* update_timing_info(thd_trace_list, &entry, curr_spd); */
+
+
+			// Add more functions here.... and detection later
+
+			curr_spd = next_entry_spd(&entry_curr);
+			/* printc("update to_spd %d\n\n", curr_spd); */
 		}
 	}
 
 	return;
 }
 
-static void walk_cs_events()
+static void walk_through_cs()
 {
 	int i, size;
 	CK_RING_INSTANCE(logcs_ring) *csring;
@@ -382,7 +617,9 @@ static void lm_csring_empty()
 		struct cs_info *cs_entry;
 		for (i = 0; i < size; i++){
 			cs_entry = &csring->ring[i];
-			moncs_dequeue(csring, cs_entry);
+			if (!CK_RING_DEQUEUE_SPSC(logcs_ring, csring, cs_entry)) {
+				printc("Nothing to dequeue\n");
+			}
 		}
 	}
 	
@@ -404,8 +641,10 @@ static void lm_evtsring_empty(spdid_t spdid)
 		struct event_info *evt_entry;
 		for (i = 0; i < size; i++){
 			evt_entry = &evtring->ring[i];
-			printc("caller spd %d\n", evt_entry->spd_id);
-			monevt_dequeue(evtring, evt_entry);
+			printc("caller spd %d\n", evt_entry->from_spd);
+			if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, evt_entry)) {
+				printc("Nothing to dequeue\n");
+			}
 		}
 	}
 
@@ -414,24 +653,7 @@ static void lm_evtsring_empty(spdid_t spdid)
 
 static int first = 0;
 
-// some spds above logmonitor is periodically calling into and do the violation check here
-void lm_sync_process()
-{
-	LOCK();
-
-	/* walk_thd_events(); */
-	// browse the event history for threads
-	/* int i; */
-	/* for (i = 1; i < MAX_NUM_THREADS; i++) print_thd_history(i); */
-	
-	/* walk_cs_events(); */
-	/* lm_report(); */
-
-	UNLOCK();
-	return;
-}
-
-// Now only one thread to check the log, there can be multiple threads
+// Now only one thread to check the log, there can be multiple threads inserting themselves
 // we can have something like lm_sync_period[NUM]
 unsigned int lm_get_sync_period()
 {
@@ -448,17 +670,17 @@ int lm_process(spdid_t spdid)
 	int i;
 
 	LOCK();
-	printc("lm_process is called\n");
+	printc("lm_process is called by thd %d\n", cos_get_thd_id());
 
-	walk_thd_events();
+	walk_through_events();
 
-	/* walk_cs_events(); */
+	/* walk_through_cs(); */
+	
 	/* lm_csring_empty(); */
-	/* walk_cs_events(); */
 
 	/* lm_evtsring_empty(11); */
 
-	lm_report();
+	/* lm_report(); */
 
 	UNLOCK();
 	return 0;
@@ -471,30 +693,38 @@ vaddr_t lm_init(spdid_t spdid)
 
 	LOCK();
 
-	spdmon = &logmon_info[spdid];
-
-	printc("lm_init...(thd %d spd %d)\n", cos_get_thd_id(), spdid);
 	assert(spdid);
+	spdmon = &logmon_info[spdid];
+	
+	assert(spdmon);
+	// limit one RB per component here
+	if (spdmon->mon_ring && spdmon->cli_ring){
+		ret = spdmon->mon_ring;
+		goto done;
+	}
+
+	/* printc("lm_init...(thd %d spd %d)\n", cos_get_thd_id(), spdid); */
 	if (shared_ring_setup(spdid)) {
 		printc("failed to setup shared rings\n");
-		BUG();
+		goto done;
 	}
 	assert(spdmon->cli_ring);
 	ret = spdmon->cli_ring;
-	/* printc("cli_ring addr %p\n", (void *)ret); */
-
+done:
 	UNLOCK();
 	return ret;
 }
 
-void cos_init(void *d)
+void 
+cos_init(void *d)
 {
 	static int first = 0;
-	union sched_param sp;
 	int i, j;
 	int ttt = 0;
 	
-	if(first == 0){
+	if (first == 0) {
+		union sched_param sp;
+
 		first = 1;
 
 		lock_static_init(&lm_lock);
@@ -503,6 +733,9 @@ void cos_init(void *d)
 		memset(logmon_info, 0, sizeof(struct logmon_info) * MAX_NUM_SPDS);
 		for (i = 0; i < MAX_NUM_SPDS; i++) {
 			logmon_info[i].spdid = i;
+			logmon_info[i].mon_ring = 0;
+			logmon_info[i].cli_ring = 0;
+			logmon_info[i].last_stop = (struct event_info *)malloc(sizeof(struct event_info));
 		}
 
 		/* memset(spd_trace, 0, sizeof(struct spd_trace) * MAX_NUM_SPDS); */
@@ -512,6 +745,8 @@ void cos_init(void *d)
 		/* } */
 
 		memset(&lmcs, 0, sizeof(struct logmon_cs));
+		lmcs.mon_csring = 0;
+		lmcs.sched_csring = 0;
 
 		/* sp.c.type = SCHEDP_PRIO; */
 		/* sp.c.value = 9; */
@@ -520,34 +755,35 @@ void cos_init(void *d)
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 10;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
-
-	} else {
-		printc("lm_sync process init...(thd %d)\n", cos_get_thd_id());
-		lm_sync_period = LM_SYNC_PERIOD;
-		timed_event_block(cos_spd_id(), 30);
-		if (shared_csring_setup()) {
-			printc("failed to set up shared cs ");
+		
+		return;
+	} 
+	printc("lm_sync process init...(thd %d)\n", cos_get_thd_id());
+	lm_sync_period = LM_SYNC_PERIOD;
+	timed_event_block(cos_spd_id(), 50); // FIXME: rely on less services
+	if (shared_csring_setup()) {
+		printc("failed to set up shared cs ");
 			BUG();
-		}
-		while(1) {
-			sched_logpub_wait();
-			lm_process(cos_spd_id());
-		}
+	}
+	while(1) {
+		sched_logpub_wait();
+		printc("cs ring is full\n");
+		lm_process(cos_spd_id());
 	}
 	return;
 }
  
 
-void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
-{
-	switch (t) {
-	case COS_UPCALL_LOGMON_PROCESS:
-		printc("logmonitor upcall: thread %d\n", cos_get_thd_id());
-		break;
-	default:
-		cos_init(NULL);
-	}
-	return;
-}
+/* void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3) */
+/* { */
+/* 	switch (t) { */
+/* 	case COS_UPCALL_LOGMON_PROCESS: */
+/* 		printc("logmonitor upcall: thread %d\n", cos_get_thd_id()); */
+/* 		break; */
+/* 	default: */
+/* 		cos_init(NULL); */
+/* 	} */
+/* 	return; */
+/* } */
 
 

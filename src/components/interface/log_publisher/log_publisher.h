@@ -8,5 +8,6 @@
 
 vaddr_t sched_logpub_setup(spdid_t spdid, vaddr_t ring_addr);
 void sched_logpub_wait(void);
+int sched_logpop_homespd(spdid_t spdid, int thdid);
 
 #endif 	    /* !LOG_PUB_H */

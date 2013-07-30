@@ -27,7 +27,7 @@ static inline int csring_is_full()
 	capacity = CK_RING_CAPACITY(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
 	size = CK_RING_SIZE(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
 	
-	if (capacity == size + 50) {
+	if (capacity == size + 1) {
 		return 1;
 	}
 
@@ -56,23 +56,5 @@ static inline void moncs_enqueue(unsigned short int thd_id)
 
         while (unlikely(!CK_RING_ENQUEUE_SPSC(logcs_ring, cs_ring, &moncs)));
 
-	return;
-}
-
-/* only done by the log monitor  */
-static inline void moncs_dequeue(CK_RING_INSTANCE(logcs_ring) *ring, struct cs_info *moncs)
-{
-	int capacity, size;
-
-	assert(ring);
-
-	size = CK_RING_SIZE(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)ring));
-	if (unlikely (size == 0)) {
-		printc("Queue is already empty before dequeue\n");
-		return;
-	}
-
-	/* printc("CALL DEQUEUE szie %d!!!!\n", size); */
-	while (CK_RING_DEQUEUE_SPSC(logcs_ring, ring, moncs) == 0);
 	return;
 }

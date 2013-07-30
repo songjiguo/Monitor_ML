@@ -381,6 +381,49 @@ fault_ipc_invoke(struct thread *thd, vaddr_t fault_addr, int flags, struct pt_re
 	return __fault_ipc_invoke(thd, fault_addr, flags, regs, fault_num, NULL);
 }
 
+/* COS_SYSCALL int */
+/* cos_syscall_get_dest(int spdid, int option, spdid_t d_spdid, unsigned int cap_no) */
+/* { */
+/* 	int dest_spdid = 0; */
+/* 	struct spd *this_spd, *dest_spd; */
+/* 	struct invocation_cap *cap_entry; */
+/* 	unsigned int cap_no_origin; */
+	
+/* 	this_spd   = spd_get_by_index(spdid); */
+/* 	if (!this_spd) { */
+/* 		printk("cos: invalid sys call for spd %d\n", spdid); */
+/* 		return -1; */
+/* 	} */
+	
+/* 	cap_no >>= 20; */
+
+/* 	if (unlikely(cap_no >= MAX_STATIC_CAP)) { */
+/* 		printk("cos: capability %d greater than max\n", */
+/* 		       cap_no); */
+/* 		return -1; */
+/* 	} */
+
+/* 	cap_entry = &invocation_capabilities[cap_no]; */
+
+/* 	if (unlikely(!cap_entry->owner)) { */
+/* 		printk("cos: No owner for cap %d.\n", cap_no); */
+/* 		return -1; */
+/* 	} */
+
+/* 	switch(option) { */
+/* 	case COS_GET_DEST_BY_CAP: */
+/* 		dest_spd = cap_entry->destination; */
+/* 		dest_spdid = spd_get_index(dest_spd); */
+/* 		/\* printk("cos: dest spd %d\n", dest_spdid); *\/ */
+/* 		break; */
+/* 	default: */
+/* 		return -1; */
+/* 		break; */
+/* 	} */
+
+/* 	return dest_spdid;	 */
+/* } */
+
 
 /* fault notification related functions */
 
@@ -4163,17 +4206,23 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 	struct spd *cspd, *sspd = NULL;
 	spdid_t cspdid, sspdid;
 
+	struct invocation_cap *cap_entry;  // Jiguo: for monitor
+
 	/* TODO: access control */
 
-	cspdid = arg1 >> 16;
-	cspd = spd_get_by_index(cspdid);
-	if (!cspd) return -1;
-	if (option == COS_CAP_GET_INVCNT) {
-		sspdid = 0xFFFF & arg1;
-		sspd = spd_get_by_index(sspdid);
-		if (!sspd) return -1;
+	if (option == COS_CAP_GET_SER_SPD) {   //Jiguo: for monitor
+		capid = arg2 >> 20;
 	} else {
-		capid =  0xFFFF & arg1;
+		cspdid = arg1 >> 16;
+		cspd = spd_get_by_index(cspdid);
+		if (!cspd) return -1;
+		if (option == COS_CAP_GET_INVCNT) {
+			sspdid = 0xFFFF & arg1;
+			sspd = spd_get_by_index(sspdid);
+			if (!sspd) return -1;
+		} else {
+			capid =  0xFFFF & arg1;
+		}
 	}
 
 	switch (option) {
@@ -4182,6 +4231,12 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 		assert((vaddr_t)cspd->user_cap_tbl == va);
 		
 		ret = spd_read_reset_invocation_cnt(cspd, sspd);
+		break;
+	case COS_CAP_GET_SER_SPD:   // Jiguo: use this to decide what the dest spd is for
+		cap_entry = &invocation_capabilities[capid];
+		if (!cap_entry) ret = -1;
+		else ret = spd_get_index(cap_entry->destination);
+		/* printk("cos: dest spd %d\n", ret); */
 		break;
 	case COS_CAP_SET_FAULT:
 		if (spd_cap_set_fault_handler(cspd, capid, arg2)) ret = -1;

@@ -344,6 +344,8 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 {
 	unsigned int prio = PRIO_LOWEST;
 	struct sched_thd *c;
+
+	struct sched_param_s *t_ps = ps;
 	
 	assert(t);
 	while (ps->type != SCHEDP_NOOP) {
@@ -405,6 +407,16 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 	}
 	if (sched_thd_ready(t)) fp_rem_thd(t);
 	fp_add_thd(t, prio);
+
+
+	// Jiguo: add thread so we can tell which is home spd (for log monitor)
+	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {
+		if (cos_sched_cntl(COS_SCHED_RECORD_THD, t->id, 0)) BUG();
+		if (cos_sched_cntl(COS_SCHED_RECORD_PRIO, t->id, prio)) BUG();
+		if (cos_sched_cntl(COS_SCHED_RECORD_VALUE, t->id, (int)t_ps->type)) BUG();
+	}
+
+
 	
 	return 0;
 }

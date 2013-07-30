@@ -1109,6 +1109,20 @@ done:
 	return ret;
 }
 
+int sched_logpop_homespd(spdid_t spdid, int thd_id)
+{
+	void *dest;
+	assert(thd_id);
+	dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
+	
+	if (!dest) {
+		printc("can not find home spd\n");
+		return 0;
+	}
+
+	return (int)dest;
+}
+
 /* <<<<<< Jiguo: track context switch END  >>>> */
 
 /* 

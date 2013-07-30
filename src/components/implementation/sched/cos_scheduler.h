@@ -438,10 +438,9 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 
         // Jiguo: track context switch ----->
 	// 7 is timer thread, should be tracked as well
-	/* if (cs_ring && cos_get_thd_id() != 7) moncs_enqueue(thd_id); */
-	if (cs_ring) {
+	if (cs_ring && cos_get_thd_id() != 7) {
+	/* if (cs_ring) { */
 		if (unlikely(csring_is_full())) {
-			printc("csRing is full\n\n");
 			cos_sched_lock_release();
 			sched_wakeup(cos_spd_id(), cs_wait_thread);
 			cos_sched_lock_take();

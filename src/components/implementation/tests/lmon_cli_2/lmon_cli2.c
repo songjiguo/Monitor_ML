@@ -33,12 +33,12 @@ cos_init(void)
 
 	} else {
 		if (cos_get_thd_id() == high) {
-			timed_event_block(cos_spd_id(), 20);
+			timed_event_block(cos_spd_id(), 50);
 			i = 0;
 			while(i++ < ITER) lmon_ser1_test();
 		}
 		if (cos_get_thd_id() == low) {
-			timed_event_block(cos_spd_id(), 20);
+			timed_event_block(cos_spd_id(), 50);
 			j = 0;
 			while(j++ < ITER) lmon_ser1_test();
 		}
