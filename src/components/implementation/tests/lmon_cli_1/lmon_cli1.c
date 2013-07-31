@@ -10,6 +10,7 @@
 #include <lmon_ser1.h>
 
 int high, low;
+int warm;
 
 #define ITER 5
 
@@ -22,6 +23,10 @@ cos_init(void)
 	
 	if(first == 0){
 		first = 1;
+
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 10;
+		warm = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 11;
@@ -42,6 +47,13 @@ cos_init(void)
 			j = 0;
 			while(j++ < ITER) lmon_ser1_test();
 		}
+
+		if (cos_get_thd_id() == warm) {
+			timed_event_block(cos_spd_id(), 50);
+			i = 0;
+			while(i++ < ITER) lmon_ser1_test();
+		}
+
 	}
 
 	return;

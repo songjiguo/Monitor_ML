@@ -13,9 +13,9 @@ CSTUB_FN_0(int, lmon_ser2_test)
 		if (!(cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id())))) BUG();
 	}
 
-	monevt_enqueue(uc->cap_no, INV_CLI1);
+	monevt_enqueue(uc->cap_no);
 CSTUB_ASM_0(lmon_ser2_test)
-	monevt_enqueue(cos_spd_id(), INV_CLI2);
+	monevt_enqueue(cos_spd_id());
 
 CSTUB_POST
 

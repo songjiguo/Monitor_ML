@@ -2,6 +2,9 @@
     header file for only log_mgr
 */
 
+#ifndef   	LOG_MGR_H
+#define   	LOG_MGR_H
+
 // MOVE these to implementation directory FIXME:
 /* ring buffer for event flow (per spd) */
 struct logmon_info {
@@ -21,16 +24,34 @@ struct logmon_cs {
 /*
   Track related
 */
+
+#define MAX_SPD_TRACK 1024
+
 // FIXME: might not need save all information in log_process
 /* per-thread event flow, updated within the log_monitor  */
 struct thd_trace {
 	int thd_id;
-	unsigned long long exec[MAX_NUM_SPDS]; // not moving avg FIXME:
+
+	unsigned long long alpha_exec[MAX_NUM_SPDS];  // initial entry in a spd
+	unsigned long long avg_exec[MAX_NUM_SPDS]; // not moving avg FIXME:
+	unsigned long long last_exec[MAX_NUM_SPDS];  // tmp use
+
 	unsigned long long tot_spd_exec[MAX_NUM_SPDS]; // total exec in spd
-	unsigned long long wcet[MAX_NUM_SPDS];
+	unsigned int tot_inv[MAX_NUM_SPDS];
+
+	unsigned long long upto_wcet[MAX_NUM_SPDS];  // wcet below a spd
+	unsigned long long tot_upto_wcet[MAX_NUM_SPDS];
+	unsigned long long wcet[MAX_NUM_SPDS];        // wcet among all invocations in a spd
+	unsigned long long tot_wcet[MAX_NUM_SPDS];   // all wcet below a spd
+	unsigned long long this_wcet[MAX_NUM_SPDS];   // wcet in one invocation in a spd
+
 	unsigned long long tot_exec;
-	unsigned long long tot_wcet;   // FIXME: should be the total wcet of thread w/ invk number
-	int pair; // test only (can be used to indicate if wait for the next pair, e.g, call-return)
+
+	int curr_pos;
+	int spd_trace[MAX_SERVICE_DEPTH];  // 31 for max depth
+	int total_pos;
+	int all_spd_trace[MAX_SPD_TRACK];  // 1024 for max spd invoked
+
 	/* struct event_info *entry; */
 	void *trace_head;
 };
@@ -58,3 +79,5 @@ static unsigned int get_powerOf2(unsigned int orig) {
 
         return (v == orig) ? v : v >> 1;
 }
+
+#endif

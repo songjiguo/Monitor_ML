@@ -30,9 +30,9 @@ CSTUB_FN_0(int, lmon_ser1_test)
 // FIXME: issue, maybe not need this???
 	/* event_id = (uc->invocation_fn & 0xFFFF0000) | (uc->cap_no >> 16); */
 
-        monevt_enqueue(uc->cap_no, INV_CLI1);
+        monevt_enqueue(uc->cap_no);
 CSTUB_ASM_0(lmon_ser1_test)
-        monevt_enqueue(cos_spd_id(), INV_CLI2);
+        monevt_enqueue(cos_spd_id());
 
 CSTUB_POST
 

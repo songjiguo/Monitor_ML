@@ -16,9 +16,9 @@ vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
 		assert(cli_ring);
 	}
 
-	monevt_enqueue(cos_spd_id(), INV_SER1);
+	monevt_enqueue(cos_spd_id());
 	ret = lmon_ser1_test();
-	monevt_enqueue(0, INV_SER2);  // the return spd should be popped from stack
+	monevt_enqueue(0);  // the return spd should be popped from stack
 
 	return ret;
 }

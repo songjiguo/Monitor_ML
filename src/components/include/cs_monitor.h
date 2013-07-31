@@ -1,5 +1,8 @@
 /* Header file for tracking context switch, within scheduler(cos_scheduler.h) */
 
+#ifndef   	CS_MONITOR_H
+#define   	CS_MONITOR_H
+
 #include <ck_ring_cos.h>
 
 // context tracking
@@ -58,3 +61,5 @@ static inline void moncs_enqueue(unsigned short int thd_id)
 
 	return;
 }
+
+#endif
