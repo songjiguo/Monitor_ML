@@ -481,6 +481,14 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 			next = target;
 		}
 		next = resolve_dependencies(next);
+
+		// Jiguo: test
+		/* printc("3  next %d current %d\n", next->id, current->id); */
+		if (next->id == 15 && current->id == 15) {
+			next = sched_get_mapping(14);
+		}
+		// Jiguo: end
+
 		if (next == current) goto done;
 
 		if (sched_is_child() && unlikely(next == idle)) {
@@ -493,10 +501,15 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 		}
 		if (sched_thd_grp(next)) flags |= COS_SCHED_CHILD_EVT;
 
-		assert(!sched_thd_blocked(next));
+		/* // Jiguo: test only */
+		/* if (next->id != 17) { */
+		/* 	assert(!sched_thd_blocked(next)); */
+		/* } */
+		/* // Jiguo: end */
+
+		/* assert(!sched_thd_blocked(next)); */
 		report_event(SWITCH_THD);
 		timer_end(&t);
-
 		ret = cos_switch_thread_release(next->id, flags);
 		assert(ret != COS_SCHED_RET_ERROR);
 		if (COS_SCHED_RET_CEVT == ret) { report_event(CEVT_RESCHED); }
@@ -813,7 +826,7 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 	/* unsigned long ll = 0; */
 	/* while(ll++ < 1000000); */
 		
-	/* printc("thread %d waking up thread %d. %d\n", cos_get_thd_id(), thd_id, 0); */
+	/* printc("thread %d waking up thread %d\n", cos_get_thd_id(), thd_id); */
 	thd = sched_get_mapping(thd_id);
 	if (!thd) goto error;
 	
@@ -1015,7 +1028,7 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 				goto unblock;
 			}
 		} else {
-			/* printc("no depden 1 block here (thd %d)\n", cos_get_thd_id());5B */
+			/* printc("no depden 1 block here (thd %d)\n", cos_get_thd_id()); */
 			sched_switch_thread(0, BLOCK_LOOP);
 			/* printc("no depden 2 block here (thd %d)\n", cos_get_thd_id()); */
 			cos_sched_lock_take();

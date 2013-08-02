@@ -39,25 +39,25 @@ print_csinfo(struct cs_info *csentry)
 	return;
 }
 
-// print all event info for a thread
-static void 
-print_thd_history(int thd_id)
-{
-	assert(thd_id);
-	struct thd_trace *evt_list;
-	evt_list = &thd_trace[thd_id];
-	assert(evt_list);
-	if (evt_list->trace_head) {
-		struct event_info *entry_iter;
-		for (entry_iter = LAST_LIST((struct event_info *)evt_list->trace_head, next, prev) ;
-		     entry_iter!= evt_list->trace_head;
-		     entry_iter = LAST_LIST(entry_iter, next, prev)) {
-			print_evtinfo(entry_iter);
-		}
-	}
+/* // print all event info for a thread */
+/* static void  */
+/* print_thd_history(int thd_id) */
+/* { */
+/* 	assert(thd_id); */
+/* 	struct thd_trace *evt_list; */
+/* 	evt_list = &thd_trace[thd_id]; */
+/* 	assert(evt_list); */
+/* 	if (evt_list->trace_head) { */
+/* 		struct event_info *entry_iter; */
+/* 		for (entry_iter = LAST_LIST((struct event_info *)evt_list->trace_head, next, prev) ; */
+/* 		     entry_iter!= evt_list->trace_head; */
+/* 		     entry_iter = LAST_LIST(entry_iter, next, prev)) { */
+/* 			print_evtinfo(entry_iter); */
+/* 		} */
+/* 	} */
 
-	return;
-}
+/* 	return; */
+/* } */
 
 static void 
 print_csrb(CK_RING_INSTANCE(logcs_ring) *csring)

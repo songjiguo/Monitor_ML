@@ -4,6 +4,7 @@
 #include <sched.h>
 #include <pong.h>
 
+#include <pingpong_test.h>
 
 #define NUM 6
 

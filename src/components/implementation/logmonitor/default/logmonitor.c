@@ -422,19 +422,12 @@ static void
 lm_csring_empty()
 {
 	int i, size;
+	struct cs_info cs_entry;
 	CK_RING_INSTANCE(logcs_ring) *csring;
 	csring = (CK_RING_INSTANCE(logcs_ring) *)lmcs.mon_csring;
 	if (csring) {
-		size = CK_RING_SIZE(logcs_ring, csring);
-		struct cs_info *cs_entry;
-		for (i = 0; i < size; i++){
-			cs_entry = &csring->ring[i];
-			if (!CK_RING_DEQUEUE_SPSC(logcs_ring, csring, cs_entry)) {
-				printc("Nothing to dequeue\n");
-			}
-		}
+		while (CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry));
 	}
-	
 	return;
 }
 
@@ -445,20 +438,13 @@ lm_evtsring_empty(spdid_t spdid)
 	int i, size;
         struct logmon_info *spdmon;
 	CK_RING_INSTANCE(logevts_ring) *evtring;
+	struct event_info evt_entry;
 
         assert(spdid);
 	spdmon = &logmon_info[spdid];
 	evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
 	if (evtring) {
-		size = CK_RING_SIZE(logevts_ring, evtring);
-		struct event_info *evt_entry;
-		for (i = 0; i < size; i++){
-			evt_entry = &evtring->ring[i];
-			printc("caller spd %d\n", evt_entry->from_spd);
-			if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, evt_entry)) {
-				printc("Nothing to dequeue\n");
-			}
-		}
+		while (CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, &evt_entry));
 	}
 
 	return;
@@ -503,17 +489,15 @@ lm_process(spdid_t spdid)
 	int i;
 
 	LOCK();
-	printc("lm_process is called by thd %d\n", cos_get_thd_id());
+	printc("lm_process is called by thd %d (passed spd %d)\n", cos_get_thd_id(), spdid);
 
-	walk_through_events();
+	/* walk_through_events(); */
+	/* lm_report(); */
 
-	/* walk_through_cs(); */
-	
-	/* lm_csring_empty(); */
+	/* lm_evtsring_empty(spdid); */
+	lm_csring_empty();
 
-	/* lm_evtsring_empty(11); */
 
-	lm_report();
 
 	UNLOCK();
 	return 0;
@@ -587,7 +571,7 @@ cos_init(void *d)
 		/* logmon_process = sched_create_thd(cos_spd_id(), sp.v, 0, 0); */
 
 		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 10;
+		sp.c.value = 8;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 		
 		return;

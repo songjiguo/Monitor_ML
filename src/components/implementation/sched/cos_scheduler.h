@@ -438,6 +438,7 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 
         // Jiguo: track context switch ----->
 	// 7 is timer thread, should be tracked as well
+	/* printc("curr %d next %d\n", cos_get_thd_id(), thd_id); */
 	if (cs_ring && cos_get_thd_id() != 7) {
 	/* if (cs_ring) { */
 		if (unlikely(csring_is_full())) {
@@ -447,6 +448,8 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 		}
 		moncs_enqueue(thd_id);
 	}
+        // Jiguo: track context switch <------end
+
 	cos_sched_lock_release();
 
 	/* kernel will read next thread information from cos_next */

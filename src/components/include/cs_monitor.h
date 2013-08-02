@@ -31,6 +31,8 @@ static inline int csring_is_full()
 	size = CK_RING_SIZE(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
 	
 	if (capacity == size + 1) {
+		printc("cs ring (spd %ld) is full\n", cos_spd_id());
+		printc("cap %d size %d\n", capacity, size);
 		return 1;
 	}
 

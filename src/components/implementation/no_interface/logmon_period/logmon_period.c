@@ -30,7 +30,6 @@ void cos_init(void)
 			periodic_wake_create(cos_spd_id(), lm_sync_period);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				/* lm_sync_process(); */
 				lm_process(cos_spd_id());
 			}
 		}
