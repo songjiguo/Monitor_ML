@@ -1075,28 +1075,68 @@ int sched_cs_state(spdid_t spdid)
 	return ret;
 }
 
-/* <<<<<< Jiguo: track context switch  >>>> */
 
+/* <<<<<< Jiguo: sched log events ring  >>>> */
 #include <log_publisher.h>
+
+/* event_init_thread: A thread within the scheduler, activated when the
+ * spd needs initialize the events ring buffer
+*/
+static int spd_test = 0;
+
+int sched_logevent_init(spdid_t spdid)
+{
+	int ret = 0;
+
+	event_init_thread = cos_get_thd_id();
+	sched_block(cos_spd_id(), 0);
+
+	printc("spd_test is %d\n", spd_test);
+	ret = spd_test;
+	return ret;
+}
 
 /* cs_wait_thread: A thread within the scheduler, activated when the
  * cs_ring is full and do the check/clean
 */
 
-void sched_logpub_wait()
+int sched_logpub_wait(spdid_t spdid)
 {
+	int ret = 0;
 	cs_wait_thread = cos_get_thd_id();
+	printc("have the thread waits here\n");
 	sched_block(cos_spd_id(), 0);
 
-	return;
+	ret = cos_spd_id();
+	return ret;
 }
 
-vaddr_t sched_logpub_setup(spdid_t spdid, vaddr_t ring_addr)
+/* <<<<<< Jiguo: process the log if full  >>>> */
+int sched_logprocess_wake(spdid_t spdid, int type)
+{
+	if (!cs_wait_thread) return 0;
+	if (!event_init_thread) return 0;
+	assert(spdid);
+	// 1: events, 0:cs
+	spd_test = spdid;
+	if (type == 1) sched_wakeup(cos_spd_id(), event_init_thread);
+	if (type == 0) sched_wakeup(cos_spd_id(), cs_wait_thread);
+	return 1;
+}
+
+
+vaddr_t sched_logpub_setup(spdid_t spdid, vaddr_t ring_addr, int type)
 {
 	char *addr, *hp;
 	vaddr_t ret = 0;
 	
 	cos_sched_lock_take();
+
+	if (ring_addr == 0) {
+		ret = (vaddr_t) cos_spd_id();
+		goto done;
+	}
+
 	assert(ring_addr);
 	
 	addr = cos_get_heap_ptr();
@@ -1114,7 +1154,15 @@ vaddr_t sched_logpub_setup(spdid_t spdid, vaddr_t ring_addr)
 		printc("alias rings failed.\n");
 		goto done;
 	}
-	cs_ring = (CK_RING_INSTANCE(logcs_ring) *)addr;
+
+        // events ring
+	if (type == 1) {
+		printc("ready to set up an event RB\n");
+		cli_ring = (CK_RING_INSTANCE(logevts_ring) *)addr;
+	}
+	// cs ring
+	if (type == 0) cs_ring = (CK_RING_INSTANCE(logcs_ring) *)addr;
+	
 	ret = (vaddr_t)addr;
 	
 done:

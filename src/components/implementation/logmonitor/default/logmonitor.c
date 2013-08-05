@@ -102,6 +102,7 @@ shared_ring_setup(spdid_t spdid) {
         }
         spdmon->cli_ring = cli_ring;
 
+	// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))
         CK_RING_INIT(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_ring), NULL,
                      get_powerOf2((PAGE_SIZE)/ sizeof(struct event_info)));
 
@@ -123,12 +124,11 @@ err:
 }
 
 
-// set up shared ring buffer between scheduler and log manager
+// set up shared ring buffer between scheduler and log manager for CS
 static int 
 shared_csring_setup() 
 {
         vaddr_t mon_csring, sched_csring;
-	char *addr, *hp;
 
         mon_csring = (vaddr_t)cos_get_vas_page();
         if (!mon_csring) {
@@ -138,7 +138,7 @@ shared_csring_setup()
 
 	lmcs.mon_csring = mon_csring;
 
-	sched_csring = sched_logpub_setup(cos_spd_id(), mon_csring);
+	sched_csring = sched_logpub_setup(cos_spd_id(), mon_csring, 0);
 	assert(sched_csring);
 
         lmcs.sched_csring = sched_csring;
@@ -146,7 +146,47 @@ shared_csring_setup()
         CK_RING_INIT(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)mon_csring), NULL,
                      get_powerOf2((PAGE_SIZE)/ sizeof(struct cs_info)));
 
-	if (CK_RING_SIZE(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_csring)) != 0) {
+	if (CK_RING_SIZE(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)mon_csring)) != 0) {
+		printc("Ring should be empty \n");
+		BUG();
+	}
+
+        return 0;
+err:
+        return -1;
+}
+
+// set up shared ring buffer between scheduler and log manager for events
+static int 
+shared_sched_ring_setup() 
+{
+        struct logmon_info *spdmon;
+        vaddr_t mon_ring, sched_ring;
+
+	spdid_t spdid;
+	// get sched spdid
+	spdid = (spdid_t)sched_logpub_setup(cos_spd_id(), 0, 0);
+        assert(spdid);
+
+	spdmon = &logmon_info[spdid];
+
+        mon_ring = (vaddr_t)cos_get_vas_page();
+        if (!mon_ring) {
+                printc(" alloc ring buffer failed in logmonitor %ld.\n", cos_spd_id());
+                goto err;
+        }
+
+	spdmon->mon_ring = mon_ring;
+
+	sched_ring = sched_logpub_setup(cos_spd_id(), mon_ring, 1);
+	assert(sched_ring);
+
+        spdmon->cli_ring = sched_ring;
+
+        CK_RING_INIT(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_ring), NULL,
+                     get_powerOf2((PAGE_SIZE)/ sizeof(struct event_info)));
+
+	if (CK_RING_SIZE(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)mon_ring)) != 0) {
 		printc("Ring should be empty \n");
 		BUG();
 	}
@@ -204,6 +244,25 @@ get_head_entry(int thdid)
 	return ret;
 }
 
+
+static void 
+update_stack_info(struct thd_trace *thd_trace_list, int spdid)
+{
+	assert(thd_trace_list);
+		
+	if (spdid) {
+		assert (thd_trace_list->curr_pos < MAX_SERVICE_DEPTH);
+		thd_trace_list->spd_trace[thd_trace_list->curr_pos++] = spdid;
+		assert (thd_trace_list->total_pos < MAX_SPD_TRACK);
+		thd_trace_list->all_spd_trace[thd_trace_list->total_pos++] = spdid;
+	} else {
+		assert (thd_trace_list->curr_pos > 0);
+		thd_trace_list->spd_trace[--thd_trace_list->curr_pos] = 0;
+	}
+	
+	return;
+}
+
 // Decide what the next spd will be, based on where the execution is within invocation 
 static int
 find_next_spd(struct event_info *entry)
@@ -227,24 +286,6 @@ find_next_spd(struct event_info *entry)
 		return ret;
 	}
 	return dest;
-}
-
-static void 
-update_stack_info(struct thd_trace *thd_trace_list, int spdid)
-{
-	assert(thd_trace_list);
-		
-	if (spdid) {
-		assert (thd_trace_list->curr_pos < MAX_SERVICE_DEPTH);
-		thd_trace_list->spd_trace[thd_trace_list->curr_pos++] = spdid;
-		assert (thd_trace_list->total_pos < MAX_SPD_TRACK);
-		thd_trace_list->all_spd_trace[thd_trace_list->total_pos++] = spdid;
-	} else {
-		assert (thd_trace_list->curr_pos > 0);
-		thd_trace_list->spd_trace[--thd_trace_list->curr_pos] = 0;
-	}
-	
-	return;
 }
 
 
@@ -515,7 +556,7 @@ lm_init(spdid_t spdid)
 	spdmon = &logmon_info[spdid];
 	
 	assert(spdmon);
-	// limit one RB per component here
+	// limit one RB per component here, not per interface
 	if (spdmon->mon_ring && spdmon->cli_ring){
 		ret = spdmon->mon_ring;
 		goto done;
@@ -532,6 +573,8 @@ done:
 	UNLOCK();
 	return ret;
 }
+
+int event_ring_init;
 
 void 
 cos_init(void *d)
@@ -573,20 +616,37 @@ cos_init(void *d)
 		sp.c.type = SCHEDP_PRIO;
 		sp.c.value = 8;
 		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 9;
+		event_ring_init = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 		
 		return;
 	} 
-	printc("lm_sync process init...(thd %d)\n", cos_get_thd_id());
-	lm_sync_period = LM_SYNC_PERIOD;
-	timed_event_block(cos_spd_id(), 50); // FIXME: rely on less services
-	if (shared_csring_setup()) {
-		printc("failed to set up shared cs ");
+	if (cos_get_thd_id() == event_ring_init) {
+		if (shared_sched_ring_setup()) {
+			printc("failed to set up shared events ring for sched (cli/ser) ");
 			BUG();
-	}
-	while(1) {
-		sched_logpub_wait();
-		printc("cs ring is full\n");
-		lm_process(cos_spd_id());
+		}
+
+		int spdid = 0;
+		while(1) {
+			spdid = sched_logevent_init(cos_spd_id());
+			assert(spdid);
+			/* lm_init(spdid); */
+		}
+	} else {
+		printc("lm_sync process init...(thd %d)\n", cos_get_thd_id());
+		lm_sync_period = LM_SYNC_PERIOD;
+		timed_event_block(cos_spd_id(), 50); // FIXME: rely on less services
+		if (shared_csring_setup()) {
+			printc("failed to set up shared cs ");
+			BUG();
+		}
+		while(1) {
+			sched_logpub_wait(cos_spd_id());
+			lm_process(cos_spd_id());
+		}
 	}
 	return;
 }

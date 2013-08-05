@@ -1,4 +1,5 @@
 /*
+   Jiguo:
    The header file for only clients interface, mainly used for the log monitor
    latent fault (state machine)
 */
@@ -14,6 +15,7 @@
 
 extern vaddr_t lm_init(spdid_t spdid);
 extern int lm_process(spdid_t spdid);
+extern int sched_logprocess_wake(spdid_t spdid, int type);
 
 /* event entry in the ring buffer (per event) */
 struct event_info {
@@ -64,12 +66,46 @@ static inline void monevt_conf(struct event_info *monevt, int param)
 static inline void monevt_enqueue(int param)
 {
 	struct event_info monevt;
-	int capacity, size;
 
-	if (unlikely(ring_is_full())) lm_process(cos_spd_id());
+	if (unlikely(!cli_ring)) {
+		if (!(cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id())))) BUG();
+	}
+
+	if (unlikely(ring_is_full())) {
+		printc("kevin\n");
+		lm_process(cos_spd_id());
+	}
 
 	monevt_conf(&monevt, param);
         while (unlikely(!CK_RING_ENQUEUE_SPSC(logevts_ring, cli_ring, &monevt)));
+	return;
+}
+
+static inline void monevt_sched_enqueue(int param)
+{
+	struct event_info monevt;
+
+	/* if (unlikely(!cli_ring)) { */
+	/* 	if (!(cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id())))) BUG(); */
+	/* } */
+	int thd = cos_get_thd_id();
+	printc("thd %d in spd %ld\n", thd, cos_spd_id());
+	if (cos_spd_id() == 7 || cos_spd_id() == 6) return;
+	if (thd == 13 || thd == 14 || thd == 15 || thd == 16) {
+		printc("thd %d\n", thd);
+		if (unlikely(!cli_ring)) {
+			if (!sched_logprocess_wake(cos_spd_id(), 1)) return;
+		}
+
+		printc("andy in spd %ld\n", cos_spd_id());
+		if (unlikely(ring_is_full())) {
+			if (!sched_logprocess_wake(cos_spd_id(), 0)) return;
+		}
+		printc("andy 2\n");
+
+		monevt_conf(&monevt, param);
+		while (unlikely(!CK_RING_ENQUEUE_SPSC(logevts_ring, cli_ring, &monevt)));
+	}
 	return;
 }
 

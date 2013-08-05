@@ -72,19 +72,15 @@ cos_init(void)
 #ifdef EXAMINE_PI   // 1 cli and 1 ser, also depends on lock, scheduler (maybe period if we need periodic task)
 		if (cos_get_thd_id() == high) {
 			timed_event_block(cos_spd_id(), 5);
-			/* periodic_wake_create(cos_spd_id(), 1); */
 			lmon_ser1_test();
 		}
 
 		if (cos_get_thd_id() == med) {
-			/* timed_event_block(cos_spd_id(), 5); */
-			/* periodic_wake_create(cos_spd_id(), 8); */
 			lmon_ser1_test();
 		}
 
 		if (cos_get_thd_id() == low) {
 			timed_event_block(cos_spd_id(), 2);
-			/* periodic_wake_create(cos_spd_id(), 14); */
 			lmon_ser1_test();
 		}
 #endif

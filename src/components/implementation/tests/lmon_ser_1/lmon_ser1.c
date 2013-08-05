@@ -33,7 +33,7 @@ cos_lock_t lock;
 volatile int spin = 1;
 volatile int kevin, andy, qq;
 
-static void try_lock_hp(void)
+static void try_crisec_hp(void)
 {
 	int i;
 	while(1) {
@@ -54,7 +54,7 @@ static void try_lock_hp(void)
 	return;
 }
 
-static void try_lock_mp(void)
+static void try_crisec_mp(void)
 {
 	volatile int jj, kk;
 	while (1) {
@@ -70,7 +70,7 @@ static void try_lock_mp(void)
 }
 
 
-static void try_lock_lp(void)
+static void try_crisec_lp(void)
 {
 	volatile int jj = 0;
 	while (1) {
@@ -108,9 +108,9 @@ vaddr_t lmon_ser1_test(void)
 		LOCK_INIT();
 	}
 	
-	if (cos_get_thd_id() == 13) try_lock_hp();
-	if (cos_get_thd_id() == 14) try_lock_mp();
-	if (cos_get_thd_id() == 15) try_lock_lp();
+	if (cos_get_thd_id() == 13) try_crisec_hp();
+	if (cos_get_thd_id() == 14) try_crisec_mp();
+	if (cos_get_thd_id() == 15) try_crisec_lp();
 
 	return 0;
 }

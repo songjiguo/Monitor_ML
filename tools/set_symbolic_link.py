@@ -13,6 +13,7 @@ names = ['mem_mgr','rtorrent', 'sched', 'timed_blk']
 # interface
 interface_path = '/src/components/interface/'
 rec_stubs = '__stubs_rec'
+log_stubs = '__stubs_log'
 normal_stubs = '__stubs'
 using_stubs = 'stubs'
 
@@ -52,9 +53,9 @@ te_c = 'timed_event.c'
 
 def query(name, default = "0"):
 
-    valid = {"n":"normal","r":"recovery"}
+    valid = {"n":"normal","r":"recovery", "l":"log"}
 
-    prompt = " [n/r] "
+    prompt = " [n/r/l] "
     print 
     sys.stdout.write(name + prompt)
 
@@ -64,7 +65,7 @@ def query(name, default = "0"):
     elif choice in valid.keys():
         return valid[choice]
     else:
-        print "please type n/r"
+        print "please type n/r/l"
         return '0'
 
 def main():
@@ -80,6 +81,7 @@ def main():
         os.chdir(prefix)
 
         p_rec = rec_stubs
+        p_log = log_stubs
         p_nor = normal_stubs
         p_dst = using_stubs
 
@@ -100,6 +102,8 @@ def main():
           os.system("ln -s " + p_nor + " " + p_dst)
         elif (ret == 'recovery') or (ret == 'r'):
             os.system("ln -s " + p_rec + " " + p_dst)
+        elif (ret == 'log') or (ret == 'l'):
+            os.system("ln -s " + p_log + " " + p_dst)
         else:
             os.system("ln -s " + p_nor + " " + p_dst)
 

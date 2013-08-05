@@ -1,16 +1,18 @@
-
 /**
- * Copyright 2007 by Gabriel Parmer, gabep1@cs.bu.edu
+ * Copyright 2009 by Gabriel Parmer, gabep1@cs.bu.edu
  *
  * Redistribution of this file is permitted under the GNU General
  * Public License v2.
+	cos_asm_server_stub_spdid(sched_wakeup)
+	cos_asm_server_stub_spdid(sched_block)
+	cos_asm_server_stub_spdid(sched_wakeup_helper)
  */
 
 #include <cos_asm_server_stub_simple_stack.h>
 .text	
 
-cos_asm_server_stub_spdid(sched_wakeup)
-cos_asm_server_stub_spdid(sched_block)
+cos_asm_server_fn_stub_spdid(sched_wakeup, __sg_sched_wakeup)
+cos_asm_server_fn_stub_spdid(sched_block, __sg_sched_block)
 cos_asm_server_stub_spdid(sched_timeout)
 cos_asm_server_stub_spdid(sched_timeout_thd)
 cos_asm_server_stub_spdid(sched_create_net_brand)
@@ -28,9 +30,5 @@ cos_asm_server_stub(sched_priority)
 cos_asm_server_stub_spdid(sched_component_take)
 cos_asm_server_stub_spdid(sched_component_release)
 
-cos_asm_server_stub_spdid(sched_cs_state) // Jiguo: check the cs holding status
-
-cos_asm_server_stub(sched_active_uc)
-
-// added to wake up all threads calling from the same spd	
-cos_asm_server_stub(sched_wakeup_spd_all)
+cos_asm_server_stub_spdid(sched_logprocess_wake)
+cos_asm_server_stub_spdid(sched_logevent_init)

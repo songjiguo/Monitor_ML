@@ -12,11 +12,6 @@ vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
 {
 	vaddr_t ret = 0;
 
-	if (unlikely(!cli_ring)) {
-		cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id()));
-		assert(cli_ring);
-	}
-
 	monevt_enqueue(cos_spd_id());
 
 	ret = lmon_ser1_test();

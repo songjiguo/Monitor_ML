@@ -415,7 +415,9 @@ done:
 
 // Jiguo: for tracking context switch --->
 #include <cs_monitor.h>
+#include <monitor.h>
 static int cs_wait_thread;
+static int event_init_thread;
 // Jiguo End above <--------
 
 /*************** Scheduler Synchronization Fns ***************/
