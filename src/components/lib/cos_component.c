@@ -17,6 +17,7 @@ int cos_sched_notifications __attribute__((weak));
 /* 	.cos_events = {} */
 /* }; */
 
+
 __attribute__ ((weak))
 void cos_init(void *arg)
 {

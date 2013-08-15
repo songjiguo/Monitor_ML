@@ -1,18 +1,20 @@
-/*
-    header file for only log_mgr
-*/
+#ifndef LOG_INT_H
+#define LOG_INT_H
 
-#ifndef   	LOG_MGR_H
-#define   	LOG_MGR_H
+#include <log.h>
 
-// MOVE these to implementation directory FIXME:
+vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
+vaddr_t llog_cs_init(spdid_t spdid, vaddr_t addr);
+int llog_process(spdid_t spdid);
+unsigned int llog_get_syncp(spdid_t spdid);
+
 /* ring buffer for event flow (per spd) */
 struct logmon_info {
 	spdid_t spdid;
 	vaddr_t mon_ring;
 	vaddr_t cli_ring;
 	
-	struct event_info *last_stop;  // this indicates where it stopped in the last time window
+	struct event_info last_stop;  // this indicates where it stopped in the last time window, current head
 };
 
 /* ring buffer for context switch (only one) */
@@ -21,9 +23,13 @@ struct logmon_cs {
 	vaddr_t sched_csring;
 };
 
-/*
-  Track related
-*/
+
+/* the timing about a thread enters and leaves a spd */
+struct all_spd_timing {
+	int spdid;
+	unsigned long long enter;
+	unsigned long long leave;
+};
 
 #define MAX_SPD_TRACK 1024
 
@@ -50,20 +56,11 @@ struct thd_trace {
 	int curr_pos;
 	int spd_trace[MAX_SERVICE_DEPTH];  // 31 for max depth
 	int total_pos;
-	int all_spd_trace[MAX_SPD_TRACK];  // 1024 for max spd invoked
+	struct all_spd_timing all_spd_trace[MAX_SPD_TRACK];  // 1024 for max spd invoked
 
 	/* struct event_info *entry; */
 	void *trace_head;
 };
-
-
-
-/* /\* per-spd event flow, updated within the log_monitor  *\/ */
-/* struct spd_trace { */
-/* 	spdid_t spd_id; */
-/* 	struct event_info *entry; */
-/* }; */
-
 
 //FIXME: name
 /* compute the highest power of 2 less or equal than 32-bit v */
@@ -80,4 +77,4 @@ static unsigned int get_powerOf2(unsigned int orig) {
         return (v == orig) ? v : v >> 1;
 }
 
-#endif
+#endif /* LOG_INT_H */

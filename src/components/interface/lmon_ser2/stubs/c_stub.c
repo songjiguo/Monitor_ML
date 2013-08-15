@@ -6,12 +6,9 @@
 #include <cstub.h>
 
 #include <stdint.h>
-#include <monitor.h>
+#include <ll_log.h>
 
 CSTUB_FN_0(int, lmon_ser2_test)
-	if (unlikely(!cli_ring)) {
-		if (!(cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(lm_init(cos_spd_id())))) BUG();
-	}
 
 	monevt_enqueue(uc->cap_no);
 CSTUB_ASM_0(lmon_ser2_test)

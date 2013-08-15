@@ -1,5 +1,5 @@
 LIB_OBJS=
 LIBS=$(LIB_OBJS:%.o=%.a)
-ASM_STUBS=s_stubpublisher.o
+ASM_STUBS=s_stublllog.o
 
 include ../Makefile.subdir

@@ -68,7 +68,7 @@ static inline int sched_is_root(void) { return sched_type == SCHED_ROOT; }
 static inline int sched_is_child(void) { return !sched_is_root(); } 
 
 /* What is the spdid of the booter component? */
-#define BOOT_SPD 5
+#define BOOT_SPD 6
 
 //#define FPRR_REPORT_EVTS
 
@@ -397,6 +397,8 @@ static struct sched_thd *resolve_dependencies(struct sched_thd *next)
 	return next;
 }
 
+
+static int PI_NUM = 0;
 /* 
  * Important: assume that cos_sched_lock_take() has been called.  The
  * reason for this assumption is so that outer (calling) code can
@@ -482,12 +484,15 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 		}
 		next = resolve_dependencies(next);
 
-		// Jiguo: test
+		/* // Jiguo: test, switch to a mid thd on purpose to create PI */
 		/* printc("3  next %d current %d\n", next->id, current->id); */
-		if (next->id == 15 && current->id == 15) {
-			next = sched_get_mapping(14);
+		if (PI_NUM < 2) {
+			if (next->id == 14 && current->id == 14) {
+				PI_NUM++;
+				next = sched_get_mapping(13);
+			}
 		}
-		// Jiguo: end
+		/* // Jiguo: end */
 
 		if (next == current) goto done;
 
@@ -646,7 +651,7 @@ static void fp_create_spd_thd(void *d)
 {
 	int spdid = (int)d;
 
-	if (cos_upcall(spdid)) prints("fprr: error making upcall into spd.\n");
+	if (cos_upcall(spdid)) printc("fprr: error making upcall into spd %d.\n", spdid);
 	BUG();
 }
 
@@ -1075,117 +1080,6 @@ int sched_cs_state(spdid_t spdid)
 	return ret;
 }
 
-
-/* <<<<<< Jiguo: sched log events ring  >>>> */
-#include <log_publisher.h>
-
-/* event_init_thread: A thread within the scheduler, activated when the
- * spd needs initialize the events ring buffer
-*/
-static int spd_test = 0;
-
-int sched_logevent_init(spdid_t spdid)
-{
-	int ret = 0;
-
-	event_init_thread = cos_get_thd_id();
-	sched_block(cos_spd_id(), 0);
-
-	printc("spd_test is %d\n", spd_test);
-	ret = spd_test;
-	return ret;
-}
-
-/* cs_wait_thread: A thread within the scheduler, activated when the
- * cs_ring is full and do the check/clean
-*/
-
-int sched_logpub_wait(spdid_t spdid)
-{
-	int ret = 0;
-	cs_wait_thread = cos_get_thd_id();
-	printc("have the thread waits here\n");
-	sched_block(cos_spd_id(), 0);
-
-	ret = cos_spd_id();
-	return ret;
-}
-
-/* <<<<<< Jiguo: process the log if full  >>>> */
-int sched_logprocess_wake(spdid_t spdid, int type)
-{
-	if (!cs_wait_thread) return 0;
-	if (!event_init_thread) return 0;
-	assert(spdid);
-	// 1: events, 0:cs
-	spd_test = spdid;
-	if (type == 1) sched_wakeup(cos_spd_id(), event_init_thread);
-	if (type == 0) sched_wakeup(cos_spd_id(), cs_wait_thread);
-	return 1;
-}
-
-
-vaddr_t sched_logpub_setup(spdid_t spdid, vaddr_t ring_addr, int type)
-{
-	char *addr, *hp;
-	vaddr_t ret = 0;
-	
-	cos_sched_lock_take();
-
-	if (ring_addr == 0) {
-		ret = (vaddr_t) cos_spd_id();
-		goto done;
-	}
-
-	assert(ring_addr);
-	
-	addr = cos_get_heap_ptr();
-	if (!addr) {
-		printc("fail to allocate a page from the heap\n");
-		goto done;
-	}
-	cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
-	if ((vaddr_t)addr != mman_get_page(cos_spd_id(), (vaddr_t)addr, 0)) {
-		printc("fail to get a page from mmgr\n");
-		goto done;
-	}
-	
-	if (unlikely(ring_addr != mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, ring_addr))) {
-		printc("alias rings failed.\n");
-		goto done;
-	}
-
-        // events ring
-	if (type == 1) {
-		printc("ready to set up an event RB\n");
-		cli_ring = (CK_RING_INSTANCE(logevts_ring) *)addr;
-	}
-	// cs ring
-	if (type == 0) cs_ring = (CK_RING_INSTANCE(logcs_ring) *)addr;
-	
-	ret = (vaddr_t)addr;
-	
-done:
-	cos_sched_lock_release();
-	return ret;
-}
-
-int sched_logpop_homespd(spdid_t spdid, int thd_id)
-{
-	void *dest;
-	assert(thd_id);
-	dest  = (void *)cos_sched_introspect(COS_SCHED_THD_DEST, cos_spd_id(), thd_id);
-	
-	if (!dest) {
-		printc("can not find home spd\n");
-		return 0;
-	}
-
-	return (int)dest;
-}
-
-/* <<<<<< Jiguo: track context switch END  >>>> */
-
 /* 
  * component_{take|release} constitute the critical section
  * helping-based wait-free synchronization.  A component can call
@@ -1198,8 +1092,8 @@ int sched_component_take(spdid_t spdid)
 	struct sched_thd *holder, *curr;
 	int first = 1;
 
-	if (cos_get_thd_id() == 2) return 0; /* for eager test */
-	/* printc("sched take %d (thd %ld)\n", spdid, cos_get_thd_id()); */
+	/* printc("sched take %d (thd %d)\n", spdid, cos_get_thd_id()); */
+	/* if (cos_get_thd_id() == 2) return 0; /\* for eager test *\/ */
 
 	cos_sched_lock_take();
 	report_event(COMP_TAKE);
@@ -1238,8 +1132,8 @@ int sched_component_release(spdid_t spdid)
 {
 	struct sched_thd *curr;
 
-	if (cos_get_thd_id() == 2) return 0; /* for eager test */
 	/* printc("sched release %d\n", spdid); */
+	/* if (cos_get_thd_id() == 2) return 0; /\* for eager test *\/ */
 
 	report_event(COMP_RELEASE);
 	cos_sched_lock_take();
@@ -1415,10 +1309,11 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 	sp[1] = ((union sched_param)sched_param_1).c;
 	sp[2] = ((union sched_param)sched_param_2).c;
 	sp[3] = (union sched_param){.c = {.type = SCHEDP_NOOP}}.c;
-	
+
 	cos_sched_lock_take();
 	new = sched_setup_thread_arg(&sp, fp_create_spd_thd, (void*)t, 1);
 	sched_switch_thread(0, NULL_EVT);
+
 	if (!new) return -1;
 	/* printc("sched %d: created default thread %d in spdid %d (requested by %d from %d)\n", */
 	/*        (unsigned int)cos_spd_id(), new->id, spdid, sched_get_current()->id, spdid); */

@@ -279,10 +279,10 @@ int timed_event_block(spdid_t spdinv, unsigned int amnt)
 	amnt++;
 	
 	TAKE(spdid);
+
 	te = te_get(cos_get_thd_id());
 	if (NULL == te) BUG();
 	assert(EMPTY_LIST(te, next, prev));
-
 	te->thread_id = cos_get_thd_id();
 	te->flags &= ~TE_TIMED_OUT;
 	te->flags |= TE_BLOCKED;
@@ -300,7 +300,6 @@ int timed_event_block(spdid_t spdinv, unsigned int amnt)
 	if (-1 == sched_block(spdid, 0)) {
 		prints("fprr: sched block failed in timed_event_block.");
 	}
-
 	/* we better have been taking off the list! */
 	assert(EMPTY_LIST(te, next, prev));
 	if (te->flags & TE_TIMED_OUT) return TIMER_EXPIRED;
@@ -548,7 +547,7 @@ int periodic_wake_wait(spdid_t spdinv)
 	struct thread_event *te;
 	u16_t tid = cos_get_thd_id();
 	long long t;
-	/* printc("thd %d calling period_wake_wait\n", cos_get_thd_id()); */
+	printc("thd %d calling period_wake_wait\n", cos_get_thd_id());
 
 	TAKE(spdid);
 	te = te_pget(tid);
@@ -587,11 +586,11 @@ int periodic_wake_wait(spdid_t spdinv)
 	te->flags |= TE_BLOCKED;
 	RELEASE(spdid);
 
-	/* printc("period wake wait calling block..\n"); */
+	printc("period wake wait calling block..\n");
 	if (-1 == sched_block(spdid, 0)) {
 		prints("fprr: sched block failed in timed_event_periodic_wait.");	}
 
-	/* printc("leaving the periodic wake wait\n"); */
+	printc("leaving the periodic wake wait\n");
 
 	return 0;
 err:

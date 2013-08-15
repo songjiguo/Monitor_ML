@@ -6,7 +6,7 @@
 #include <cstub.h>
 
 #include <stdint.h>
-#include <monitor.h>
+#include <ll_log.h>
 
 #ifdef MEAS_WITH_LOG
 CSTUB_FN_0(int, lmon_ser1_test)

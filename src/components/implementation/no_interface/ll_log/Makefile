@@ -1,8 +1,9 @@
-C_OBJS=logmon_test1.o
+C_OBJS=ll_logmon.o
 ASM_OBJS=
-COMPONENT=lmon1.o
-INTERFACES=
-DEPENDENCIES=periodic_wake sched printc lock mem_mgr lmon_test2 timed_blk logmonitor
+COMPONENT=lllog.o
+INTERFACES=sched_hier ll_log
+DEPENDENCIES=printc sched_hier
+FN_PREPEND=parent_
 IF_LIB=
 
 include ../../Makefile.subsubdir

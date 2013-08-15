@@ -374,11 +374,9 @@ static int
 boot_spd_thd(spdid_t spdid)
 {
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
-
-	/* printc("call create_default_thread in booter(by thd) %d\n", cos_get_thd_id()); */
+	
 	/* Create a thread IF the component requested one */
 	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
-
 	/* if ((sched_create_thread_default(spdid, sp.v, 0, 99)) < 0) return -1; /\* test only *\/ */
 	return 0;
 }
@@ -438,6 +436,7 @@ boot_create_system(void)
 		if (boot_spd_reserve_caps(h, spdid))             BUG();
 		if (cos_spd_cntl(COS_SPD_ACTIVATE, spdid, 0, 0)) BUG();
 	}
+
 	for (i = 0 ; hs[i] != NULL ; i++) {
 		struct cobj_header *h;
 		h = hs[i];
@@ -455,7 +454,6 @@ boot_create_system(void)
 			if (hs[j]->id == boot_sched[i]) h = hs[j];
 		}
 		assert(h);
-
 		if (h->flags & COBJ_INIT_THD) boot_spd_thd(h->id);
 	}
 	/* printc("return accc\n"); */
@@ -559,6 +557,7 @@ void cos_init(void)
 	struct cobj_header *h;
 	int num_cobj, i;
 
+	printc("thd in booter cos_init %d\n", cos_get_thd_id());
 	LOCK();
 	boot_deps_init();
 	h         = (struct cobj_header *)cos_comp_info.cos_poly[0];
@@ -585,17 +584,12 @@ void cos_init(void)
 	printc("h @ %p, heap ptr @ %p\n", h, cos_get_heap_ptr());
 	printc("header %p, size %d, num comps %d, new heap %p\n", 
 	       h, h->size, num_cobj, cos_get_heap_ptr());
-
 	/* Assumes that hs have been setup with boot_find_cobjs */
 	boot_create_system();
 
-	/* printc("<<<UNLOCK?>>>\n"); */
-
 	UNLOCK();
 
-	/* printc("<<<UNLOCK? yes>>>\n"); */
 	boot_deps_run();
 
-	/* printc("boot thread %d is leaving\n", cos_get_thd_id()); */
 	return;
 }

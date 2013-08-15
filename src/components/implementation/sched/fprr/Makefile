@@ -1,8 +1,8 @@
 C_OBJS=fp_rr.o
 ASM_OBJS=
 COMPONENT=fprr.o
-INTERFACES=sched sched_hier log_publisher
-DEPENDENCIES=printc sched_hier recovery_upcall mem_mgr
+INTERFACES=sched sched_hier
+DEPENDENCIES=printc sched_hier recovery_upcall mem_mgr ll_log valloc_local
 IF_LIB=../complib.o
 FN_PREPEND=parent_
 

@@ -194,6 +194,7 @@ cvas_deref(struct comp_vas *cv)
 	if (cv->nmaps == 0) {
 		cvect_free(cv->pages);
 		cvect_del(&comps, cv->spdid);
+		printc("cv spdid %d\n", cv->spdid);
 		cslab_free_cvas(cv);
 	}
 }
@@ -319,7 +320,6 @@ __mapping_destroy(struct mapping *m)
 	assert(m == cvect_lookup(cv->pages, m->addr >> PAGE_SHIFT));
 	cvect_del(cv->pages, m->addr >> PAGE_SHIFT);
 	cvas_deref(cv);
-
 	idx = cos_mmap_cntl(COS_MMAP_REVOKE, 0, m->spdid, m->addr, 0);
 	/* if (!idx) return; 	/\* FIXME: fault makes the pte not presented in pgtbl, but mm still can see it *\/ */
 	/* printc("thread %d idx %d frame_idx %d\n", cos_get_thd_id(), idx, frame_index(m->f)); */
@@ -490,12 +490,17 @@ void mman_release_all(void)
 
 #include <sched_hier.h>
 
-int  sched_init(int reboot)   { return 0; }
+/* int  sched_init(int reboot)   { return 0; } */
+extern void parent_sched_init(int reboot);
+int  sched_init(int reboot)   { parent_sched_init(reboot); return 0;}
+
 extern void parent_sched_exit(void);
 void 
 sched_exit(void)   
 {
-	mman_release_all(); 
+	/* printc("sched exit in mm (thd %d)\n", cos_get_thd_id()); */
+	/* mman_release_all();  */
+	/* printc("after mm release all (thd %d)\n", cos_get_thd_id()); */
 	parent_sched_exit();
 }
 

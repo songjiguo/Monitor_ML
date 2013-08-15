@@ -41,7 +41,4 @@ int sched_create_thd_again(unsigned int tid);
 
 void sched_active_uc(int thd_id);
 
-int sched_logprocess_wake(spdid_t spdid, int type);  //Jiguo: used to wake up the thread which process the log if full
-int sched_logevent_init(spdid_t spdid);     //Jiguo: used to have a thread that can initialize the events ring later
-
 #endif 	    /* !SCHED_H */

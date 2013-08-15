@@ -60,25 +60,28 @@ printc(char *fmt, ...)
  * prev_thd:     the thread requesting the initialization
  * recover_spd:  the spd that will require rebooting
  */
-static int          alpha, init_thd, recovery_thd;	
+static int          alpha, init_thd, recovery_thd, log_thd;
 static volatile int prev_thd, recover_spd;
 
 static volatile vaddr_t recovery_arg;
 static volatile int operation;
 
 enum { /* hard-coded initialization schedule */
-	LLBOOT_SCHED = 2,
-	LLBOOT_MM    = 3,
+	LLBOOT_LOG   = 2,
+	LLBOOT_SCHED = 3,
+	LLBOOT_MM    = 4
 };
 
 struct comp_boot_info {
 	int symbols_initialized, initialized, memory_granted;
 };
-#define NCOMPS 6 	/* comp0, us, and the four other components */
+#define NCOMPS 7 	/* comp0, us, and the four other components, and a log manager */
 static struct comp_boot_info comp_boot_nfo[NCOMPS];
 
-static spdid_t init_schedule[]   = {LLBOOT_MM, LLBOOT_SCHED, 0};
-static int     init_mem_access[] = {1, 0, 0};
+#define PAGES_NUM_LOG 1024
+
+static spdid_t init_schedule[]   = {LLBOOT_LOG, LLBOOT_MM, LLBOOT_SCHED, 0};
+static int     init_mem_access[] = {1, 1, 0, 0};
 static int     sched_offset      = 0, nmmgrs = 0;
 static int     frame_frontier    = 0; /* which physical frames have we used? */
 
@@ -105,7 +108,6 @@ sched_create_thread_default(spdid_t spdid, u32_t sched_param_0,
 
 static void
 llboot_ret_thd(void) { return; }
-
 
 void sched_exit(void);
 static int first = 0;
@@ -135,9 +137,13 @@ llboot_thd_done(void)
 			 * other memory managers. */
 			if (init_mem_access[sched_offset]) {
 				int max_pfn, proportion;
-
-				max_pfn = cos_pfn_cntl(COS_PFN_MAX_MEM, 0, 0, 0);
-				proportion = (max_pfn - frame_frontier)/nmmgrs;
+				if (sched_offset == 1) proportion = PAGES_NUM_LOG;
+				else {
+					if (nmmgrs > 1) nmmgrs--; // the first is reserved for log:Jiguo
+					max_pfn = cos_pfn_cntl(COS_PFN_MAX_MEM, 0, 0, 0);
+					max_pfn -= PAGES_NUM_LOG;
+					proportion = (max_pfn - frame_frontier)/nmmgrs;
+				}
 				cos_pfn_cntl(COS_PFN_GRANT, s, frame_frontier, proportion);
 				comp_boot_nfo[s].memory_granted = 1;
 			}
@@ -154,6 +160,12 @@ llboot_thd_done(void)
 		while (1) cos_switch_thread(alpha, 0);
 		BUG();
 	}
+
+	/* //Jiguo: for logging */
+	/* if (tid == log_thd) { */
+	/* 	printc("asdflkaj\n"); */
+	/* 	cos_upcall_args(COS_UPCALL_LOG_PROCESS, LLBOOT_LOG, 0); */
+	/* } */
 
 	while (1) {
 		int     pthd  = prev_thd;
@@ -381,7 +393,6 @@ __vpage2frame(vaddr_t addr) { return (addr - init_hp) / PAGE_SIZE; }
 static vaddr_t
 __mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 {
-	/* printc("deps 1\n"); */
 	if (cos_mmap_cntl(COS_MMAP_GRANT, 0, cos_spd_id(), addr, frame_frontier++)) BUG();
 	if (!init_hp) init_hp = addr;
 	return addr;
@@ -395,7 +406,6 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 	assert(init_hp);
 	fp = __vpage2frame(s_addr);
 	assert(fp >= 0);
-	/* printc("deps 2\n"); */
 	if (cos_mmap_cntl(COS_MMAP_GRANT, 0, d_spd, d_addr, fp)) BUG();
 	return d_addr;
 }
@@ -419,6 +429,11 @@ boot_deps_init(void)
 	alpha        = cos_get_thd_id();
 	recovery_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(recovery_thd >= 0);
+
+	/* // Jiguo: for logging */
+	/* log_thd     = cos_create_thread((int)llboot_ret_thd, 0, 0); */
+	/* assert(log_thd >= 0); */
+
 	init_thd     = cos_create_thread((int)llboot_ret_thd, 0, 0);
 	printc("Low-level booter created threads:\n\t"
 	       "%d: alpha\n\t%d: recov\n\t%d: init\n",

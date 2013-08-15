@@ -2,7 +2,7 @@ C_OBJS=cos_ip.o
 ASM_OBJS=
 COMPONENT=tip.o
 INTERFACES=torrent
-DEPENDENCIES=cbuf_c torrent printc lock sched valloc uniq_map evt mem_mgr_large
+DEPENDENCIES=cbuf_c torrent printc lock sched valloc uniq_map evt mem_mgr_large ll_log
 FN_PREPEND=parent_
 
 include ../../Makefile.subsubdir

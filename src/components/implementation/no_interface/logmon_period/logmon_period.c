@@ -7,9 +7,9 @@
 #include <periodic_wake.h>
 #include <timed_blk.h>
 
-#include <logmonitor.h>
+#include <ll_log.h>
 
-int high, low;
+int high;
 
 void cos_init(void)
 {
@@ -24,13 +24,15 @@ void cos_init(void)
 
 	} else {
 		if (cos_get_thd_id() == high) {
-			timed_event_block(cos_spd_id(), 30);
+			printc("<<<....>>>\n");
+			/* timed_event_block(cos_spd_id(), 30); */
 			int lm_sync_period;
-			lm_sync_period = lm_get_sync_period();
+			lm_sync_period = llog_get_syncp(cos_spd_id());
 			periodic_wake_create(cos_spd_id(), lm_sync_period);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				lm_process(cos_spd_id());
+				printc("periodic process log....\n");
+				llog_process(cos_spd_id());
 			}
 		}
 	}

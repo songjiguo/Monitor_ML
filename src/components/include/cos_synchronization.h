@@ -171,7 +171,7 @@ lock_static_init(cos_lock_t *l)
 {
 	lock_init(l);
 	l->lock_id = lock_id_get();
-
+	/* printc("lock ... after alloc\n"); */
 	return l->lock_id;
 }
 

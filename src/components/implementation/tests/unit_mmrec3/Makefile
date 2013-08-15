@@ -2,7 +2,7 @@ C_OBJS=memory_rec3.o
 ASM_OBJS=
 COMPONENT=mm_rec3.o
 INTERFACES= unit_mmrec3
-DEPENDENCIES= sched printc lock mem_mgr
+DEPENDENCIES= sched printc lock mem_mgr ll_log valloc_local
 IF_LIB=
 
 include ../../Makefile.subsubdir

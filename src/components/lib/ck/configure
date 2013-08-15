@@ -344,6 +344,8 @@ case $PLATFORM in
 
 				PLATFORM=x86
 				ENVIRONMENT=32
+				# added by Jiguo to use cmpxchg8b
+				# CFLAGS="$CFLAGS -march=i586"
 				;;
 
 			*)

@@ -100,13 +100,16 @@ err_free1:
 	goto done;
 }
 
+
 void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages)
 {
 	void *ret = NULL;
 	struct spd_vas_tracker *trac;
 	struct spd_vas_occupied *occ;
 	long off;
-
+	
+	printc("valloc mgr\n");
+	
 	LOCK();
 
 	trac = cos_vect_lookup(&spd_vect, dest);

@@ -5,9 +5,20 @@
 #include <base_pong.h>
 #include <pgfault.h>
 
+#include <pong.h>
 #include <pingpong_test.h>
 
 static int number = 0;
+
+#ifdef SIMPLE_PPONG
+void pong(void)
+{
+	/* void *addr; */
+	/* addr = valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */
+	/* printc("pong: addr %p\n", addr); */
+	return;
+}
+#endif
 
 #ifdef TEST_INVOCATION_RECOVERY
 int pong(void)
@@ -62,24 +73,6 @@ int pong(void)
 		}
 	}
 	return 0;
-}
-#endif
-
-#ifdef SIMPLE_PPONG
-void pong(void)
-{
-	union sched_param sp;
-	
-	/* sp.c.type = SCHEDP_PRIO; */
-	/* sp.c.value = 12; */
-	/* sched_create_thd(cos_spd_id(), sp.v, 0, 0); */
-
-	/* sp.c.type = SCHEDP_PRIO; */
-	/* sp.c.value = 13; */
-	/* sched_create_thd(cos_spd_id(), sp.v, 0, 0); */
-
-	return;
-	number = 0;
 }
 #endif
 

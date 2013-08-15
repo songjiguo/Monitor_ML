@@ -3,9 +3,8 @@
 
 #include <lmon_ser1.h>
 
-#include <monitor.h>
+#include <ll_log.h>
 
-extern vaddr_t lm_init(spdid_t spdid);
 
 #ifdef MEAS_WITH_LOG
 vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
@@ -13,9 +12,7 @@ vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
 	vaddr_t ret = 0;
 
 	monevt_enqueue(cos_spd_id());
-
 	ret = lmon_ser1_test();
-
 	monevt_enqueue(0);  // the return spd should be popped from stack
 
 	return ret;

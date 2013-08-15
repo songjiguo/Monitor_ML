@@ -3,14 +3,11 @@
 
 #include <lmon_ser2.h>
 
-#include <monitor.h>
-
-extern vaddr_t lm_init(spdid_t spdid);
+#include <ll_log.h>
 
 vaddr_t __sg_lmon_ser2_test(spdid_t spdid, int event_id)
 {
 	vaddr_t ret = 0;
-	/* printc("ser (spd %ld) interface -->\n", cos_spd_id()); */
 
 	monevt_enqueue(cos_spd_id());
 	ret = lmon_ser2_test();

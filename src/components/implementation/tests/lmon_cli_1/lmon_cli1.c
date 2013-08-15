@@ -71,15 +71,18 @@ cos_init(void)
 #endif
 #ifdef EXAMINE_PI   // 1 cli and 1 ser, also depends on lock, scheduler (maybe period if we need periodic task)
 		if (cos_get_thd_id() == high) {
+			printc("<<<high thd %d>>>\n", cos_get_thd_id());
 			timed_event_block(cos_spd_id(), 5);
 			lmon_ser1_test();
 		}
 
 		if (cos_get_thd_id() == med) {
+			printc("<<<med thd %d>>>\n", cos_get_thd_id());
 			lmon_ser1_test();
 		}
 
 		if (cos_get_thd_id() == low) {
+			printc("<<<low thd %d>>>\n", cos_get_thd_id());
 			timed_event_block(cos_spd_id(), 2);
 			lmon_ser1_test();
 		}
@@ -98,6 +101,7 @@ cos_init(void)
 		}
 #endif
 		if (cos_get_thd_id() == warm) {
+			printc("<<<warm thd %d>>>\n", cos_get_thd_id());
 			timed_event_block(cos_spd_id(), 50);
 			i = 0;
 			while(i++ < ITER) lmon_ser1_test();

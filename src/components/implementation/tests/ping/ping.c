@@ -3,18 +3,56 @@
 #include <cos_component.h>
 #include <res_spec.h>
 #include <sched.h>
-#include <timed_blk.h>
+/* #include <timed_blk.h> */
 #include <pong.h>
-#include <ping2.h>
-#include <pgfault.h>
+/* #include <ping2.h> */
+/* #include <pgfault.h> */
 
+//#include <cos_alloc.h>
 #include <pingpong_test.h>
+#include <valloc.h>
 
 #define NUM 6
 #define THREAD1 14
 #define THREAD2 15
 
 int high, low;
+
+struct test{
+	int a;
+	int b;
+};
+
+
+#ifdef SIMPLE_PPONG
+/* simple ping pong test */
+/* 1. w/ stack, change both Makefile and interface .S */
+/* 2. w/ simple stack, change both Makefile and interface .S */
+#define ITER 100000
+static void
+ping_pong_test()
+{
+	int i, k;
+	unsigned long long start, end;
+	printc("<<< SIMPLE PPONG TEST BEGIN! >>>\n");
+
+	void *addr;
+	addr = valloc_alloc(cos_spd_id(), 9, 1);
+	printc("ping: addr %p\n", addr);
+
+	for (k = 0; k < 2; k++){
+		rdtscll(start);
+		for (i = 0; i<2; i++) {
+			pong();
+		}
+		rdtscll(end);
+		printc("avg invocations cost: %llu\n", (end-start)/ITER);
+	}
+	printc("\n<<< PPONG TEST END! >>>\n");
+	return;
+}
+#endif
+
 
 #ifdef TEST_INVOCATION_RECOVERY
 static void
@@ -69,36 +107,10 @@ ping_pong_test()
 	return;
 }
 #endif
-#ifdef SIMPLE_PPONG
-/* simple ping pong test */
-/* 1. w/ stack, change both Makefile and interface .S */
-/* 2. w/ simple stack, change both Makefile and interface .S */
-#define ITER 100000
-static void
-ping_pong_test()
-{
-	int i, k;
-	unsigned long long start, end;
-	printc("<<< SIMPLE PPONG TEST BEGIN! >>>\n");
-
-	for (k = 0; k < 1000; k++){
-		rdtscll(start);
-		for (i = 0; i<ITER; i++) {
-			pong();
-		}
-		rdtscll(end);
-		printc("avg invocations cost: %llu\n", (end-start)/ITER);
-	}
-	printc("\n<<< PPONG TEST END! >>>\n");
-	return;
-}
-#endif
-
 
 void 
 cos_init(void)
 {
-	printc("<<< SIMPLE PPONG TEST BEGIN hhhhhhh >>>\n");
 	static int first = 0;
 	union sched_param sp;
 

@@ -73,10 +73,11 @@ const char *INIT_FILE_NAME = "init.tar";
 
 typedef enum {
 	LLBOOT_COMPN = 1,
-	LLBOOT_SCHED = 2,
-	LLBOOT_MM    = 3,
-	LLBOOT_PRINT = 4,
-	LLBOOT_BOOT  = 5
+	LLBOOT_LOG   = 2,
+	LLBOOT_SCHED = 3,
+	LLBOOT_MM    = 4,
+	LLBOOT_PRINT = 5,
+	LLBOOT_BOOT  = 6
 } llboot_component_ids;
 
 const char *ATOMIC_USER_DEF[NUM_ATOMIC_SYMBS] = 

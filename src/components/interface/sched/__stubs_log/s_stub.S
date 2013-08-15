@@ -27,8 +27,5 @@ cos_asm_server_stub(sched_timestamp)
 cos_asm_server_stub(sched_timer_stopclock)
 cos_asm_server_stub(sched_priority)
 	
-cos_asm_server_stub_spdid(sched_component_take)
-cos_asm_server_stub_spdid(sched_component_release)
-
-cos_asm_server_stub_spdid(sched_logprocess_wake)
-cos_asm_server_stub_spdid(sched_logevent_init)
+cos_asm_server_fn_stub_spdid(sched_component_take, __sg_sched_component_take)
+cos_asm_server_fn_stub_spdid(sched_component_release, __sg_sched_component_release)

@@ -9,7 +9,7 @@
 
 #define COS_FMT_PRINT
 
-//#include <cos_synchronization.h>
+#include <cos_synchronization.h>
 #include <cos_component.h>
 #include <cos_alloc.h>
 #include <cos_debug.h>
@@ -361,7 +361,6 @@ unsigned long lock_component_alloc(spdid_t spd)
 	TAKE(spdid);
 	l = lock_alloc(spd);
 	RELEASE(spdid);
-	
 	if (!l) return 0;
  	return l->lock_id;
 }

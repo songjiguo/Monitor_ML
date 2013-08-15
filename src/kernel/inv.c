@@ -643,6 +643,7 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 		return -1;
 	}
 
+	
 	if (!spd_is_scheduler(curr_spd)/* || !thd_scheduled_by(curr, curr_spd)*/) {
 /* FIXME: if initmm is the root, then the second to root should be
  * able to create threads. */
@@ -2576,7 +2577,7 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	op     = op_spd >> 16;
 	spd_id = 0xFFFF & op_spd;
 
-	if (spd_id == 33) spd_id = 8;
+	/* if (spd_id == 33) spd_id = 8; // What is this??? */
 
 	dest = spd_get_by_index(spd_id);
 	thd = thd_get_current();
@@ -2595,8 +2596,8 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	 * into the destination.)
 	 */
 	if (verify_trust(dest, curr_spd) && curr_spd->sched_depth != 0) {
-		printk("cos: upcall attempted from %d to %d without trust relation.\n",
-		       spd_get_index(curr_spd), spd_get_index(dest));
+		printk("cos: upcall attempted from %d to %d without trust relation. (curr thd %d)\n",
+		       spd_get_index(curr_spd), spd_get_index(dest), thd->thread_id);
 		return -1;
 	}
 

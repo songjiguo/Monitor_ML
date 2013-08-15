@@ -3,9 +3,7 @@
 #ifndef   	LOG_REPORT_H
 #define   	LOG_REPORT_H
 
-#include <monitor.h>
-#include <cs_monitor.h>
-#include <logmonitor.h>
+#include <ll_log.h>
 
 extern struct logmon_info logmon_info[MAX_NUM_SPDS];
 extern struct logmon_cs lmcs;
@@ -39,22 +37,43 @@ print_csinfo(struct cs_info *csentry)
 	return;
 }
 
-/* // print all event info for a thread */
-/* static void  */
-/* print_thd_history(int thd_id) */
+static void
+print_last_stop()
+{
+	int i;
+        struct logmon_info *spdmon;
+	CK_RING_INSTANCE(logevts_ring) *evtring;
+	
+	printc("\n\n all last stops\n");
+
+	for (i = 1; i < MAX_NUM_SPDS; i++) {
+		spdmon = &logmon_info[i];
+		evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
+		if (!evtring) continue;
+		if (&spdmon->last_stop) {
+			/* printc("last stop (spd %d) thd %d\n", i, spdmon->last_stop->thd_id); */
+			print_evtinfo(&spdmon->last_stop);
+		}
+	}
+	printc("END>>>\n");
+	return;
+}
+
+/* // print all events within a spd */
+/* static void */
+/* print_spd_history(int spdid) */
 /* { */
-/* 	assert(thd_id); */
-/* 	struct thd_trace *evt_list; */
-/* 	evt_list = &thd_trace[thd_id]; */
-/* 	assert(evt_list); */
-/* 	if (evt_list->trace_head) { */
-/* 		struct event_info *entry_iter; */
-/* 		for (entry_iter = LAST_LIST((struct event_info *)evt_list->trace_head, next, prev) ; */
-/* 		     entry_iter!= evt_list->trace_head; */
-/* 		     entry_iter = LAST_LIST(entry_iter, next, prev)) { */
-/* 			print_evtinfo(entry_iter); */
-/* 		} */
-/* 	} */
+/* 	assert(spdid); */
+/*         struct logmon_info *spdmon; */
+/* 	CK_RING_INSTANCE(logevts_ring) *evtring; */
+
+/* 	spdmon = &logmon_info[i]; */
+/* 	assert(spdmon); */
+	
+/* 	evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring; */
+/* 	if (!evtring) return; */
+
+/* 	print_evtinfo(&spdmon->last_stop); */
 
 /* 	return; */
 /* } */
@@ -84,28 +103,6 @@ print_evtrb(CK_RING_INSTANCE(logevts_ring) *evtring)
 		print_evtinfo(&evt_entry);
 	}
 	
-	return;
-}
-
-static void
-print_last_stop()
-{
-	int i;
-        struct logmon_info *spdmon;
-	CK_RING_INSTANCE(logevts_ring) *evtring;
-	
-	printc("\n\n all last stops\n");
-
-	for (i = 1; i < MAX_NUM_SPDS; i++) {
-		spdmon = &logmon_info[i];
-		evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
-		if (!evtring) continue;
-		if (spdmon->last_stop) {
-			/* printc("last stop (spd %d) thd %d\n", i, spdmon->last_stop->thd_id); */
-			print_evtinfo(spdmon->last_stop);
-		}
-	}
-	printc("END>>>\n");
 	return;
 }
 
@@ -261,7 +258,7 @@ report_thd_stack_list(int thdid)
 
 	printc("thd %d total trace list: ", thdid);
 	for (i = 0; i < MAX_SPD_TRACK; i++) {
-		spd = thd_trace_list->all_spd_trace[i];
+		spd = thd_trace_list->all_spd_trace[i].spdid;
 		if (!spd) break;
 		printc(" %d", spd);
 	}

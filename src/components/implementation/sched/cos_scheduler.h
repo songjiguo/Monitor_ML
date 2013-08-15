@@ -414,11 +414,7 @@ done:
 }
 
 // Jiguo: for tracking context switch --->
-#include <cs_monitor.h>
-#include <monitor.h>
-static int cs_wait_thread;
-static int event_init_thread;
-// Jiguo End above <--------
+#include <log.h>
 
 /*************** Scheduler Synchronization Fns ***************/
 
@@ -439,18 +435,7 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_next->next_thd_flags = flags;
 
         // Jiguo: track context switch ----->
-	// 7 is timer thread, should be tracked as well
-	/* printc("curr %d next %d\n", cos_get_thd_id(), thd_id); */
-	if (cs_ring && cos_get_thd_id() != 7) {
-	/* if (cs_ring) { */
-		if (unlikely(csring_is_full())) {
-			cos_sched_lock_release();
-			sched_wakeup(cos_spd_id(), cs_wait_thread);
-			cos_sched_lock_take();
-		}
-		moncs_enqueue(thd_id);
-	}
-        // Jiguo: track context switch <------end
+	moncs_enqueue(thd_id);
 
 	cos_sched_lock_release();
 

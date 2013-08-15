@@ -2,7 +2,7 @@ C_OBJS=pgfault.o
 ASM_OBJS=
 COMPONENT=pfs.o
 INTERFACES=pgfault
-DEPENDENCIES=printc stkmgr sched lock mem_mgr_large valloc
+DEPENDENCIES=printc stkmgr sched lock mem_mgr_large valloc ll_log
 IF_LIB=
 
 include ../../Makefile.subsubdir
