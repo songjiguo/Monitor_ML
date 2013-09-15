@@ -10,13 +10,13 @@
 
 #ifdef MEAS_WITH_LOG
 CSTUB_FN_0(int, lmon_ser1_test)
-
-        monevt_enqueue(uc->cap_no);
-
+#ifdef LOG_MONITOR
+monevt_enqueue(uc->cap_no,1, 0);
+#endif
 CSTUB_ASM_0(lmon_ser1_test)
-
-        monevt_enqueue(cos_spd_id());
-
+#ifdef LOG_MONITOR
+monevt_enqueue(cos_spd_id(),1, 0);
+#endif
 CSTUB_POST
 #endif
 

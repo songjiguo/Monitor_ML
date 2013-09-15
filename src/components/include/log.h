@@ -12,8 +12,8 @@ extern vaddr_t llog_cs_init(spdid_t spdid, vaddr_t addr);
 extern int llog_process(spdid_t spdid);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 
+
 #include "../implementation/sched/cos_sched_sync.h"
-#define SCHED_SPD 3
 
 #include <cos_list.h>
 #include <ck_ring_cos.h>
@@ -27,6 +27,9 @@ struct event_info {
 	spdid_t from_spd;
 	int dest_info;  // can be cap_no for dest spd or return spd from the stack
 	unsigned long long time_stamp;
+
+	int func_num;   // hard code which function call FIXME:naming space
+	int dep_thd;   // hard code dependency, for scheduler_blk only
 };
 
 // context tracking
@@ -34,6 +37,8 @@ struct cs_info {
 	int curr_thd;
 	int next_thd;
 	unsigned long long time_stamp;
+
+	int flags;
 };
 
 #ifndef CK_RING_CONTINUOUS
@@ -57,16 +62,12 @@ ring_is_full()
 	assert(cli_ring);
 	capacity = CK_RING_CAPACITY(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)cli_ring));
 	size = CK_RING_SIZE(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)cli_ring));
-	if (capacity == size + 1) {
-		printc("evt ring (spd %ld) is full\n", cos_spd_id());
-		printc("cap %d size %d\n", capacity, size);
-		return 1;   // FIXME: the max size is not same as capacity??
-	}
-	return 0;
+	if (capacity == size + 1) return 1;
+	else return 0;
 }
 
 static inline void 
-monevt_conf(struct event_info *monevt, int param)
+monevt_conf(struct event_info *monevt, int param, int func_num, int dep)
 {
 	unsigned long long ts;
 	rdtscll(ts);
@@ -76,16 +77,42 @@ monevt_conf(struct event_info *monevt, int param)
 	monevt->from_spd = cos_spd_id();
 	monevt->dest_info = param;
 
+	monevt->func_num = func_num;
+	monevt->dep_thd = dep;
+
+	return;
+}
+
+// print info for an event
+static void 
+print_evt(struct event_info *entry)
+{
+	assert(entry);
+
+	printc("thd id %d ", entry->thd_id);
+	printc("from spd %d ", entry->from_spd);
+
+	int dest = entry->dest_info;
+	if (dest > MAX_NUM_SPDS) {
+		if ((dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest)) <= 0) assert(0);
+	}
+	printc("dest spd %d ", dest);
+
+	printc("func num %d ", entry->func_num);
+	printc("dep thd %d ", entry->dep_thd);
+
+	// FIXME: to_spd info can be pushed into stack an pop when return
+	/* printc("next spd %d\n", entry->dest_info); */
+
+	printc("time_stamp %llu\n", entry->time_stamp);
+	
 	return;
 }
 
 static inline void 
-monevt_enqueue(int param)
+monevt_enqueue(int param, int func_num, int dep)
 {
 	struct event_info monevt;
-
-	if (cos_get_thd_id() == 5) return;  // do not track booter initial thread here, test
-
 
 	if (unlikely(!cli_ring)) {
 		printc("evt enqueue (spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id());
@@ -95,16 +122,38 @@ monevt_enqueue(int param)
 	}
 
 	if (unlikely(ring_is_full())) {
+		/* printc("evt_ring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id()); */
 		llog_process(cos_spd_id());
 	}
 
-	monevt_conf(&monevt, param);
+	monevt_conf(&monevt, param, func_num, dep);
+
+	/* if (dep) { */
+	/* 	printc("ADD EVT: "); */
+	/* 	print_evt(&monevt); */
+	/* } */
+
         while (unlikely(!CK_RING_ENQUEUE_SPSC(logevts_ring, cli_ring, &monevt)));
-	printc("evt enqueue (spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id());
+
 	return;
 }
 
 // Context switch monitoring
+
+// print info a cs
+static void 
+print_cs(struct cs_info *entry)
+{
+	assert(entry);
+
+	printc("CS: curr_thd id %d ", entry->curr_thd);
+	printc("next_thd id %d ", entry->next_thd);
+	printc("time_stamp %llu\n", entry->time_stamp);
+	
+	return;
+}
+
+
 static inline int 
 csring_is_full()
 {
@@ -114,66 +163,55 @@ csring_is_full()
 	capacity = CK_RING_CAPACITY(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
 	size = CK_RING_SIZE(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
 	
-	if (capacity == size + 1) {
-		printc("cs ring (spd %ld) is full\n", cos_spd_id());
-		printc("cap %d size %d\n", capacity, size);
-		return 1;
-	}
-
-	return 0;
+	if (capacity == size + 1) return 1;
+	else return 0;
 }
 
 static inline void 
-moncs_conf(struct cs_info *moncs)
+moncs_conf(struct cs_info *moncs, int flags, int thd_id)
 {
 	unsigned long long ts;
 
 	moncs->curr_thd = cos_get_thd_id();
 	rdtscll(ts);
 	moncs->time_stamp = ts;
+	moncs->flags = flags;
+	moncs->next_thd = thd_id;
 
 	return;
 }
 
-static int first  = 0;
+static int ready_log  = 0;
 
 /* only called by scheduler  */
 static inline void 
-moncs_enqueue(unsigned short int thd_id)
+moncs_enqueue(unsigned short int thd_id, int flags)
 {
 	struct cs_info moncs;
 
-	// 7 is timer thread, 5 is initial booter thread
-	/* printc("curr %d next %d\n", cos_get_thd_id(), thd_id); */
+	assert(thd_id);
 
-	/* if (cos_get_thd_id() != 7 && cos_get_thd_id() != 5) { */
+	if (cos_get_thd_id() == thd_id) return;
 
-	if (cos_get_thd_id() == 7) return; // not tracking timer interrupt for now
-	if (cos_get_thd_id() == 5 && first == 0) { // not tracking init thread before any other threads created
-		first = 1;
-		return;
-	}
-
-	assert(cos_spd_id() == SCHED_SPD);
-
-	// this will execute only one time 
 	if (unlikely(!cs_ring)) {
 		printc("cs enqueue (spd %ld, thd %d) ", cos_spd_id(), cos_get_thd_id());
-		cos_sched_lock_release();
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
-		cos_sched_lock_take();
 		assert(cli_addr);
 		if (!(cs_ring = (CK_RING_INSTANCE(logcs_ring) *)(llog_cs_init(cos_spd_id(), cli_addr)))) BUG();
 	}
 
 	if (unlikely(csring_is_full())) {
+		/* printc("csring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id()); */
 		llog_process(cos_spd_id());
 	}
-	
-	moncs_conf(&moncs);
-	moncs.next_thd = thd_id;
-        while (unlikely(!CK_RING_ENQUEUE_SPSC(logcs_ring, cs_ring, &moncs)));
-		
+
+	moncs_conf(&moncs, flags, thd_id);
+
+	/* printc("ADD CS: "); */
+	/* print_cs(&moncs); */
+
+	while (unlikely(!CK_RING_ENQUEUE_SPSC(logcs_ring, cs_ring, &moncs)));
+
 	return;
 }
 

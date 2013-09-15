@@ -14,8 +14,18 @@ static void
 print_evtinfo(struct event_info *entry)
 {
 	assert(entry);
-	printc("thd id %d\n", entry->thd_id);
-	printc("from spd %d\n", entry->from_spd);
+
+	printc("thd id %d ", entry->thd_id);
+	printc("from spd %d ", entry->from_spd);
+
+	int dest = entry->dest_info;
+	if (dest > MAX_NUM_SPDS) {
+		if ((dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest)) <= 0) assert(0);
+	}
+	printc("dest spd %d ", dest);
+
+	printc("func num %d ", entry->func_num);
+	printc("dep thd %d ", entry->dep_thd);
 
 	// FIXME: to_spd info can be pushed into stack an pop when return
 	/* printc("next spd %d\n", entry->dest_info); */
@@ -38,7 +48,7 @@ print_csinfo(struct cs_info *csentry)
 }
 
 static void
-print_last_stop()
+print_first_entry()
 {
 	int i;
         struct logmon_info *spdmon;
@@ -50,9 +60,9 @@ print_last_stop()
 		spdmon = &logmon_info[i];
 		evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
 		if (!evtring) continue;
-		if (&spdmon->last_stop) {
-			/* printc("last stop (spd %d) thd %d\n", i, spdmon->last_stop->thd_id); */
-			print_evtinfo(&spdmon->last_stop);
+		if (&spdmon->first_entry) {
+			/* printc("last stop (spd %d) thd %d\n", i, spdmon->first_entry->thd_id); */
+			print_evtinfo(&spdmon->first_entry);
 		}
 	}
 	printc("END>>>\n");
@@ -73,7 +83,7 @@ print_last_stop()
 /* 	evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring; */
 /* 	if (!evtring) return; */
 
-/* 	print_evtinfo(&spdmon->last_stop); */
+/* 	print_evtinfo(&spdmon->first_entry); */
 
 /* 	return; */
 /* } */
@@ -246,22 +256,10 @@ report_thd_stack_list(int thdid)
 	thd_trace_list = &thd_trace[thdid];
 	assert(thd_trace_list);
 
-	if (!thd_trace_list->total_pos) return;
-
-	printc("thd %d curr spd list: ", thdid);
-	for (i = 0; i < MAX_SERVICE_DEPTH; i++) {
-		spd = thd_trace_list->spd_trace[i];
-		if (!spd) break;
-		printc(" %d", spd);
-	}
-	printc("\n");
-
-	printc("thd %d total trace list: ", thdid);
-	for (i = 0; i < MAX_SPD_TRACK; i++) {
-		spd = thd_trace_list->all_spd_trace[i].spdid;
-		if (!spd) break;
-		printc(" %d", spd);
-	}
+	spd = thd_trace_list->curr_spd_info.spdid;
+	if (!spd) return;
+	printc("thd %d (prio %d) : ", thdid, thd_trace_list->prio);
+	printc("%d -> %d", thd_trace_list->curr_spd_info.from_spd, spd);
 	printc("\n");
 
 	return;

@@ -57,6 +57,8 @@
 #include <torlib.h>
 #include <cbuf.h>
 
+#include <log.h>
+
 unsigned long long start, end;
 //#define MEAS_EVENT_WAIT_WHOLE
 //#define MEAS_INT_WAIT
@@ -761,6 +763,7 @@ static int interrupt_wait(void)
 
 	assert(wildcard_brand_id > 0);
 	if (-1 == (ret = cos_brand_wait(wildcard_brand_id))) BUG();
+	moncs_enqueue(cos_get_thd_id(), COS_SCHED_BRAND_WAIT); // jiguo: cs monitoring
 #ifdef UPCALL_TIMING
 	last_upcall_cyc = (u32_t)ret;
 #endif	

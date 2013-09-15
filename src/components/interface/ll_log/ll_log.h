@@ -14,7 +14,7 @@ struct logmon_info {
 	vaddr_t mon_ring;
 	vaddr_t cli_ring;
 	
-	struct event_info last_stop;  // this indicates where it stopped in the last time window, current head
+	struct event_info first_entry;  // this indicates (where it stopped in the last time window) current head
 };
 
 /* ring buffer for context switch (only one) */
@@ -25,18 +25,19 @@ struct logmon_cs {
 
 
 /* the timing about a thread enters and leaves a spd */
-struct all_spd_timing {
+struct curr_spd_info {
 	int spdid;
-	unsigned long long enter;
-	unsigned long long leave;
+	int from_spd;
 };
-
-#define MAX_SPD_TRACK 1024
 
 // FIXME: might not need save all information in log_process
 /* per-thread event flow, updated within the log_monitor  */
 struct thd_trace {
 	int thd_id;
+	int prio;  // hard code priority for PI testing
+	
+	int block_dep;
+	unsigned long long pi_duration;  // how long this thread has been in PI?
 
 	unsigned long long alpha_exec[MAX_NUM_SPDS];  // initial entry in a spd
 	unsigned long long avg_exec[MAX_NUM_SPDS]; // not moving avg FIXME:
@@ -54,12 +55,7 @@ struct thd_trace {
 	unsigned long long tot_exec;
 
 	int curr_pos;
-	int spd_trace[MAX_SERVICE_DEPTH];  // 31 for max depth
-	int total_pos;
-	struct all_spd_timing all_spd_trace[MAX_SPD_TRACK];  // 1024 for max spd invoked
-
-	/* struct event_info *entry; */
-	void *trace_head;
+	struct curr_spd_info curr_spd_info;  // current spd info
 };
 
 //FIXME: name

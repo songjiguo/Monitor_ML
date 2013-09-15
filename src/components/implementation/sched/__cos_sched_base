@@ -35,6 +35,11 @@
 #include <timer.h>
 #include <errno.h>
 
+// Jiguo: for context switch
+#ifdef LOG_MONITOR
+#define SCHED_LL_LOG
+#endif
+
 //#define SCHED_DEBUG
 #ifdef SCHED_DEBUG
 #define PRINTD(s, args...) printc(s, args);
@@ -387,6 +392,8 @@ static struct sched_thd *resolve_dependencies(struct sched_thd *next)
 		assert(sched_thd_ready(dep));
 		assert(dep != next);
 		report_event(SCHED_DEPENDENCY);
+		/* printc("next %d  dep %d\n", next->id, dep->id); */
+			
 		next = dep;
 
 		/* At this point it's possible that next == current.
@@ -482,17 +489,19 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 			report_event(SCHED_TARGETTED_DEPENDENCY);
 			next = target;
 		}
+		/* printc("2  next %d current %d\n", next->id, current->id); */
 		next = resolve_dependencies(next);
-
-		/* // Jiguo: test, switch to a mid thd on purpose to create PI */
 		/* printc("3  next %d current %d\n", next->id, current->id); */
-		if (PI_NUM < 2) {
-			if (next->id == 14 && current->id == 14) {
-				PI_NUM++;
-				next = sched_get_mapping(13);
-			}
-		}
-		/* // Jiguo: end */
+
+		/* /\* // Jiguo: test, switch to a mid thd on purpose to create PI *\/ */
+		/* /\* printc("3  next %d current %d\n", next->id, current->id); *\/ */
+		/* if (PI_NUM < 2) { */
+		/* 	if (next->id == 14 && current->id == 14) { */
+		/* 		PI_NUM++; */
+		/* 		next = sched_get_mapping(13); */
+		/* 	} */
+		/* } */
+		/* /\* // Jiguo: end *\/ */
 
 		if (next == current) goto done;
 
@@ -593,9 +602,12 @@ static void sched_timer_tick(void)
 {
 	while (1) {
 		cos_sched_lock_take();
-		
+
 		report_event(TIMER_TICK);
 		
+		/* printc("report:REPORT_FREQ*TIMER_FREQ %d\n",REPORT_FREQ*TIMER_FREQ); */
+		/* printc("report:RUN_TIME*TIMER_FREQ %d\n",RUNTIME_SEC*TIMER_FREQ); */
+
 		if (unlikely((ticks % (REPORT_FREQ*TIMER_FREQ)) == ((REPORT_FREQ*TIMER_FREQ)-1))) {
 			report_thd_accouting();
 			//cos_stats();
@@ -700,7 +712,7 @@ static void fp_pre_block(struct sched_thd *thd);
 static void fp_block(struct sched_thd *thd, spdid_t spdid);
 
 /* used to set a timeout for the timer thread */
-void sched_timeout(spdid_t spdid, unsigned long amnt)
+int sched_timeout(spdid_t spdid, unsigned long amnt)
 {
 	unsigned long long abs_timeout;
 	struct sched_thd *thd;
@@ -709,7 +721,7 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 	
 	if (0 == amnt) {
 		cos_sched_lock_release();
-		return;
+		return 0;
 	}
 
 	thd = sched_get_mapping(cos_get_thd_id());
@@ -723,7 +735,7 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 	/* If we're the timer thread, lets block, otherwise return */
 	if (thd != wakeup_thd) {
 		cos_sched_lock_release();
-		return;
+		return 0;
 	}
 
 	fp_pre_block(thd);
@@ -731,12 +743,12 @@ void sched_timeout(spdid_t spdid, unsigned long amnt)
 	if (thd->wake_cnt) {
 		assert(thd->wake_cnt == 1);
 		cos_sched_lock_release();
-		return;
+		return 0;
 	}
 	fp_block(thd, cos_spd_id());
 	sched_switch_thread(0, TIMEOUT_LOOP);	
 
-	return;
+	return 0;
 }
 
 /* Assign a timeout thread that will be executed and woken up in
@@ -1802,7 +1814,7 @@ int sched_root_init(void)
 		printc("switch thread failed with %d\n", ret);
 	}
 
-	/* printc("we are about to exit %d\n", cos_get_thd_id()); */
+	printc("we are about to exit %d\n", cos_get_thd_id());
 	parent_sched_exit();
 	
 	/* cos_switch_thread(1, 0); /\* test only *\/ */

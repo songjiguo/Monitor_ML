@@ -50,6 +50,8 @@
 
 #include <net_if.h>
 
+#include <log.h>
+
 #define NUM_WILDCARD_BUFFS 256 //64 //32
 #define UDP_RCV_MAX (1<<15)
 /* 
@@ -469,6 +471,7 @@ static int interrupt_wait(void)
 
 	assert(wildcard_brand_id > 0);
 	if (-1 == (ret = cos_brand_wait(wildcard_brand_id))) BUG();
+	moncs_enqueue(cos_get_thd_id(), COS_SCHED_BRAND_WAIT); // jiguo: cs monitoring
 #ifdef UPCALL_TIMING
 	last_upcall_cyc = (u32_t)ret;
 #endif	

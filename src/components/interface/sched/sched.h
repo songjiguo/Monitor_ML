@@ -12,7 +12,7 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id);
 int sched_block_helper(spdid_t spdid, unsigned short int dependency_thd);
 int sched_block(spdid_t spdid, unsigned short int dependency_thd);
 
-void sched_timeout(spdid_t spdid, unsigned long amnt);
+int sched_timeout(spdid_t spdid, unsigned long amnt); // can not use void since interface stub
 int sched_timeout_thd(spdid_t spdid);
 unsigned int sched_tick_freq(void);
 unsigned long sched_cyc_per_tick(void);

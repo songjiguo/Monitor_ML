@@ -413,11 +413,7 @@ done:
 	return 0;
 }
 
-// Jiguo: for tracking context switch --->
-#include <log.h>
-
 /*************** Scheduler Synchronization Fns ***************/
-
 #include <cos_sched_sync.h>
 
 /*
@@ -434,9 +430,11 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_next->next_thd_id = thd_id;
 	cos_next->next_thd_flags = flags;
 
+#ifdef LOG_MONITOR
         // Jiguo: track context switch ----->
-	moncs_enqueue(thd_id);
-
+	/* printc("cos_switch_thread_release...cs_enqueue (thd %d -> %d)\n", cos_get_thd_id(), thd_id); */
+	moncs_enqueue(thd_id, flags);
+#endif
 	cos_sched_lock_release();
 
 	/* kernel will read next thread information from cos_next */

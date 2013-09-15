@@ -10,9 +10,9 @@
 
 CSTUB_FN_0(int, lmon_ser2_test)
 
-	monevt_enqueue(uc->cap_no);
+monevt_enqueue(uc->cap_no, 1, 0);
 CSTUB_ASM_0(lmon_ser2_test)
-	monevt_enqueue(cos_spd_id());
+monevt_enqueue(cos_spd_id(), 1, 0);
 
 CSTUB_POST
 

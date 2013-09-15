@@ -102,7 +102,6 @@ cos_init(void)
 #endif
 		if (cos_get_thd_id() == warm) {
 			printc("<<<warm thd %d>>>\n", cos_get_thd_id());
-			timed_event_block(cos_spd_id(), 50);
 			i = 0;
 			while(i++ < ITER) lmon_ser1_test();
 		}

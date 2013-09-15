@@ -10,10 +10,13 @@
 vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
 {
 	vaddr_t ret = 0;
-
-	monevt_enqueue(cos_spd_id());
+#ifdef LOG_MONITOR
+	monevt_enqueue(cos_spd_id(), 11, 0);
+#endif
 	ret = lmon_ser1_test();
-	monevt_enqueue(0);  // the return spd should be popped from stack
+#ifdef LOG_MONITOR
+	monevt_enqueue(0, 11, 0);  // the return spd should be popped from stack
+#endif
 
 	return ret;
 }

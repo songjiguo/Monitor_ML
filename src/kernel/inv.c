@@ -3985,6 +3985,7 @@ cos_syscall_mmap_cntl(int spdid, long op_flags_dspd, vaddr_t daddr, unsigned lon
 			/* printk("cos: mmap grant -- could not get a physical page.\n"); */
 			return -EINVAL;
 		}
+		/* printk("cos mmap_cntl grant page(%lu): spd %d -- base %d pfn %d\n", page, spdid, this_spd->pfn_base, this_spd->pfn_extent); */
 		/*
 		 * Demand paging could mess this up as the entry might
 		 * not be in the page table, and we map in our cos
@@ -4133,6 +4134,7 @@ cos_syscall_pfn_cntl(int spdid, long op_dspd, unsigned int mem_id, int extent)
 		/* Given "grant" access to the destination component for the pfn range */
 		dspd->pfn_base   = mem_id;
 		dspd->pfn_extent = extent;
+		/* printk("cos pfn_cntl: spd %d -- base %d pfn %d\n", dspdid, dspd->pfn_base, dspd->pfn_extent); */
 		break;
 	case COS_PFN_MAX_MEM:
 		ret = spd->pfn_extent;

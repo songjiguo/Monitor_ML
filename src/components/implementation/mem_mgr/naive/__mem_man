@@ -36,6 +36,11 @@
 #include <cos_alloc.h>
 #include <print.h>
 
+// Jiguo: for context switch
+#ifdef LOG_MONITOR
+#define MM_LL_LOG
+#endif
+
 #include <cos_list.h>
 #include "../../sched/cos_sched_ds.h"
 #include "../../sched/cos_sched_sync.h"
@@ -194,7 +199,6 @@ cvas_deref(struct comp_vas *cv)
 	if (cv->nmaps == 0) {
 		cvect_free(cv->pages);
 		cvect_del(&comps, cv->spdid);
-		printc("cv spdid %d\n", cv->spdid);
 		cslab_free_cvas(cv);
 	}
 }
@@ -498,9 +502,7 @@ extern void parent_sched_exit(void);
 void 
 sched_exit(void)   
 {
-	/* printc("sched exit in mm (thd %d)\n", cos_get_thd_id()); */
-	/* mman_release_all();  */
-	/* printc("after mm release all (thd %d)\n", cos_get_thd_id()); */
+	mman_release_all();
 	parent_sched_exit();
 }
 

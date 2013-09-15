@@ -7,7 +7,7 @@
 #define RUNTIME                5 // seconds
 
 // After how many seconds should schedulers print out their information?
-#define SCHED_PRINTOUT_PERIOD  19
+#define SCHED_PRINTOUT_PERIOD  3
 #define COMPONENT_ASSERTIONS   1 // activate assertions in components?
 
 #define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
@@ -63,5 +63,7 @@
 /* to avoid the overhead of re-capability. Need fix later */
 #define LAZY_RECOVERY   1               // 1 will enable the lazy recovery, 0 for eager recovery
 #define SWIFI_ENABLE    0		// 1 enable the fault injection (swifi component), 0 disable
+
+#define LOG_MONITOR   1// Macro for low level log monitor 
 
 #endif /* COS_CONFIG_H */

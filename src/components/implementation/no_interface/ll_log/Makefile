@@ -2,7 +2,7 @@ C_OBJS=ll_logmon.o
 ASM_OBJS=
 COMPONENT=lllog.o
 INTERFACES=sched_hier ll_log
-DEPENDENCIES=printc sched_hier
+DEPENDENCIES=printc sched_hier recovery_upcall
 FN_PREPEND=parent_
 IF_LIB=
 

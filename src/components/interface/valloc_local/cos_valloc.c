@@ -5,14 +5,17 @@
 
 // for now, only 1 page at a time
 
+#include <cos_component.h>
+#include <print.h>
 #include <valloc_config.h>
-#include "../../implementation/sched/cos_sched_sync.h"
 
 #ifdef USE_VALLOC_LOCAL
 
-/* synchronization... */
-#define LOCK()   if (cos_sched_lock_take())    BUG();
-#define UNLOCK() if (cos_sched_lock_release()) BUG();
+/* // can not use this lock since cos_sched_lock_take/release will call context_switch */
+/* #include "../../implementation/sched/cos_sched_sync.h" */
+/* /\* synchronization... *\/ */
+/* #define LOCK()   if (cos_sched_lock_take())    BUG(); */
+/* #define UNLOCK() if (cos_sched_lock_release()) BUG(); */
 
 void *
 valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages)
@@ -20,7 +23,7 @@ valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages)
 	char *addr;
 	vaddr_t ret = 0;
 	
-	LOCK();
+	/* LOCK(); */
 
 	printc("local valloc (in spd %ld, thd %d)\n", cos_spd_id(), cos_get_thd_id());
 
@@ -32,7 +35,7 @@ valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages)
 	cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
 
 done:
-	UNLOCK();
+	/* UNLOCK(); */
 	return addr;
 }
 

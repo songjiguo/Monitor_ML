@@ -38,11 +38,6 @@ printc(char *fmt, ...)
 #define cos_idle_thd  4	        /* idle thread*/
 #define cos_timer_thd 7  	/* timer thread */
 
-#ifndef assert
-/* On assert, immediately switch to the "exit" thread */
-#define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); cos_switch_thread(alpha, 0);} } while(0)
-#endif
-
 #ifdef BOOT_DEPS_H
 #error "boot_deps.h should not be included more than once, or in anything other than boot."
 #endif
@@ -60,7 +55,7 @@ printc(char *fmt, ...)
  * prev_thd:     the thread requesting the initialization
  * recover_spd:  the spd that will require rebooting
  */
-static int          alpha, init_thd, recovery_thd, log_thd;
+static int          alpha, init_thd, recovery_thd;
 static volatile int prev_thd, recover_spd;
 
 static volatile vaddr_t recovery_arg;
@@ -78,12 +73,13 @@ struct comp_boot_info {
 #define NCOMPS 7 	/* comp0, us, and the four other components, and a log manager */
 static struct comp_boot_info comp_boot_nfo[NCOMPS];
 
-#define PAGES_NUM_LOG 1024
-
 static spdid_t init_schedule[]   = {LLBOOT_LOG, LLBOOT_MM, LLBOOT_SCHED, 0};
 static int     init_mem_access[] = {1, 1, 0, 0};
+static int     init_mem_amnt[]   = {128, 0, 0, 0};  // 128 pages for LL_LOG, 0 for default (evenly)
 static int     sched_offset      = 0, nmmgrs = 0;
 static int     frame_frontier    = 0; /* which physical frames have we used? */
+
+static int     allocated_mem    = 0; // Jiguo: any already allocated memory before mmgr
 
 typedef void (*crt_thd_fn_t)(void);
 
@@ -94,9 +90,15 @@ typedef void (*crt_thd_fn_t)(void);
 
 #include "../../sched/cos_sched_sync.h"
 #include "../../sched/cos_sched_ds.h"
+
 /* synchronization... */
 #define LOCK()   if (cos_sched_lock_take())    BUG();
 #define UNLOCK() if (cos_sched_lock_release()) BUG();
+
+#ifndef assert
+/* On assert, immediately switch to the "exit" thread */
+#define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); cos_switch_thread(alpha, 0);} } while(0)
+#endif
 
 /* scheduling/thread operations... */
 
@@ -136,13 +138,19 @@ llboot_thd_done(void)
 			 * proportional amount of memory WRT to the
 			 * other memory managers. */
 			if (init_mem_access[sched_offset]) {
-				int max_pfn, proportion;
-				if (sched_offset == 1) proportion = PAGES_NUM_LOG;
-				else {
-					if (nmmgrs > 1) nmmgrs--; // the first is reserved for log:Jiguo
-					max_pfn = cos_pfn_cntl(COS_PFN_MAX_MEM, 0, 0, 0);
-					max_pfn -= PAGES_NUM_LOG;
+				int max_pfn, proportion, mem_sz;
+
+				mem_sz = init_mem_amnt[sched_offset];
+				if (mem_sz) {
+					assert(nmmgrs > 1);
+					nmmgrs--;
+					proportion = mem_sz;
+					allocated_mem += mem_sz;
+				} else {
+					frame_frontier += allocated_mem;
+					max_pfn =  cos_pfn_cntl(COS_PFN_MAX_MEM, 0, 0, 0);
 					proportion = (max_pfn - frame_frontier)/nmmgrs;
+					//FIXME: round up here. Need assert
 				}
 				cos_pfn_cntl(COS_PFN_GRANT, s, frame_frontier, proportion);
 				comp_boot_nfo[s].memory_granted = 1;
@@ -161,11 +169,6 @@ llboot_thd_done(void)
 		BUG();
 	}
 
-	/* //Jiguo: for logging */
-	/* if (tid == log_thd) { */
-	/* 	printc("asdflkaj\n"); */
-	/* 	cos_upcall_args(COS_UPCALL_LOG_PROCESS, LLBOOT_LOG, 0); */
-	/* } */
 
 	while (1) {
 		int     pthd  = prev_thd;
@@ -214,6 +217,7 @@ recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 
 	return 0;
 }
+
 
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed);
@@ -430,14 +434,10 @@ boot_deps_init(void)
 	recovery_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(recovery_thd >= 0);
 
-	/* // Jiguo: for logging */
-	/* log_thd     = cos_create_thread((int)llboot_ret_thd, 0, 0); */
-	/* assert(log_thd >= 0); */
-
 	init_thd     = cos_create_thread((int)llboot_ret_thd, 0, 0);
 	printc("Low-level booter created threads:\n\t"
 	       "%d: alpha\n\t%d: recov\n\t%d: init\n",
-	       alpha, recovery_thd, init_thd);
+	       alpha, recovery_thd , init_thd);
 	assert(init_thd >= 0);
 
 	/* How many memory managers are there? */

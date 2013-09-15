@@ -408,6 +408,7 @@ thread_param_set(struct sched_thd *t, struct sched_param_s *ps)
 	if (sched_thd_ready(t)) fp_rem_thd(t);
 	fp_add_thd(t, prio);
 
+	printc("thd %d with prio %d\n", t->id, prio);
 
 	// Jiguo: add thread so we can tell which is home spd (for log monitor)
 	if (unlikely(!cos_sched_introspect(COS_SCHED_THD_EXIST, cos_spd_id(), t->id))) {

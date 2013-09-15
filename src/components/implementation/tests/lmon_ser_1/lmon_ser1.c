@@ -42,6 +42,8 @@ cos_lock_t t_lock;
 volatile int spin = 1;
 volatile int kevin, andy, qq;
 
+unsigned long long start, end;
+
 static void try_crisec_hp(void)
 {
 	int i;
@@ -52,7 +54,11 @@ static void try_crisec_hp(void)
 		timed_event_block(cos_spd_id(), 9);
 		spin = 0;
 		printc("thread h : %d try to take lock\n", cos_get_thd_id());
+		/* rdtscll(start); */
 		LOCK_TAKE();
+		/* rdtscll(end); */
+		/* printc("it takes %llu for high thread to get the lock\n", end-start); */
+
 		printc("thread h : %d has the lock\n", cos_get_thd_id());
 
 		LOCK_RELEASE();

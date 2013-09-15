@@ -7,6 +7,8 @@
 #include <cos_component.h>
 #include <cos_debug.h>
 
+#include <log.h>
+
 extern struct cos_sched_data_area cos_sched_notifications;
 /*
  * We cannot just pass the thread id into the system call in registers
@@ -32,6 +34,7 @@ static inline int cos_switch_thread(unsigned short int thd_id, unsigned short in
 	cos_next->next_thd_flags = flags;
 
 	/* kernel will read next thread information from cos_next */
+	// Jiguo: no need to monitor sched_init and sched_exit */
 	return cos___switch_thread(thd_id, flags); 
 }
 
@@ -48,7 +51,7 @@ static inline int cos_sched_lock_take(void)
 	u16_t curr_thd = cos_get_thd_id(), owner;
 	 
 	/* Recursively taking the lock: not good */
-	/* printc("current thread %d\n", curr_thd); */
+	/* printc("current thread %d in cos_sched_lock_take\n", curr_thd); */
 	assert(l->c.owner_thd != curr_thd);
 	do {
 		union cos_synchronization_atom p, n; /* previous and new */
@@ -64,6 +67,12 @@ static inline int cos_sched_lock_take(void)
 		if (unlikely(owner)) {
 			/* If another thread holds the lock, notify
 			 * kernel to switch */
+#ifdef LOG_MONITOR
+#if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)
+			printc("cos_sched_lock_take...cs_enqueue (thd %d)\n", cos_get_thd_id());
+			moncs_enqueue(owner, COS_SCHED_SYNC_BLOCK);   // Jiguo: monitor
+#endif
+#endif
 			if (cos___switch_thread(owner, COS_SCHED_SYNC_BLOCK) == -1) return -1;
 		}
 		/* If we are now the owner, we're done.  If not, try
@@ -85,7 +94,15 @@ static inline int cos_sched_lock_release(void)
 		queued_thd    = p.c.queued_thd;
 	} while (unlikely(!cos_cas((unsigned long *)&l->v, p.v, 0)));
 	/* If a thread is contending the lock. */
-	if (queued_thd) return cos___switch_thread(queued_thd, COS_SCHED_SYNC_UNBLOCK);
+	if (queued_thd) {
+#ifdef LOG_MONITOR
+#if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)
+		printc("cos_sched_lock_release...cs_enqueue (thd %d)\n", cos_get_thd_id());
+		moncs_enqueue(queued_thd, COS_SCHED_SYNC_UNBLOCK);   // Jiguo: monitor
+#endif
+#endif
+		return cos___switch_thread(queued_thd, COS_SCHED_SYNC_UNBLOCK);
+	}
 	
 	return 0;
 

@@ -7,6 +7,8 @@
 #include <valloc.h>
 #include <sched.h>
 
+#include <log.h>
+
 cos_lock_t l;
 #define LOCK() if (lock_take(&l)) BUG();
 #define UNLOCK() if (lock_release(&l)) BUG();
@@ -199,6 +201,7 @@ static int channel_init(int channel)
 		while (1) {
 			int ret;
 			if (-1 == (ret = cos_brand_wait(bid))) BUG();
+			moncs_enqueue(cos_get_thd_id(), COS_SCHED_BRAND_WAIT); // jiguo: cs monitoring
 			assert(channels[channel].t);
 			evt_trigger(cos_spd_id(), channels[channel].t->evtid);
 		}

@@ -74,8 +74,8 @@ static volatile unsigned long long generation = 0;
 /* Datastructure of blocked thread structures */
 COS_VECT_CREATE_STATIC(bthds);
 
-#define TAKE(spdid) 	do { if (sched_component_take(spdid))    return -1; } while (0)
-#define RELEASE(spdid)	do { if (sched_component_release(spdid)) return -1; } while (0)
+#define TAKE(spdid) 	do { if (sched_component_take(spdid))    assert(0); } while (0)
+#define RELEASE(spdid)	do { if (sched_component_release(spdid)) assert(0); } while (0)
 
 /* 
  * FIXME: to make this predictable (avoid memory allocation in the
@@ -255,6 +255,7 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 
 	RELEASE(spdid);
 
+	/* printc("thd %d tries lock and block on thd %d\n", cos_get_thd_id(), thd_id); */
 	if (-1 == sched_block(spdid, thd_id)) {
 		printc("Deadlock including thdids %d -> %d in spd %d, lock id %d.\n", 
 		       cos_get_thd_id(), thd_id, spd, (int)lock_id);
@@ -339,6 +340,7 @@ int lock_component_release(spdid_t spd, unsigned long lock_id)
 			RELEASE(spdid);
 		}
 
+		/* printc("thd %d is going to wakeup thd %d\n", cos_get_thd_id(), tid); */
 		/* Wakeup the way we were put to sleep */
 		assert(tid != cos_get_thd_id());
 		sched_wakeup(spdid, tid);
