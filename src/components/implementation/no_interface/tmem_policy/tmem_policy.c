@@ -749,7 +749,7 @@ init_thds(void)
 		t->sched_info.priority = p;
 		insert_thread(t);
 
-		//printc("TMEM Policy: Found thread %d.\n", i);
+		printc("TMEM Policy: Found thread %d.\n", i);
 
 		for (mgr = 0 ; mgr < NUM_TMEM_MGR ; mgr++) {
 			for (c = FIRST_LIST(&components[mgr], next, prev) ;
@@ -967,10 +967,10 @@ cos_init(void *arg)
 		counter++;
 		if (counter % report_period == 0) {
 			/* report tmems usage */
-			//cbufmgr_buf_report();
-			//stkmgr_stack_report();
+			cbufmgr_buf_report();
+			stkmgr_stack_report();
 		}
-		//gather_data(counter % report_period);
+		gather_data(counter % report_period);
 #ifdef THD_POOL
 		if (counter % report_period == 0) {
 			if (THD_POOL == 1)

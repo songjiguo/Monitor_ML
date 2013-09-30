@@ -17,7 +17,24 @@ struct thd_trace thd_trace[MAX_NUM_THREADS];
 static struct event_info last_evt_entry;  // to continue from last time on evt_ring in some spd
 static struct cs_info last_cs_entry;  // to continue from last time on cs_ring
 
+/* required timing data */
+#define CPU_FREQUENCY  (CPU_GHZ*1000000000)
+#define TIMER_FREQ     (CPU_TIMER_FREQ)
+#define CYC_PER_TICK   (CPU_FREQUENCY/TIMER_FREQ)
 // hard code the prio with thread for now. PI test only
+
+/* [ 6233.442649] cobj lllog:2 found at 0x40c35000:8f04, size 62894 -> 41c00000 */
+/* [ 6233.442658] cobj fprr:3 found at 0x40c3df20:15188, size 40bbc -> 42000000 */
+/* [ 6233.442667] cobj mm:4 found at 0x40c530c0:94c0, size 3b194 -> 42400000 */
+/* [ 6233.442675] cobj print:5 found at 0x40c5c580:266c, size 2b6a8 -> 42800000 */
+/* [ 6233.442682] cobj boot:6 found at 0x40c5ec00 -> 42c00000 */
+/* [ 6233.443718] cobj l:7 found at 0x42c36000:9390, size 3306c -> 43c00000 */
+/* [ 6233.443721] cobj te:8 found at 0x42c3f3a0:cd38, size 37a08 -> 44000000 */
+/* [ 6233.443723] cobj mon_p:9 found at 0x42c4c0e0:b4f0, size 34230 -> 44400000 */
+/* [ 6233.443726] cobj lmoncli1:10 found at 0x42c575e0:de64, size 36b90 -> 44800000 */
+/* [ 6233.443728] cobj lmonser1:11 found at 0x42c65460:10dac, size 39aec -> 44c00000 */
+/* [ 6233.443730] cobj va:12 found at 0x42c76220 -> 45000000 */
+
 static void
 prio_init(int thdid) 
 {
@@ -45,12 +62,18 @@ prio_init(int thdid)
 			break;
 		case 12:
 			thd_trace[thdid].prio = 11;
+			thd_trace[thdid].period = 10*CYC_PER_TICK;
+			thd_trace[thdid].execution = 2*CYC_PER_TICK;
 			break;
 		case 13:
 			thd_trace[thdid].prio = 15;
+			thd_trace[thdid].period = 22*CYC_PER_TICK;
+			thd_trace[thdid].execution = 4*CYC_PER_TICK;
 			break;
 		case 14:
 			thd_trace[thdid].prio = 20;
+			thd_trace[thdid].period = 56*CYC_PER_TICK;
+			thd_trace[thdid].execution = 12*CYC_PER_TICK;
 			break;
 		default:
 			break;
@@ -64,9 +87,18 @@ init_thread_trace()
 	int i, j;
 	memset(thd_trace, 0, sizeof(struct thd_trace) * MAX_NUM_THREADS);
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
-		thd_trace[i].thd_id = i;
-		thd_trace[i].block_dep = 0;
+		thd_trace[i].thd_id	 = i;
+		thd_trace[i].block_dep	 = 0;
 		thd_trace[i].pi_duration = 0;
+
+		thd_trace[i].period	    = 0;
+		thd_trace[i].execution	    = 0;
+
+		thd_trace[i].release	    = 0;
+		thd_trace[i].runtime	    = 0;
+		thd_trace[i].completion	    = 0;
+		thd_trace[i].wait_for_block = 0;
+
 		prio_init(i);
 		for (j = 0; j < MAX_NUM_SPDS; j++) {
 			thd_trace[i].alpha_exec[j]    = 0;
@@ -138,303 +170,6 @@ shared_ring_setup(spdid_t spdid, vaddr_t cli_addr, int type) {
 err:
         return -1;
 }
-
-/* /\* static void  *\/ */
-/* /\* copy_evt_entry(struct event_info *to, struct event_info *from) *\/ */
-/* /\* { *\/ */
-/* /\* 	assert(to); *\/ */
-/* /\* 	assert(from); *\/ */
-	
-/* /\* 	to->thd_id     = from->thd_id; *\/ */
-/* /\* 	to->from_spd   = from->from_spd; *\/ */
-/* /\* 	to->dest_info  = from->dest_info; *\/ */
-/* /\* 	to->time_stamp = from->time_stamp; *\/ */
-	
-/* /\* 	return; *\/ */
-/* /\* } *\/ */
-
-/* /\* the first item should always be the most recent ones that need to be processed *\/ */
-/* static int  */
-/* find_earliest_spd(int thdid) */
-/* { */
-/* 	int i, j, spdid = 0; */
-/*         struct logmon_info *spdmon, *spdmon_tmp; */
-/* 	struct thd_trace *thd_trace_list, *this_list;; */
-/* 	CK_RING_INSTANCE(logevts_ring) *evtring; */
-/* 	unsigned long long t, ts = LLONG_MAX; */
-	
-/* 	struct event_info *entry; */
-/* 	int valid; */
-/* 	j = 0; */
-/* 	for (i = 1; i < MAX_NUM_SPDS; i++) { */
-/* 		spdmon = &logmon_info[i]; */
-/* 		entry = &spdmon->first_entry; */
-/* 		valid = spdmon->first_entry.valid; */
-/* 		if (!valid) { */
-/* 			evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring; */
-/* 			if (!evtring) continue; */
-/* 			if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, &spdmon->first_entry)) continue; */
-/* 			t = spdmon->first_entry.time_stamp; */
-/* 			printc("head -- (spd %d thd %d (%llu), passed thd %d)\n", i, spdmon->first_entry.thd_id, t, thdid); */
-/* 		} */
-		
-/* 		if (thdid == 0) { */
-/* 			if (spdmon->first_entry.time_stamp > 0  */
-/* 			    && spdmon->first_entry.time_stamp < ts) { */
-/* 				ts = spdmon->first_entry.time_stamp; */
-/* 				/\* spdid = entry->from_spd; *\/ */
-/* 				spdid = i; */
-/* 			} */
-/* 		} else { */
-/* 			if (spdmon->first_entry.thd_id == thdid */
-/* 			    && spdmon->first_entry.time_stamp > 0  */
-/* 			    && spdmon->first_entry.time_stamp < ts) { */
-/* 				ts = spdmon->first_entry.time_stamp; */
-/* 				spdid = i; */
-/* 				/\* spdid = entry->from_spd; *\/ */
-/* 				printc("found *** spdid %d\n", spdid); */
-/* 			} */
-/* 		} */
-/* 	} */
-/* 	/\* printc("found first spdid %d\n", spdid); *\/ */
-
-/* 	return spdid; */
-/* } */
-
-/* // Decide what the next spd will be, based on where the execution is within invocation  */
-/* // dest: 0(need a returned spd) or spdid or cap_no  */
-/* static int */
-/* find_next_spd(struct event_info *entry, struct logmon_info *spdmon, int this_thd) */
-/* { */
-/* 	int dest; */
-/* 	assert(entry); */
-/* 	assert(spdmon); */
-
-/* 	/\* printc("1\n"); *\/ */
-/* 	spdmon->first_entry.valid = 0; */
-
-/* 	dest = entry->dest_info; */
-/* 	if (dest > MAX_NUM_SPDS) { */
-/* 		if ((dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest)) <= 0) assert(0); */
-/* 		goto done; */
-/* 	} */
-
-/* 	dest = find_earliest_spd(this_thd); */
-/* 	assert(dest < MAX_NUM_SPDS); */
-/* 	/\* printc("find next spd %d\n", dest); *\/ */
-/* done: */
-/* 	return dest; */
-/* } */
-
-/* static void */
-/* update_pi_info(struct thd_trace *thd_trace_list, struct event_info *entry, int curr_spd) */
-/* { */
-/* 	assert(thd_trace_list); */
-/* 	assert(entry); */
-
-/* 	if (!(thd_trace_list->block_dep = entry->dep_thd)) return; */
-
-/* 	/\* print_evtinfo(entry); *\/ */
-
-/* 	int dest = entry->dest_info; */
-/* 	if (dest > MAX_NUM_SPDS) { */
-/* 		if ((dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest)) <= 0) assert(0); */
-/* 	} */
-	
-/* 	/\* if (entry->from_spd == 3 && dest == 3 && entry->func_num == 11) { *\/ */
-/* 	/\* 	printc("---\n"); *\/ */
-/* 	/\* 	print_evtinfo(entry); *\/ */
-/* 	/\* 	printc("\n"); *\/ */
-/* 	/\* } *\/ */
-
-/* 	/\* if (entry->from_spd == 3 && dest == 0 && entry->func_num == 11) { *\/ */
-/* 	/\* 	printc("---\n"); *\/ */
-/* 	/\* 	print_evtinfo(entry); *\/ */
-/* 	/\* 	printc("\n"); *\/ */
-/* 	/\* } *\/ */
-	
-/* 	return; */
-/* } */
-
-/* static void */
-/* update_stack_info(struct thd_trace *thd_trace_list, struct event_info *entry, int curr_spd) */
-/* { */
-/* 	assert(thd_trace_list); */
-/* 	assert(entry); */
-	
-/* 	thd_trace_list->curr_spd_info.spdid = curr_spd; */
-/* 	thd_trace_list->curr_spd_info.from_spd = entry->from_spd; */
-/* 	/\* thd_trace_list->curr_spd_info.func_num = entry->func_num; *\/ */
-/* 	/\* thd_trace_list->curr_spd_info.dep_thd = entry->dep_thd; *\/ */
-/* 	/\* printc("update: total_pos %d (thd %d spdid %d)\n", thd_trace_list->total_pos, thd_trace_list->thd_id, spdid); *\/ */
-	
-/* 	return; */
-/* } */
-
-/* static void  */
-/* update_timing_info(struct thd_trace *thd_trace_list, struct event_info *entry, int curr_spd) */
-/* { */
-/* 	unsigned long long exec_tmp = 0; */
-
-/* 	assert(thd_trace_list); */
-/* 	assert(entry); */
-/* 	assert(curr_spd); */
-
-/* 	if (unlikely(!thd_trace_list->alpha_exec[curr_spd])) { */
-/* 		thd_trace_list->alpha_exec[curr_spd] = entry->time_stamp; */
-/* 		thd_trace_list->last_exec[curr_spd] = entry->time_stamp; */
-/* 	} else { */
-/* 		if (entry->dest_info && entry->dest_info == curr_spd) { */
-/* 			thd_trace_list->last_exec[curr_spd] = entry->time_stamp; */
-/* 		} else { */
-/* 			exec_tmp = entry->time_stamp - thd_trace_list->last_exec[curr_spd]; */
-/* 			assert(exec_tmp); */
-/* 			thd_trace_list->tot_exec += exec_tmp; */
-/* 			thd_trace_list->tot_spd_exec[curr_spd] += exec_tmp; */
-/* 			thd_trace_list->this_wcet[curr_spd] += exec_tmp; */
-/* 		} */
-/* 	} */
-
-/*         // this must be the return from server side, then update the wcet in this spd */
-/* 	if (!entry->dest_info) { */
-/* 		// update the wcet of this thd up to this spd */
-/* 		exec_tmp = entry->time_stamp - thd_trace_list->alpha_exec[curr_spd]; */
-/* 		thd_trace_list->alpha_exec[curr_spd] = 0; */
-/* 		if (exec_tmp > thd_trace_list->upto_wcet[curr_spd]) */
-/* 			thd_trace_list->upto_wcet[curr_spd] = exec_tmp; */
-/* 		/\* printc(" thd %d << wcet %llu >>\n ",thd_trace_list->thd_id, exec_tmp);		 *\/ */
-/* 		thd_trace_list->tot_upto_wcet[curr_spd] += thd_trace_list->upto_wcet[curr_spd]; */
-
-/* 		// update the wcet of this thd in this spd */
-/* 		if (thd_trace_list->this_wcet[curr_spd] > thd_trace_list->wcet[curr_spd]) */
-/* 			thd_trace_list->wcet[curr_spd] = thd_trace_list->this_wcet[curr_spd]; */
-/* 		thd_trace_list->tot_wcet[curr_spd] += thd_trace_list->wcet[curr_spd]; */
-
-/* 		// reset local wcet record and increase the invs to this spd */
-/* 		thd_trace_list->this_wcet[curr_spd] = 0; */
-/* 		thd_trace_list->tot_inv[curr_spd]++; */
-/* 	} */
-
-/* 	/\* printc("thd %d (total exec %llu, wcet %llu) in spd %d \n", thd_trace_list->thd_id, thd_trace_list->tot_spd_exec[curr_spd], thd_trace_list->wcet[curr_spd], curr_spd); *\/ */
-/* 	/\* printc("thd %d (total wcet %llu) upto spd %d (invocations %d)\n\n ", thd_trace_list->thd_id, thd_trace_list->tot_wcet[curr_spd], curr_spd, thd_trace_list->tot_inv[curr_spd]); *\/ */
-	
-/* 	return; */
-/* } */
-
-/* static struct event_info * */
-/* deq_entry(struct logmon_info *spdmon)  */
-/* { */
-/* 	struct event_info *entry_curr; */
-/* 	CK_RING_INSTANCE(logevts_ring) *evts_ring; */
-
-/* 	evts_ring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring; */
-/* 	if(!evts_ring) return NULL; */
-/* 	if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evts_ring, &spdmon->first_entry)) return NULL; */
-/* 	return &spdmon->first_entry; */
-/* } */
-
-/* static int cs_catch_evt = 1; */
-
-/* static void */
-/* walk_through_events() */
-/* { */
-/* 	int cs_thd, this_thd; */
-/* 	unsigned long long s,e; */
-
-/*         struct logmon_info *spdmon; */
-/* 	struct event_info *entry_curr = NULL; */
-/* 	struct thd_trace *thd_trace_list; */
-/* 	struct cs_info cs_entry_curr, cs_entry_next; */
-/* 	int curr_spd; */
-
-/* 	memset(&cs_entry_curr, 0, sizeof(struct cs_info)); */
-/* 	memset(&cs_entry_next, 0, sizeof(struct cs_info)); */
-
-/* 	/\* if (cs_catch_evt) { *\/ */
-/* 		curr_spd = find_earliest_spd(0); */
-/* 		assert(curr_spd); */
-/* 		spdmon = &logmon_info[curr_spd]; */
-/* 		entry_curr = &spdmon->first_entry; */
-/* 		assert(entry_curr); */
-/* 	/\* } *\/ */
-
-/* 	CK_RING_INSTANCE(logcs_ring) *csring; */
-/* 	csring = (CK_RING_INSTANCE(logcs_ring) *)lmcs.mon_csring; */
-/* 	assert(csring); */
-/* 	if (!CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry_curr)) return; */
-
-/* 	cs_thd = cs_entry_curr.next_thd; */
-/* 	s      = cs_entry_curr.time_stamp; */
-/* 	while(CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry_next)) { */
-/* 		this_thd = cs_thd; */
-/* 		cs_thd = cs_entry_next.next_thd; */
-/* 		e = cs_entry_next.time_stamp; */
-/* 		/\* printc("this_thd %d next thd %d\n", this_thd, cs_thd);		 *\/ */
-/* 		if (this_thd == cs_thd) continue; */
-/* 		// cs need catch events */
-/* 		/\* if (cs_catch_evt && entry_curr->time_stamp > e) goto next; *\/ */
-/* 		if (entry_curr->time_stamp > e) { */
-/* 			printc(" NEXT: this_thd %d, next thd %d timestamp %llu  <<< s: %llu e: %llu>>> \n", this_thd, cs_thd, entry_curr->time_stamp, s, e); */
-/* 			curr_spd = find_earliest_spd(0); */
-/* 			assert(curr_spd); */
-/* 			spdmon = &logmon_info[curr_spd]; */
-/* 			entry_curr = &spdmon->first_entry; */
-/* 			assert(entry_curr); */
-/* 			goto next; */
-/* 		} */
-/* 		/\* cs_catch_evt = 0; *\/ */
-/* 		curr_spd = find_earliest_spd(this_thd); */
-/* 		thd_trace_list = &thd_trace[this_thd]; */
-/* 		assert(thd_trace_list); */
-		
-/* 		while (curr_spd) { */
-/* 			/\* printc("curr_spd is %d\n", curr_spd); *\/ */
-/* 			spdmon = &logmon_info[curr_spd]; */
-/* 			entry_curr = &spdmon->first_entry; */
-/* 			printc("curr_spd %d thd %d timstamp %llu <<< s: %llu e: %llu>>>\n", curr_spd, this_thd, entry_curr->time_stamp, s, e); */
-/* 			/\* if (entry_curr->dest_info == 3 && entry_curr->dep_thd)  *\/ */
-/* 			/\* printc("curr_spd %d : entry_curr->thd_id %d (func %d, dep %d)\n", curr_spd, entry_curr->thd_id, entry_curr->func_num, entry_curr->dep_thd); *\/ */
-/* 			assert(entry_curr->thd_id); */
-
-/* 			// events need catch cs */
-/* 			while (entry_curr */
-/* 			       && entry_curr->time_stamp > 0 */
-/* 			       && entry_curr->time_stamp < s) { */
-/* 				printc("deq (this thd %d next thd %d): time_stamp %llu s %llu e %llu\n", this_thd, cs_thd, entry_curr->time_stamp, s, e); */
-/* 				entry_curr = deq_entry(spdmon); */
-/* 				printc("after deq (this thd %d next thd %d): time_stamp %llu s %llu e %llu\n", this_thd, cs_thd, entry_curr->time_stamp, s, e); */
-/* 			} */
-/* 			if (!entry_curr) break; // no more records for this spd */
-/* 			/\* assert(entry_curr->thd_id == this_thd); *\/ */
-/* 			if (entry_curr->thd_id != this_thd  */
-/* 			    || entry_curr->time_stamp < s  */
-/* 			    || entry_curr->time_stamp > e) { */
-/* 				/\* spdmon->first_entry.valid = 0; *\/ */
-/* 				/\* printc("BREAK!!\n"); *\/ */
-/* 				break; */
-/* 			} */
-
-/* 			printc("11111\n"); */
-/* 			update_timing_info(thd_trace_list, entry_curr, curr_spd); */
-/* 			update_stack_info(thd_trace_list, entry_curr, curr_spd); */
-/* 			update_pi_info(thd_trace_list, entry_curr, curr_spd); */
-
-
-/* 			if (entry_curr->dep_thd) { */
-/* 				printc(" this_thd %d, next thd %d  <<< s: %llu e: %llu>>> ", this_thd, cs_thd, s, e); */
-/* 				print_evtinfo(entry_curr); */
-/* 			} */
-
-/* 			curr_spd = find_next_spd(entry_curr, spdmon, this_thd); */
-/* 			/\* printc("next spd is %d\n", curr_spd); *\/ */
-/* 		} */
-/* 	next: */
-/* 		s = e; */
-/* 	} */
-	
-/* 	return; */
-/* } */
-
 
 static void
 update_pi_info(struct thd_trace *thd_trace_list, struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_info *cs_entry_next)
@@ -549,47 +284,13 @@ update_timing_info(struct thd_trace *thd_trace_list, struct event_info *entry, s
 static void 
 update_info(struct thd_trace *thd_trace_list, struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_info *cs_entry_next)
 {
-	update_timing_info(thd_trace_list, entry, cs_entry_curr, cs_entry_next);
+	/* update_timing_info(thd_trace_list, entry, cs_entry_curr, cs_entry_next); */
 	/* update_stack_info(thd_trace_list, entry, cs_entry_curr, cs_entry_next); */
-	/* update_pi_info(thd_trace_list, entry, cs_entry_curr, cs_entry_next); */
+	update_pi_info(thd_trace_list, entry, cs_entry_curr, cs_entry_next);
 
 	return;
 }
 
-
-static void
-init_earliest_evts()
-{
-	int i;
-        struct logmon_info *spdmon;
-	CK_RING_INSTANCE(logevts_ring) *evtring;
-	
-	struct event_info *entry;
-	for (i = 1; i < MAX_NUM_SPDS; i++) {
-		spdmon = &logmon_info[i];
-		entry = &spdmon->first_entry;
-		evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
-		if (!evtring) continue;
-		if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, entry)) continue;
-	}
-	return;
-}
-
-static void
-refill_earliest_evts(int spdid)
-{
-        struct logmon_info *spdmon;
-	CK_RING_INSTANCE(logevts_ring) *evtring;
-
-	spdmon = &logmon_info[spdid];
-	evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
-	if (!evtring) return;
-	/* reach the end of evts ring?  */
-	if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, &spdmon->first_entry)) { 
-		memset(&spdmon->first_entry, 0, sizeof(struct event_info));
-	}
-	return;
-}
 
 static void
 next_to_curr_evt(struct event_info *curr, struct event_info *next)
@@ -615,6 +316,88 @@ next_to_curr_cs(struct cs_info *curr, struct cs_info *next)
 	return;
 }
 
+static void 
+cap_to_dest(struct event_info *entry)
+{
+	int dest = entry->dest_info;
+	if (dest > MAX_NUM_SPDS) {
+		if ((dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest)) <= 0) assert(0);
+		entry->dest_info = dest;
+	}
+	
+	return;
+}
+
+static int sync_evt_cs(struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_info *cs_entry_next);
+
+static int
+invariance_check(struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_info *cs_entry_next)
+{
+	struct thd_trace *thd_trace_list;
+	if (!sync_evt_cs(entry, cs_entry_curr, cs_entry_next)) return 0;
+	thd_trace_list = &thd_trace[entry->thd_id];
+	assert(thd_trace_list);
+	update_info(thd_trace_list, entry, cs_entry_curr, cs_entry_next);
+	return 1;
+}
+
+static unsigned long long old_curr_t;
+static unsigned long long old_next_t;
+
+static int
+deadline_check(struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_info *cs_entry_next)
+{
+	struct thd_trace *thd_trace_list;
+	thd_trace_list = &thd_trace[cs_entry_curr->next_thd];
+	assert(thd_trace_list);
+	int spd = entry->dest_info;
+	assert(spd < MAX_NUM_SPDS);
+
+
+	if (thd_trace_list->release
+	    && (old_curr_t != cs_entry_curr->time_stamp) 
+	    && (old_next_t != cs_entry_next->time_stamp)) {
+		printc("thd %d runtime update ", cs_entry_curr->next_thd);
+		printc("cs curr %llu cs next %llu\n", cs_entry_curr->time_stamp,cs_entry_next->time_stamp);
+		thd_trace_list->runtime  += cs_entry_next->time_stamp - cs_entry_curr->time_stamp;
+		old_curr_t = cs_entry_curr->time_stamp;
+		old_next_t = cs_entry_next->time_stamp;
+	}
+
+	// unblock from periodic_wake_wait
+	if (entry->dest_info == 0 && entry->from_spd == 8 && entry->func_num == 212) {
+		printc("unblock: thd %d spd form %d to %d (entry thd %d) -- %llu\n",cs_entry_curr->next_thd, entry->from_spd, entry->dest_info, entry->thd_id, entry->time_stamp);
+		thd_trace_list->release = entry->time_stamp;
+		thd_trace_list->wait_for_block = 0;
+	}
+
+	// call periodic_wake_wait to block (need wait till actual sched_block)
+	if (entry->dest_info == 8 && entry->from_spd == 8 && entry->func_num == 212) {
+		printc("wait to block: thd %d spd form %d to %d (entry thd %d) -- %llu\n",cs_entry_curr->next_thd, entry->from_spd, entry->dest_info, entry->thd_id, entry->time_stamp);
+		assert(thd_trace_list->wait_for_block == 0);
+		thd_trace_list->wait_for_block = 1;		
+	}
+
+	// actual block in periodic_wake
+	if (entry->dest_info == 3 && entry->from_spd == 8 
+	    && entry->func_num == 1 && thd_trace_list->wait_for_block == 1) {
+		printc("periodic wake blocked!:thd %d spd form %d to %d (entry thd %d) -- %llu\n",cs_entry_curr->next_thd, entry->from_spd, entry->dest_info, entry->thd_id, entry->time_stamp);
+		thd_trace_list->completion = entry->time_stamp;
+
+		printc("thd %d -- release time %llu\n", thd_trace_list->thd_id, thd_trace_list->release);
+		printc("thd %d -- completion time %llu\n", thd_trace_list->thd_id, thd_trace_list->completion);
+
+		printc("thd %d -- expected execution time %llu\n", thd_trace_list->thd_id, thd_trace_list->execution);
+		printc("thd %d -- actual   execution time %llu\n", thd_trace_list->thd_id, thd_trace_list->runtime);
+		thd_trace_list->runtime = 0;
+		thd_trace_list->release = 0;
+		old_curr_t = 0;
+		old_next_t = 0;
+	}
+
+	return 1;
+}
+
 static int
 sync_evt_cs(struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_info *cs_entry_next)
 {
@@ -622,38 +405,48 @@ sync_evt_cs(struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_i
 	csring = (CK_RING_INSTANCE(logcs_ring) *)lmcs.mon_csring;
 	assert(csring);
 
-	if (!cs_entry_curr->time_stamp && !cs_entry_curr->time_stamp
-	    && last_cs_entry.time_stamp && last_evt_entry.time_stamp) {
-		next_to_curr_cs(cs_entry_curr, &last_cs_entry);
-		if (!(CK_RING_DEQUEUE_SPSC(logcs_ring, csring, cs_entry_next))) return 0;
-
-		/* printc("left: cs_curr  %llu  cs_next %llu (entry time %llu)\n",cs_entry_curr->time_stamp, cs_entry_next->time_stamp, last_evt_entry.time_stamp); */
-		struct thd_trace *thd_trace_list;
-		thd_trace_list = &thd_trace[last_evt_entry.thd_id];
-		assert(thd_trace_list);
-		update_info(thd_trace_list, &last_evt_entry, cs_entry_curr, cs_entry_next);
-		memset(&last_evt_entry, 0, sizeof(struct event_info));
-		memset(&last_cs_entry, 0, sizeof(struct cs_info));
-		return 1;
-	}
-	if (!entry) return 1;
 	/* printc("before: cs_curr  %llu  cs_next %llu (entry time %llu)\n",cs_entry_curr->time_stamp, cs_entry_next->time_stamp, entry->time_stamp); */
 	/* printc("thd %d spd %d  entry time %llu (entry thd %d)\n",cs_entry_curr->next_thd, entry->from_spd, entry->time_stamp, entry->thd_id); */
-	
-	if (entry->time_stamp < cs_entry_next->time_stamp && entry->thd_id == cs_entry_curr->next_thd) return 1;
-	
-	if (cs_entry_curr->time_stamp == 0) {
-		if (!CK_RING_DEQUEUE_SPSC(logcs_ring, csring, cs_entry_curr)) {
-			/* printc("1 no more cs entry\n"); */
-			return 0;
+
+	cap_to_dest(entry); 	// convert the cap to spd if this is an invocation
+
+	// same thread, no other thread switch occurred
+	if (entry->time_stamp < cs_entry_next->time_stamp && entry->thd_id == cs_entry_curr->next_thd) {
+
+		if (cs_entry_next->next_thd == 0 && cs_entry_next->flags == 0) {
+			cs_entry_next->next_thd = cs_entry_next->curr_thd;
+			assert(cs_entry_next->next_thd == 7);
+			cs_entry_next->curr_thd = cs_entry_curr->next_thd;
 		}
-	} else {
-		assert(cs_entry_next);
-		/* printc("sync:cs_curr  %llu  cs_next %llu\n",cs_entry_curr->time_stamp, cs_entry_next->time_stamp); */
+
+		deadline_check(entry, cs_entry_curr, cs_entry_next);
+		/* if (entry->dest_info == 8 && entry->func_num == 22) { */
+		/* 	printc("thd %d spd form %d to %d (entry thd %d) -- %llu\n",cs_entry_curr->next_thd, entry->from_spd, entry->dest_info, entry->thd_id, entry->time_stamp); */
+		/* } */
+		/* printc("same thread (%d) within the same cs\n", entry->thd_id); */
+		return 1;
+	}
+
+	if (cs_entry_curr->time_stamp == 0 && cs_entry_next->time_stamp == 0) { 	// first time
+		if (!CK_RING_DEQUEUE_SPSC(logcs_ring, csring, cs_entry_curr)) return 0;
+	}
+	if (cs_entry_curr->time_stamp != 0 && cs_entry_next->time_stamp != 0) { 	// during the process
 		next_to_curr_cs(cs_entry_curr, cs_entry_next);
 	}
 
-	while (CK_RING_DEQUEUE_SPSC(logcs_ring, csring, cs_entry_next)) {
+	while (CK_RING_DEQUEUE_SPSC(logcs_ring, csring, cs_entry_next)) {  	      // get 2nd cs entry
+
+		if (cs_entry_next->next_thd == 0 && cs_entry_next->flags == 0) {
+			cs_entry_next->next_thd = cs_entry_next->curr_thd;
+			assert(cs_entry_next->next_thd == 7);
+			cs_entry_next->curr_thd = cs_entry_curr->next_thd;
+		}
+
+		deadline_check(entry, cs_entry_curr, cs_entry_next);
+		/* if (entry->dest_info == 8 && entry->func_num == 22) { */
+		/* 	printc("thd %d spd form %d to %d (entry thd %d) -- %llu\n",cs_entry_curr->next_thd, entry->from_spd, entry->dest_info, entry->thd_id, entry->time_stamp); */
+		/* } */
+		/* deadline_check(entry, cs_entry_curr, cs_entry_next); */
 		/* printc("sync: cs_curr  %llu (thd %d)  cs_next %llu\n",cs_entry_curr->time_stamp, cs_entry_curr->curr_thd, cs_entry_next->time_stamp); */
 		/* printc("sync: thd %d spd %d  entry time %llu (entry thd %d)\n",cs_entry_curr->next_thd, entry->from_spd, entry->time_stamp, entry->thd_id); */
 		if (cs_entry_next->time_stamp < entry->time_stamp) {
@@ -664,10 +457,14 @@ sync_evt_cs(struct event_info *entry, struct cs_info *cs_entry_curr, struct cs_i
 			return 1;
 		}
 	}
+
+	// No cs record is found to cover the event entry, so will process in the next time
 	next_to_curr_evt(&last_evt_entry, entry);
 	next_to_curr_cs(&last_cs_entry, cs_entry_next);
 	/* printc("after: cs_curr  %llu  cs_next %llu (entry time %llu)\n",cs_entry_curr->time_stamp, cs_entry_next->time_stamp, entry->time_stamp); */
 	/* printc("thd %d spd %d  entry time %llu (entry thd %d)\n",cs_entry_curr->next_thd, entry->from_spd, entry->time_stamp, entry->thd_id); */
+	/* } */
+	
 	return 0;
 }
 
@@ -678,13 +475,18 @@ find_earliest_entry_spd()
         struct logmon_info *spdmon, *ret = NULL;
 	struct thd_trace *thd_trace_list, *this_list;;
 	unsigned long long ts = LLONG_MAX;
+	CK_RING_INSTANCE(logevts_ring) *evtring;
 	
 	struct event_info *entry;
 	for (i = 1; i < MAX_NUM_SPDS; i++) {
 		spdmon = &logmon_info[i];
 		entry = &spdmon->first_entry;
-		if (!entry->time_stamp) continue;
-		
+		evtring = (CK_RING_INSTANCE(logevts_ring) *)spdmon->mon_ring;
+		if (!evtring) continue;
+		if (!entry->thd_id) {  // fill the 1st entry
+			if (!CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, entry)) continue;
+		}
+		/* if (!entry->time_stamp) continue; */
 		if (entry->time_stamp < ts) {
 			ts = entry->time_stamp;
 			ret = spdmon;
@@ -711,11 +513,6 @@ find_next_entry(int dest, int thdid)
 
 	if (!spdmon) return NULL;
 	ret = &spdmon->first_entry;
-	int dest_tmp = ret->dest_info;
-	if (dest_tmp > MAX_NUM_SPDS) {
-		if ((dest_tmp = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest_tmp)) <= 0) assert(0);
-		ret->dest_info = dest_tmp;
-	}
 	return ret;
 }
 
@@ -730,38 +527,24 @@ walk_through_events_new()
 	struct event_info *entry_curr = NULL, *entry_next = NULL;
 	struct thd_trace *thd_trace_list;
 	struct cs_info cs_entry_curr, cs_entry_next;
-	int curr_spd;
 
 	memset(&cs_entry_curr, 0, sizeof(struct cs_info));
 	memset(&cs_entry_next, 0, sizeof(struct cs_info));
 
 	// if there is any record left from last process?
-	if (!sync_evt_cs(0, &cs_entry_curr, &cs_entry_next)) return;
+	if (last_cs_entry.time_stamp && last_evt_entry.time_stamp) {
+		next_to_curr_cs(&cs_entry_curr, &last_cs_entry);
+		if (!invariance_check(&last_evt_entry, &cs_entry_curr, &cs_entry_next)) return;
+		last_evt_entry.time_stamp = 0;
+		last_cs_entry.time_stamp = 0;
+	}
 
-	init_earliest_evts();
-
+	/* printc("cs_curr  %llu  cs_next %llu (entry time %llu)\n",cs_entry_curr.time_stamp, cs_entry_next.time_stamp, entry_curr->time_stamp); */
+	/* printc("curr_thd %d next_thd %d from_spd %d next_spd %d entry time %llu (entry thd %d)\n",cs_entry_curr.curr_thd, cs_entry_curr.next_thd, entry_curr->from_spd, dest_tmp, entry_curr->time_stamp, entry_curr->thd_id); */
 	spdmon = find_earliest_entry_spd();
 	if (!spdmon) return;
 	entry_curr = &spdmon->first_entry;
-	assert(entry_curr);
-
-	if (!sync_evt_cs(entry_curr, &cs_entry_curr, &cs_entry_next)) return;
-
-	/* printc("cs_curr  %llu  cs_next %llu (entry time %llu)\n",cs_entry_curr.time_stamp, cs_entry_next.time_stamp, entry_curr->time_stamp); */
-	int dest_tmp = entry_curr->dest_info;
-	if (dest_tmp > MAX_NUM_SPDS) {
-		if ((dest_tmp = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest_tmp)) <= 0) assert(0);
-		entry_curr->dest_info = dest_tmp;
-	}
-	/* printc("curr_thd %d next_thd %d from_spd %d next_spd %d entry time %llu (entry thd %d)\n",cs_entry_curr.curr_thd, cs_entry_curr.next_thd, entry_curr->from_spd, dest_tmp, entry_curr->time_stamp, entry_curr->thd_id); */
-
-	curr_spd = spdmon->spdid;
-	assert(curr_spd);
-	thd_trace_list = &thd_trace[entry_curr->thd_id];
-	assert(thd_trace_list);
-
-	assert(entry_curr->from_spd == curr_spd);
-	update_info(thd_trace_list, entry_curr, &cs_entry_curr, &cs_entry_next);
+	if (!invariance_check(entry_curr, &cs_entry_curr, &cs_entry_next)) return;
 
 	int dest, thdid;
 	int from_spd;
@@ -769,20 +552,16 @@ walk_through_events_new()
 		dest = entry_curr->dest_info;
 		thdid = entry_curr->thd_id;
 		from_spd = entry_curr->from_spd;
-		
-		refill_earliest_evts(from_spd);
-		entry_next = find_next_entry(dest, thdid);
+		entry_curr->thd_id = 0;
 
+		entry_next = find_next_entry(dest, thdid);
 		if (!entry_next) break;
-		if (!sync_evt_cs(entry_next, &cs_entry_curr, &cs_entry_next)) break;
 
 		/* printc("curr_thd %d next_thd %d from_spd %d next_spd %d entry time %llu (entry thd %d) ",cs_entry_curr.curr_thd, cs_entry_curr.next_thd, from_spd, entry_next->from_spd, entry_next->time_stamp, entry_next->thd_id); */
 		/* printc("cs curr %llu cs next %llu\n",cs_entry_curr.time_stamp, cs_entry_next.time_stamp); */
 
-		thd_trace_list = &thd_trace[entry_next->thd_id];
-		assert(thd_trace_list);
+		if (!invariance_check(entry_next, &cs_entry_curr, &cs_entry_next)) break;
 
-		update_info(thd_trace_list, entry_next, &cs_entry_curr, &cs_entry_next);
 		entry_curr = entry_next;		
 	}
 	return;
@@ -834,10 +613,8 @@ llog_process(spdid_t spdid)
 	/* test_num++; */
 	/* if (test_num < 4) { */
 
-	llog_report();
+	/* llog_report(); */
 	/* } */
-
-
 
 	UNLOCK();
 
@@ -906,22 +683,6 @@ done:
 	return ret;
 }
 
-static inline void
-log_spin(void)
-{
-	/* printc("log process thread (by recovery thread now) %d is processing here\n", cos_get_thd_id()); */
-
-	walk_through_events_new();
-
-	/* test_num++; */
-	/* if (test_num < 4) { */
-
-	/* 	llog_report(); */
-	/* } */
-
-	return;
-}
-
 // do this once
 static inline void
 log_init(void)
@@ -956,8 +717,6 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 	switch (t) {
 	case COS_UPCALL_BOOTSTRAP:
 		log_init(); break;
-	case COS_UPCALL_LOG_PROCESS:
-		log_spin(); break;
 	default:
 		BUG(); return;
 	}

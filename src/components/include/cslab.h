@@ -168,7 +168,6 @@ __cslab_mem_alloc(struct cslab_freelist *fl, int obj_sz, int max_objs)
 	idx = bitmap_one(bm, CSLAB_BITMAP_SIZE);
 	assert(idx > -1 && idx < max_objs);
 	bitmap_unset(bm, idx);
-	assert(!bitmap_check(bm, idx));
 	mem = __cslab_mem_first(s) + (idx * obj_sz);
 
 	assert(s->nfree);

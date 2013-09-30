@@ -12,11 +12,9 @@
 
 #ifndef ASM
 
-//#include <cos_types.h>
-//#include <consts.h>
 #include "shared/cos_types.h"
 #include "shared/consts.h"
-
+#include "chal.h"
 
 /**
  * Service Protection Domains
@@ -34,10 +32,6 @@
  * protection domains.  
  */
 
-//#define MAX_NUM_SPDS 32
-/* ~ ((pagesize - sizeof(spd))/sizeof(static_capability)) */
-//#define MAX_STATIC_CAP 1000
-
 /*
  * Static capabilities:
  * 
@@ -50,22 +44,6 @@
  * synchronized with asm_ipc_defs.h.
  */
 /* user half found in cos_types.h */
-
-
-/* Comment: by defining 0 bit, it takes no memory allocation at
- * all. By doing this, we can eliminate the fault_counter from all
- * thread and spd data structure */
-
-#if (RECOVERY_ENABLE == 1)
-struct fault_counter {
-	unsigned long cnt;
-};
-#else
-struct fault_counter {
-	unsigned long : 0;		
-};
-#endif
-
 
 /* ST stubs are linked automatically */
 struct usr_cap_stubs {
@@ -83,15 +61,12 @@ struct usr_cap_stubs {
  */
 struct spd;
 struct invocation_cap {
-	/* the spd that can make invocations on this capability
-	 * (owner), and the spd that invocations are made to. owner ==
+	/* the spd that invocations are made to. destination ==
 	 * NULL means that this entry is free and not in use.  */
-	struct spd *owner, *destination;
+	struct spd *destination;
 	unsigned int invocation_cnt:30;
 	isolation_level_t il:2;
 	vaddr_t dest_entry_instruction;
-
-	struct fault_counter fault;
 	/* 
 	 * For now, this can be part of the structure as the structure
 	 * should still remain <= 32 bytes, however if this changes,
@@ -117,21 +92,25 @@ struct invocation_cap {
  * - The static capabilities for this service.
  */
 
-/* spd flags */
-#define SPD_COMPOSITE   0x1 // Is this spd a composite_spd?
-#define SPD_FREE        0x2 // currently unused
-#define SPD_DEPRICATED  0x4 // Must have SPD_COMPOSITE.  This spd
-                            // should no longer be used except for
-			    // thread returns.
-#define SPD_SUBORDINATE 0x8 // must be a spd_composite.  uses the page 
-                            // table of another composite spd, so if we 
-                            // delete this, do not delete the pgtbl, 
-                            // just decriment the reference count of 
-                            // the spd that has the pg_tbl (via master_spd ptr)
-#define SPD_ACTIVE      0x10 // spd is active, can have capabilities
-			     // assigned to it, and threads executed
-			     // within it...
-#define MAX_MPD_DESC    1024 // Max number of descriptors for composite spds
+typedef enum {
+	/* Is this spd a composite_spd? */
+	SPD_COMPOSITE = 0x1, 
+	/* currently unused */
+	SPD_FREE = 0x2, 
+	/* Must have SPD_COMPOSITE.  This spd should no longer be used
+         * except for thread returns. */
+	SPD_DEPRICATED = 0x4, 
+	/* must be a spd_composite.  uses the page table of another
+         * composite spd, so if we delete this, do not delete the
+         * pgtbl, just decriment the reference count of the spd that
+         * has the pg_tbl (via master_spd ptr) */
+	SPD_SUBORDINATE = 0x8, 
+	/* spd is active, can have capabilities assigned to it, and
+	 * threads executed within it... */
+	SPD_ACTIVE = 0x10, 
+	/* Max number of descriptors for composite spds */
+	MAX_MPD_DESC = 1024
+} spd_flags_t;
 
 /*
  * The spd_poly struct contains all the information that both struct
@@ -139,24 +118,22 @@ struct invocation_cap {
  * to be polymorphic with spd_poly as the "base class".
  */
 struct spd_poly {
-	unsigned int flags;
+	spd_flags_t flags;
 	atomic_t ref_cnt;
 	paddr_t pg_tbl;
 };
 
 /* 
- * A collection of Symmetrically trusted spds.
+ * A collection of spds in the same protection domain.
  *
  * Spd membership in this composite can be tested by seeing if a
  * specific spd's address range is present in the spd_info->pg_tbl
- *
- * 
  */
 struct spd;
 struct composite_spd {
 	struct spd_poly spd_info;
-	struct spd *members; // iff !(flags & (SPD_DEPRICATED|SPD_SUBORDINATE))
-	struct composite_spd *master_spd; // iff flags & SPD_SUBORDINATE
+	struct spd *members;               /* iff !(flags & (SPD_DEPRICATED|SPD_SUBORDINATE)) */
+	struct composite_spd *master_spd;  /* iff flags & SPD_SUBORDINATE */
 	struct composite_spd *next, *prev; /* flags & SPD_FREE -> next == freelist |
 					    * flags & SPD_SUBORDINATE -> list of subordinates */
 } CACHE_ALIGNED;
@@ -165,6 +142,8 @@ struct composite_spd {
  * Currently spds consist of a contiguous range of virtual
  * addresses. if lowest_addr == 0, then we share page tables with the
  * main configuration task, thus having universal memory access.
+ * Please do _not_ make the assumption that this (lowest_addr == 0 is
+ * the linux task) in your code.  It will change in the near future.
  */
 struct spd_location {
 	unsigned int lowest_addr;
@@ -176,18 +155,14 @@ typedef int mmaps_t;
 struct spd {
 	/* data touched on the ipc hotpath (32 bytes)*/
 	struct spd_poly spd_info;
-
-	/* fault counter associated with this spd */
-	struct fault_counter fault;
-
 	struct spd_location location[MAX_SPD_VAS_LOCATIONS];
-	/* The "current" protection state of the spd, which might
-	 * point directly to spd->spd_info, or
-	 * a composite_spd->spd_info 
+	/* 
+	 * The "current" protection state of the spd, which might
+	 * point directly to spd->spd_info, or a
+	 * composite_spd->spd_info
 	 */
-	struct spd_poly /*composite_spd*/ *composite_spd; 
+	struct spd_poly *composite_spd; 
 	
-	unsigned short int cap_base, cap_range;
 	/* numbered faults correspond to which capability? */
 	unsigned short int fault_handler[COS_FLT_MAX];
 	/*
@@ -203,9 +178,9 @@ struct spd {
 	int sched_depth;
 	struct spd *parent_sched;
 
-	struct cos_sched_data_area *sched_shared_page, *kern_sched_shared_page;
-	unsigned short int prev_notification;
-	struct cos_net_xmit_headers *cos_net_xmit_headers;
+	struct cos_sched_data_area *sched_shared_page[NUM_CPU], *kern_sched_shared_page[NUM_CPU];
+	unsigned short int prev_notification[NUM_CPU];
+	struct cos_net_xmit_headers *cos_net_xmit_headers[NUM_CPU];
 
 	mmaps_t local_mmaps; /* mm_handle (see hijack.c) for linux compat */
 
@@ -220,9 +195,8 @@ struct spd {
 	/* Linked list of the members of a non-depricated, current composite spd */
 	struct spd *composite_member_next, *composite_member_prev;
 
-	/* fault tolerance related */
-	struct thread *scheduler_hrt_threads; /* hard real time threads */
-	struct thread *scheduler_bes_threads; /* best effort threads */
+	unsigned int ncaps;
+	struct invocation_cap caps[MAX_STATIC_CAP];
 } CACHE_ALIGNED; //cache line size
 
 paddr_t spd_alloc_pgtbl(void);
@@ -246,9 +220,6 @@ struct spd *spd_get_by_index(int idx);
 void spd_free_all(void);
 void spd_init(void);
 
-int spd_reserve_cap_range(struct spd *spd, int amnt);
-int spd_release_cap_range(struct spd *spd);
-
 int spd_cap_activate(struct spd *spd, int cap);
 int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd);
 int spd_cap_set_cstub(struct spd *spd, int cap, vaddr_t fn);
@@ -263,10 +234,9 @@ unsigned int spd_add_static_cap_extended(struct spd *spd, struct spd *trusted_sp
 					 vaddr_t AT_cli_stub, vaddr_t AT_serv_stub,
 					 vaddr_t SD_cli_stub, vaddr_t SD_serv_stub,
 					 isolation_level_t isolation_level, int flags);
-isolation_level_t cap_change_isolation(int cap_num, isolation_level_t il, int flags);
-int cap_is_free(int cap_num);
+isolation_level_t cap_change_isolation(struct spd *spd, int cap_num, isolation_level_t il, int flags);
+int cap_is_free(struct spd *spd, int cap_num);
 unsigned long spd_read_reset_invocation_cnt(struct spd *cspd, struct spd *sspd);
-struct invocation_cap *inv_cap_get(int c_num);
 
 static inline int spd_is_scheduler(struct spd *spd)
 {
@@ -399,12 +369,11 @@ int virtual_namespace_alloc(struct spd *spd, unsigned long addr, unsigned int si
  *
  * FIXME: TEST THIS!
  */
-extern int pgtbl_entry_absent(vaddr_t addr, paddr_t pg_tbl);
 static inline int spd_composite_member(struct spd *spd, struct spd_poly *poly)
 {
 	vaddr_t lowest_addr = spd->location[0].lowest_addr;
 
-	return !pgtbl_entry_absent(poly->pg_tbl, lowest_addr);
+	return !chal_pgtbl_entry_absent(poly->pg_tbl, lowest_addr);
 }
 
 #else /* ASM */

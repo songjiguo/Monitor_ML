@@ -6,7 +6,6 @@
  */
 
 #include <cos_asm_server_stub_simple_stack.h>
-#include "../../../../kernel/include/shared/cos_config.h"
 	
 .text
 cos_asm_server_stub_spdid(fault_page_fault_handler)

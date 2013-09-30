@@ -23,12 +23,6 @@ struct fsobj root;
 #define LOCK() if (lock_take(&fs_lock)) BUG();
 #define UNLOCK() if (lock_release(&fs_lock)) BUG();
 
-td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, int flag)
-{
-	return 0;
-}
-
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
        int len, tor_flags_t tflags, long evtid) 
@@ -38,8 +32,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	struct fsobj *fso, *fsc, *parent; /* obj, child, and parent */
 	char *subpath;
 
-	printc("tar tsplit...1  param %s\n", param);
-
 	if (tor_isnull(td)) return -EINVAL;
 	LOCK();
 	t = tor_lookup(td);
@@ -47,7 +39,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	fso = t->data;
 
 	fsc = fsobj_path2obj(param, len, fso, &parent, &subpath);
-	if (!fsc) printc("can not find the file %s\n", param);;
 	if (!fsc) return -ENOENT;
 
 	fsobj_take(fsc);
@@ -60,12 +51,6 @@ tsplit(spdid_t spdid, td_t td, char *param,
 done:
 	UNLOCK();
 	return ret;
-}
-
-int 
-twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
-{
-	return -ENOTSUP;
 }
 
 int 

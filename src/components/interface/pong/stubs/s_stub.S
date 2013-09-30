@@ -3,24 +3,11 @@
  *
  * Redistribution of this file is permitted under the GNU General
  * Public License v2.
-	
+ */
 
+#include <cos_asm_server_stub.h>
+//#include <cos_asm_server_stub_simple_stack.h>
 
-	.text
-	
-	cos_asm_server_stub_spdid(mman_get_page)
-        cos_asm_server_stub_spdid(mman_alias_page)	
+.text
 
-        cos_asm_server_stub_spdid(mman_revoke_page)
-
-	cos_asm_server_stub(mman_introspect)			
-*/
-
-#include <cos_asm_server_stub_simple_stack.h>
-//#include <cos_asm_server_stub.h>
-
-.text	
-
-cos_asm_server_stub(pong)
-
-
+cos_asm_server_stub(call)

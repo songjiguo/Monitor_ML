@@ -372,7 +372,6 @@ void *alloc_page(void)
 		fp->next       = NULL;
 		a              = (void*)fp;
 	}
-	memset(a, 0, PAGE_SIZE);
 	
 	return a;
 }

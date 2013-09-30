@@ -8,10 +8,9 @@
 
 #include "include/debug.h"
 #include "include/thread.h"
+#include "include/chal.h"
 
-#include <linux/kernel.h>
-
-extern vaddr_t pgtbl_vaddr_to_kaddr(paddr_t pgtbl, unsigned long addr);
+extern vaddr_t chal_pgtbl_vaddr2kaddr(paddr_t pgtbl, unsigned long addr);
 extern int user_struct_fits_on_page(unsigned long addr, unsigned int size);
 /* 
  * Return -1 if there is some form of error (couldn't find ring
@@ -30,13 +29,7 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 	vaddr_t kaddr;
 	unsigned short int status, len;
 	struct spd *bspd;
-
-	ring_buff_track_t *rb_track;
-	unsigned long long arrival_t;
-	rdtscll(arrival_t);
-	/* printk("INT arrival @ %llu\n", arrival_t); */
-
-	/* printk("cos:rb_retrieve_buff\n");	 */
+	
 	assert(brand);
 	rb = brand->k_rb;
 	if (!rb) {
@@ -54,7 +47,7 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 		return -1;
 	}
 	bspd = thd_get_thd_spd(brand);
-	kaddr = pgtbl_vaddr_to_kaddr(bspd->spd_info.pg_tbl, (unsigned long)addr);
+	kaddr = chal_pgtbl_vaddr2kaddr(bspd->spd_info.pg_tbl, (unsigned long)addr);
 	if (!kaddr || !user_struct_fits_on_page(kaddr, len)) {
 		rb->packets[position].status = RB_ERR;
 		brand->rb_next = (position+1) & (RB_SIZE-1);
@@ -70,21 +63,6 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 	rb->packets[position].status = RB_USED;
 	brand->rb_next = (position+1) & (RB_SIZE-1);
 
-//////////////////////////////////////////////////////////////////////
-/* Jiguo: Add a tracking RB to track the packet timestamp  */
-	rb_track = brand->k_rb_track;
-	if (!rb_track) {
-		return -1;
-	}
-
-	int position_track;
-	position_track = brand->rb_next_track;
-	/* printk("Arrival: postion %d\n", brand->rb_next_track); */
-	rb_track->packets[position_track].time_stamp = arrival_t;
-	brand->rb_next_track = (position_track+1) & (RB_SIZE_TRACK-1);
-	/* printk(":Arrival: postion %d (RB_SIZE_TRACK %d)\n", brand->rb_next_track, RB_SIZE_TRACK); */
-//////////////////////////////////////////////////////////////////////
-
 	return 0;
 }
 
@@ -96,19 +74,6 @@ int rb_setup(struct thread *brand, ring_buff_t *user_rb, ring_buff_t *kern_rb)
 	brand->u_rb = user_rb;
 	brand->k_rb = kern_rb;
 	brand->rb_next = 0;
-
+	
 	return 0;
 }
-
-//////////////////////////////////////////////////////////////////////
-// track the package only
-int rb_setup_track(struct thread *brand, ring_buff_track_t *user_rb, ring_buff_track_t *kern_rb)
-{
-	assert(brand && user_rb && kern_rb);
-	brand->u_rb_track = user_rb;
-	brand->k_rb_track = kern_rb;
-	brand->rb_next_track = 0;
-
-	return 0;
-}
-//////////////////////////////////////////////////////////////////////

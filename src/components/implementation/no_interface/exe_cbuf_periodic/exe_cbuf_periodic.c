@@ -152,7 +152,8 @@ void cos_init(void *arg)
 		if (sched_create_thd(cos_spd_id(), sp.v, 0, 0) == 0) BUG();
 		if (priority == 30) { //best effort thds
 			printc("thd num %d\n",thd_num);
-			for (i=0; i<(thd_num-1); i++) sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+				for (i=0; i<(thd_num-1); i++)
+				sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 		}
 		return;
 	}

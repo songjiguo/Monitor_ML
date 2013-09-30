@@ -29,16 +29,11 @@
 #include <cos_map.h>
 #include <errno.h>
 
-#include <rtorrent.h>
+#include <torrent.h>
 #include <torlib.h>
 #include <cbuf.h>
 #include <periodic_wake.h>
 #include <sched.h>
-
-unsigned long long start, end;
-//#define MEAS_TREAD
-//#define MEAS_TSPLIT
-//#define MEAS_TRELEASE
 
 static cos_lock_t h_lock;
 #define LOCK() if (lock_take(&h_lock)) BUG();
@@ -248,18 +243,9 @@ static int http_get_request(struct http_request *r)
 	int ret = -1;
 	assert(r && r->c);
 
-	/* printc("http_get_request...(thd %d)\n", cos_get_thd_id()); */
 	if (0 > r->content_id) {
-#ifdef MEAS_TSPLIT	
-			rdtscll(start);
-#endif
 		r->content_id = server_tsplit(cos_spd_id(), td_root, r->path, 
 					      r->path_len, TOR_READ, r->c->evt_id);
-#ifdef MEAS_TSPLIT			
-			rdtscll(end);
-			printc("h_ss %llu\n", end-start);
-#endif
-		/* printc("after ramfs tsplit id %ld (thd %d)\n", r->content_id, cos_get_thd_id()); */
 		if (r->content_id < 0) return r->content_id;
 		ret = 0;
 	}
@@ -429,16 +415,7 @@ static void http_free_request(struct http_request *r)
 	if (c->pending_reqs == r) {
 		c->pending_reqs = (r == next) ? NULL : next;
 	}
-
-#ifdef MEAS_TRELEASE
-	rdtscll(start);
-#endif
 	server_trelease(cos_spd_id(), r->content_id);
-#ifdef MEAS_TRELEASE
-	rdtscll(end);
-	printc("h_strelease %llu\n", end-start);
-#endif
-
 	conn_refcnt_dec(c);
 	__http_free_request(r);
 }
@@ -639,14 +616,7 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 			local_resp = cbuf_alloc(sz, &cb);
 			if (!local_resp) BUG();
 
-#ifdef MEAS_TREAD			
-			rdtscll(start);
-#endif
 			ret = server_tread(cos_spd_id(), r->content_id, cb, sz);
-#ifdef MEAS_TREAD			
-			rdtscll(end);
-			printc("h_sr %llu\n", end-start);
-#endif
 			if (ret < 0) {
 				cbuf_free(local_resp);
 				printc("https get reply returning %d.\n", ret);
@@ -739,8 +709,6 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	struct torrent *t;
 	struct connection *c;
 
-	/* printc("https tsplit\n"); */
-	/* printc("spdid %d tid, %d param %s len %d tflags %d evtid %d\n", spdid, tid, param, len, tflags, evtid); */
 	if (tor_isnull(tid)) return -EINVAL;
 	
 	LOCK();
@@ -757,13 +725,6 @@ free:
 	http_free_connection(c);
 	goto err;
 }
-
-/* td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, */
-/* 	      tor_flags_t tflags, long evtid, int flag) */
-/* { */
-/* 	printc("https: __tsplit\n"); */
-/* 	return tsplit(spdid, tid, param, len, tflags, evtid); */
-/* } */
 
 void
 trelease(spdid_t spdid, td_t td)
@@ -792,13 +753,6 @@ done:
 }
 
 int 
-twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
-{
-	return -ENOTSUP;
-}
-
-
-int 
 tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
 {
 	int ret = 0;
@@ -816,9 +770,6 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret = -1;
-
-	/* printc("https twrite (thd %d)>>>\n", cos_get_thd_id()); */
-	/* rdtscll(start); */
 
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
@@ -838,9 +789,6 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	unlock_connection(c);
 	ret = sz;
 done:
-	/* rdtscll(end); */
-	/* printc("https twrite cost: %llu\n", end-start); */
-		
 	return ret;
 unlock:
 	UNLOCK();
@@ -856,8 +804,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret;
-
-	/* printc("http: tread\n"); */
+	
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
@@ -967,30 +914,17 @@ unlock:
 
 #define HTTP_REPORT_FREQ 100
 
-/* static int ala = 0; */
-
 void cos_init(void *arg)
 {
-	union sched_param sp;
-	static int first = 0;
-	if (first == 0) {
-		first = 1;
+	torlib_init();
+	lock_static_init(&h_lock);
 
-		torlib_init();
-		lock_static_init(&h_lock);
-	
-		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 28;
-		sched_create_thd(cos_spd_id(), sp.v, 0, 0);
-	} else {
-		if (periodic_wake_create(cos_spd_id(), HTTP_REPORT_FREQ)) BUG();
-		while (1) {
-			periodic_wake_wait(cos_spd_id());
-			printc("HTTP conns %ld, reqs %ld (thd %d)\n", http_conn_cnt, http_req_cnt, cos_get_thd_id());
-			http_conn_cnt = http_req_cnt = 0;
-			/* if (ala++ == 10) assert(0); */
-		}
+	if (periodic_wake_create(cos_spd_id(), HTTP_REPORT_FREQ)) BUG();
+	while (1) {
+		periodic_wake_wait(cos_spd_id());
+		printc("HTTP conns %ld, reqs %ld\n", http_conn_cnt, http_req_cnt);
+		http_conn_cnt = http_req_cnt = 0;
 	}
-
+	
 	return;
 }

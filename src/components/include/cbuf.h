@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 by The George Washington University.  All rights reserved.
+ * Copyright 2010 by Gabriel Parmer.  All rights reserved.
  *
  * Redistribution of this file is permitted under the GNU General
  * Public License v2.
@@ -7,6 +7,11 @@
  * Author: Gabriel Parmer, gparmer@gwu.edu, 2010
  * Updated by Qi Wang and Jiguo Song, 2011
  * Updated and simplified by removing sub-page allocations, Gabe Parmer, 2012
+ * Updated to add persistent cbufs, Gabe Parmer, 2012
+ */
+
+/* 
+ * You'll require dependencies on both cbuf_c and cbufp.
  */
 
 #ifndef  CBUF_H
@@ -15,8 +20,10 @@
 #include <cos_component.h>
 #include <cos_debug.h>
 #include <cbuf_c.h>
+#include <cbufp.h>
+#define cbid_to_meta_idx(cid) ((cid) << 1)
+#define meta_to_cbid_idx(mid) ((mid) >> 1)
 #include <cbuf_vect.h>
-#include <cos_vect.h>
 #include <cos_list.h>
 #include <bitmap.h>
 #include <cos_synchronization.h>
@@ -29,10 +36,49 @@
 #include <tmem_conf.h>
 
 extern cos_lock_t cbuf_lock;
-#define CBUF_TAKE()    do { if (unlikely(cbuf_lock.lock_id == 0)) lock_static_init(&cbuf_lock); if (unlikely(lock_take_up(&cbuf_lock))) BUG(); } while(0)
+#define CBUF_TAKE()    do { if (unlikely(lock_take_up(&cbuf_lock))) BUG(); } while(0)
 #define CBUF_RELEASE() do { if (unlikely(lock_release_up(&cbuf_lock))) BUG(); } while(0)
-//#define CBUF_TAKE()
-//#define CBUF_RELEASE()
+
+#define CBUFP_MAX_NSZ 64
+
+/* 
+ * The lifetime of tmem cbufs is determined by the cbuf_alloc and
+ * cbuf_free of the calling component.  The called component uses
+ * cbuf2buf to retrieve the buffer.  
+ *
+ * API for sender of transient memory cbufs:
+ *     void *cbuf_alloc(int size, cbuf_t *id)
+ *     void cbuf_free(void *)
+ * API for the receiver of transient memory cbufs:
+ *     void *cbuf2buf(cbuf_t cb, int len)
+ * 
+ * Persistent cbufs are reference counted, so their lifetime needs to
+ * be explicitly managed by calls to access and free the buffer, both
+ * in the sender and receiver.  In the sender, alloc references it,
+ * send tracks the liveness, and deref releases the buffer.
+ * send_deref both sends and dereferences it.  The receiver of the
+ * persistent cbuf references the cbuf via cbuf2buf.  The receiver
+ * must use send an d deref just as the sender if it is also going to
+ * send the buffer.
+ *
+ * API for sender of persistent cbufs:
+ *     void *cbufp_alloc(unsigned int sz, cbufp_t *cb)
+ *     void cbufp_send(cbufp_t cb)
+ *     void cbufp_deref(cbufp_t cbid) 
+ *     void cbufp_send_deref(cbufp_t cb) // combine the previous ops
+ * API for the receiver of persistent cbufs;
+ *     void *cbufp2buf(cbufp_t cb, int len)
+ *     void cbufp_deref(cbufp_t cbid) 
+ * Note that receiver might take the role of the sender.
+ */
+
+/* 
+ * Naming scheme: The cbuf_* functions are transient memory
+ * allocations -- their lifetime must match an invocation.  The
+ * cbufp_* functions are persistent cbufs that can have any lifetime
+ * (but that don't come with a guarantee about bounded access, thus
+ * predictable sharing of the buffer).
+ */
 
 /* 
  * Shared buffer management for Composite.
@@ -150,22 +196,38 @@ extern cos_lock_t cbuf_lock;
  * same: deallocate the allocation free-list descriptor.
  */
 
-typedef u32_t cbuf_t; /* Requirement: gcc will return this in a register */
+typedef u32_t  cbuf_t;   /* Requirement: gcc will return this in a register */
+typedef cbuf_t cbufp_t;	/* ...to differentiate in interfaces with normal cbufs */
 typedef union {
 	cbuf_t v;
 	struct {
-		u32_t id:20, len:12; /* cbuf id and its maximum length */
+		/* 
+		 * cbuf id, aggregate = 1 if this cbuf holds an array
+		 * of other cbufs.
+		 */
+		u32_t aggregate: 1, id:31;
 	} __attribute__((packed)) c;
 } cbuf_unpacked_t;
 
+/* TODO: use these! */
+struct cbuf_agg_elem {
+	cbuf_t id;
+	u32_t offset, len;
+};
+/* An aggregate of multiple cbufs. */
+struct cbuf_agg {
+	int ncbufs;
+	struct cbuf_agg_elem elem[0];
+};
+
 static inline void 
-cbuf_unpack(cbuf_t cb, u32_t *cbid, u32_t *len) 
+cbuf_unpack(cbuf_t cb, u32_t *cbid) 
 {
 	cbuf_unpacked_t cu = {0};
 	
 	cu.v  = cb;
 	*cbid = cu.c.id;
-	*len  = (u32_t)cu.c.len;
+	assert(!cu.c.aggregate);
 	return;
 }
 
@@ -173,18 +235,25 @@ static inline cbuf_t
 cbuf_cons(u32_t cbid, u32_t len) 
 {
 	cbuf_unpacked_t cu;
+	cu.v     = 0;
 	cu.c.id  = cbid;
-	cu.c.len = len;
 	return cu.v; 
 }
 
 static inline cbuf_t cbuf_null(void)      { return 0; }
 static inline int cbuf_is_null(cbuf_t cb) { return cb == 0; }
 
-extern struct cbuf_alloc_desc *__cbuf_alloc_slow(int size, int *len);
-extern int __cbuf_2buf_miss(int cbid, int len);
+extern struct cbuf_alloc_desc *__cbuf_alloc_slow(int size, int *len, int tmem);
+extern int  __cbuf_2buf_miss(int cbid, int len, int tmem);
 extern void __cbuf_desc_free(struct cbuf_alloc_desc *d);
-extern cvect_t meta_cbuf;
+extern cvect_t meta_cbuf, meta_cbufp;
+
+static inline struct cbuf_meta *
+cbuf_vect_lookup_addr(long idx, int tmem)
+{
+	if (tmem) return cvect_lookup_addr(&meta_cbuf,  idx);
+	else      return cvect_lookup_addr(&meta_cbufp, idx);
+}
 
 /* 
  * Common case.  This is the most optimized path.  Every component
@@ -192,92 +261,197 @@ extern cvect_t meta_cbuf;
  * this function to map the cbuf_t to the actual buffer.
  */
 static inline void * 
-cbuf2buf(cbuf_t cb, int len)
+__cbuf2buf(cbuf_t cb, int len, int tmem)
 {
-	int sz;
 	u32_t id;
-	union cbuf_meta cm;
+	struct cbuf_meta *cm;
+	union cbufm_info ci;//, ci_new;
 	void *ret = NULL;
 	long cbidx;
 	if (unlikely(!len)) return NULL;
+	cbuf_unpack(cb, &id);
+
 	CBUF_TAKE();
-	cbuf_unpack(cb, &id, (u32_t*)&sz);
 	cbidx = cbid_to_meta_idx(id);
+again:
 	do {
-		cm.c_0.v = (u32_t)cbuf_vect_lookup(&meta_cbuf, cbidx);
-		if (unlikely(cm.c_0.v == 0)) {
-			if (__cbuf_2buf_miss(id, len)) goto done;
+		cm = cbuf_vect_lookup_addr(cbidx, tmem);
+		if (unlikely(!cm || cm->nfo.v == 0)) {
+			if (__cbuf_2buf_miss(id, len, tmem)) goto done;
+			goto again;
 		}
-	} while (unlikely(cm.c_0.v == 0));
+	} while (unlikely(!cm->nfo.v));
+	ci.v = cm->nfo.v;
 
-	assert(cm.c.flags & CBUFM_MAPPED_IN);
-
-	ret = ((void*)(cm.c.ptr << PAGE_ORDER));
+	if (!tmem) {
+		if (unlikely(cm->nfo.c.flags & CBUFM_TMEM)) goto done;
+		if (unlikely(len > cm->sz)) goto done;
+		cm->nfo.c.flags |= CBUFM_IN_USE;
+		assert(cm->owner_nfo.c.nrecvd < TMEM_SENDRECV_MAX);
+		cm->owner_nfo.c.nrecvd++;
+	} else {
+		if (unlikely(!(cm->nfo.c.flags & CBUFM_TMEM))) goto done;
+		if (unlikely(len > PAGE_SIZE)) goto done;
+	}
+	/* if (unlikely(cm->sz && (((int)cm->sz)<<PAGE_ORDER) < len)) goto done; */
+	/* ci_new.v       = ci.v; */
+	/* ci_new.c.flags = ci.c.flags | CBUFM_RECVED | CBUFM_IN_USE; */
+	/* if (unlikely(!cos_cas((unsigned long *)&cm->nfo.v,  */
+	/* 		      (unsigned long)   ci.v,  */
+	/* 		      (unsigned long)   ci_new.v))) goto again; */
+	ret = ((void*)(cm->nfo.c.ptr << PAGE_ORDER));
 done:	
 	CBUF_RELEASE();
 	assert(lock_contested(&cbuf_lock) != cos_get_thd_id());
 	return ret;
 }
 
+static inline void *
+cbuf2buf(cbuf_t cb, int len) { return __cbuf2buf(cb, len, 1); }
+static inline void *
+cbufp2buf(cbufp_t cb, int len) { return __cbuf2buf((cbuf_t)cb, len, 0); }
+
+/* 
+ * This is only called for permanent cbufs.  This is called every time
+ * we wish to send the cbuf to another component.  For each cbufp2buf,
+ * it should be called one or more times (i.e. for each component it
+ * sends the cbuf to.  If the component is instead done with the cbuf,
+ * and does not want to send it anywhere, it should cbufp_free it
+ * instead.  So to be more precise:
+ *
+ * A component that cbuf2bufs a cbuf can cbufp_send it one or more
+ * times to other components.  The last time we send the cbuf, free=1,
+ * or the component can call cbufp_free.
+ */
+static inline void
+__cbufp_send(cbuf_t cb, int free)
+{
+	u32_t id;
+	struct cbuf_meta *cm;
+
+	cbuf_unpack(cb, &id);
+
+	CBUF_TAKE();
+	cm = cbuf_vect_lookup_addr(cbid_to_meta_idx(id), 0);
+
+	assert(cm && cm->nfo.v);
+	assert(cm->nfo.c.flags & CBUFM_IN_USE);
+	assert(!(cm->nfo.c.flags & CBUFM_TMEM));
+	assert(cm->owner_nfo.c.nsent < TMEM_SENDRECV_MAX);
+
+	cm->owner_nfo.c.nsent++;
+	if (free) cm->nfo.c.flags &= ~CBUFM_IN_USE;
+	/* really should deal with this case correctly */
+	assert(!(cm->nfo.c.flags & CBUFM_RELINQ)); 
+	CBUF_RELEASE();
+}
+
+static inline void
+cbufp_send_deref(cbufp_t cb)
+{ __cbufp_send(cb, 1); }
+
+static inline void
+cbufp_send(cbufp_t cb) 
+{ __cbufp_send(cb, 0); }
+
 extern cvect_t alloc_descs; 
 struct cbuf_alloc_desc {
-	int cbid, length;
+	int cbid, length, tmem;
 	void *addr;
-	union cbuf_meta *meta;
+	struct cbuf_meta *meta;
 	struct cbuf_alloc_desc *next, *prev, *flhead; /* freelist */
 };
 extern struct cbuf_alloc_desc cbuf_alloc_freelists;
+extern struct cbuf_alloc_desc cbufp_alloc_freelists[];
 
 static inline struct cbuf_alloc_desc *
 __cbuf_alloc_lookup(int page_index) { return cvect_lookup(&alloc_descs, page_index); }
 
 /* 
  * Assume that m was retrieved with 
- * m = cbuf_vect_lookup_addr(&meta_cbuf, cbid_to_meta_idx(d->cbid));
+ * m = cbuf_vect_lookup_addr(cbid_to_meta_idx(d->cbid), tmem);
  * This validates that the d->cbid = cbid of cbuf_meta.
  */
 static inline int
-__cbuf_alloc_meta_inconsistent(struct cbuf_alloc_desc *d, union cbuf_meta *m)
+__cbuf_alloc_meta_inconsistent(struct cbuf_alloc_desc *d, struct cbuf_meta *m)
 {
 	assert(d && m && d->addr);
 	/* we don't want the manager changing this under us */
-	assert(m->c.flags & CBUFM_IN_USE);
-	return (unlikely((unsigned long)d->addr >> PAGE_SHIFT != m->c.ptr ||
+	assert(m->nfo.c.flags & CBUFM_IN_USE);
+	return (unlikely((unsigned long)d->addr >> PAGE_SHIFT != m->nfo.c.ptr ||
 			 d->meta != m /*|| length*/));
 }
 
+/* 
+ * Simple power-of-two allocator.  Later we can investigate going to
+ * something with more precision, or a slab.  We are currently leaving
+ * CBUFP_MAX_NSZ - (WORD_SIZE - PAGE_ORDER) = 64 - (32-12) = 44 unused
+ * sizes that could be expanded for both of these uses.
+ *
+ * TODO: it appears that the compiler is not able to statically
+ * calculate this...  This is a big problem for allocations of a fixed
+ * size where this should translate into a direct freelist access with
+ * no calculations.  Verify this and fix.
+ *
+ * precondition:  size must be a power of 2 && >= PAGE_SIZE
+ */
+static inline struct cbuf_alloc_desc *
+__cbufp_freelist_get(int size)
+{
+	int order = ones(size-1) - PAGE_ORDER;
+	struct cbuf_alloc_desc *d;
+
+	assert(pow2(size) && size >= PAGE_SIZE);
+	assert(order >= 0 && order < WORD_SIZE-PAGE_ORDER);
+	d = &cbufp_alloc_freelists[order];
+	assert(d->length == size);
+
+	return d;
+}
+
 static inline void *
-cbuf_alloc(unsigned int sz, cbuf_t *cb)
+__cbuf_alloc(unsigned int sz, cbuf_t *cb, int tmem)
 {
 	void *ret;
-	struct cbuf_alloc_desc *d;
-	int cbid, len, already_used, mapped_in;
-	union cbuf_meta *cm;
+	struct cbuf_alloc_desc *d, *fl;
+	int cbid, len, already_used, mapped_in, flags;
+	struct cbuf_meta *cm;
 	long cbidx;
 
+	if (tmem) {
+		fl = &cbuf_alloc_freelists;
+	} else {
+		/* need a size >= PAGE_ORDER, that is a power of 2 */
+		sz = nlepow2(round_up_to_page(sz));
+		fl = __cbufp_freelist_get(sz);
+	}
 	CBUF_TAKE();
 again:
-	d     = FIRST_LIST(&cbuf_alloc_freelists, next, prev);
+	d = FIRST_LIST(fl, next, prev);
 	if (unlikely(EMPTY_LIST(d, next, prev))) {
-		d    = __cbuf_alloc_slow(sz, &len);
+		d    = __cbuf_alloc_slow(sz, &len, tmem);
 		assert(d);
 		ret  = d->addr;
 		cbid = d->cbid;
 		goto done;
-		//TODO: check if this cbuf has been taken by another thd already.
-		// shall we add this cbuf to the freelist and just continue?
+		/*
+		 * TODO: check if this cbuf has been taken by another
+		 * thd already.  shall we add this cbuf to the
+		 * freelist and just continue?
+		 */
 	} 
-
-	cbid  = d->cbid;
 	REM_LIST(d, next, prev);
 	assert(EMPTY_LIST(d, next, prev));
+	cbid  = d->cbid;
 	assert(cbid);
-	cbidx        = cbid_to_meta_idx(cbid);
-	cm           = cbuf_vect_lookup_addr(&meta_cbuf, cbidx);
+	cbidx            = cbid_to_meta_idx(cbid);
+	cm               = cbuf_vect_lookup_addr(cbidx, tmem);
 
-	mapped_in    = cm->c.flags & CBUFM_MAPPED_IN;
-	already_used = cm->c.flags & CBUFM_IN_USE;
-	cm->c.flags |= CBUFM_IN_USE | CBUFM_TOUCHED; /* should be atomic */
+	mapped_in        = cbufm_is_mapped(cm);
+	already_used     = cm->nfo.c.flags & CBUFM_IN_USE;
+	flags            = CBUFM_IN_USE | CBUFM_TOUCHED; /* should be atomic */
+	if (tmem) flags |= CBUFM_TMEM;
+	cm->nfo.c.flags |= flags;
 
 	/* 
 	 * Now that IN_USE is set, we know the manager will not rip
@@ -286,52 +460,61 @@ again:
 	 * descriptor 
 	 */
 	assert(!already_used);
-	if (__cbuf_alloc_meta_inconsistent(d, cm) || already_used || mapped_in) {
+	if (unlikely(__cbuf_alloc_meta_inconsistent(d, cm) || already_used || !mapped_in)) {
 		/* 
 		 * This is complicated.
 		 *
 		 * See cbuf_slab_free for the rest of the story.  
 		 *
-		 * Assumptions:
-		 * 1) The cbuf manager shared the cbuf meta (in the meta_cbuf
-		 * vector) information with this component.  It can remove
-		 * asynchronously a cbuf from this structure at any time IFF
-		 * that cbuf is marked as ~CBUF_IN_USE.  
+		 * Assumptions: 
+		 * 
+		 * 1) The cbuf manager shared the cbuf meta (in the
+		 * meta_cbuf vector) information with this component.
+		 * It can remove asynchronously a cbuf from this
+		 * structure at any time IFF that cbuf is marked as
+		 * ~CBUF_IN_USE.
 		 *
-		 * 2) The slab descriptors, and the slab_desc vector are _not_
-		 * shared with the cbuf manager for complexity reasons.
+		 * 2) The slab descriptors, and the slab_desc vector
+		 * are _not_ shared with the cbuf manager for
+		 * complexity reasons.
 		 *
-		 * Question: How do we reconcile the fact that the cbuf mgr
-		 * might remove at any point a cbuf from this component, but
-		 * we still have a slab descriptor lying around for it?  How
-		 * will we know that the cbuf has been removed, and not to use
-		 * the slab data-structure anymore?
+		 * Question: How do we reconcile the fact that the
+		 * cbuf mgr might remove at any point a cbuf from this
+		 * component, but we still have a slab descriptor
+		 * lying around for it?  How will we know that the
+		 * cbuf has been removed, and not to use the slab
+		 * data-structure anymore?
 		 *
-		 * Answer: The slabs are deallocated lazily (seen here).  When a
-		 * slab is pulled off of the freelist (see the following code), 
-		 * we check to make sure that the cbuf meta information matches
-		 * up with the slab's information (i.e. the cbuf id and the
-		 * address in memory of the cbuf.  If they do not, then we
-		 * know that the slab is outdated and that the cbuf backing it
-		 * has been taken from this component.  In that case (shown in
-		 * the following code), we delete the slab descriptor.  Again,
-		 * see cbuf_slab_free to see the surprising fact that we do
-		 * _not_ deallocate the slab descriptor there to reinforce
-		 * that point.
+		 * Answer: The slabs are deallocated lazily (seen
+		 * here).  When a slab is pulled off of the freelist
+		 * (see the following code), we check to make sure
+		 * that the cbuf meta information matches up with the
+		 * slab's information (i.e. the cbuf id and the
+		 * address in memory of the cbuf.  If they do not,
+		 * then we know that the slab is outdated and that the
+		 * cbuf backing it has been taken from this component.
+		 * In that case (shown in the following code), we
+		 * delete the slab descriptor.  Again, see
+		 * cbuf_slab_free to see the surprising fact that we
+		 * do _not_ deallocate the slab descriptor there to
+		 * reinforce that point.
 		 */
-
 		__cbuf_desc_free(d);
-		if (likely(!already_used))
-			cm->c.flags &= ~(CBUFM_IN_USE | CBUFM_TOUCHED);
+		if (likely(!already_used)) {
+			cm->nfo.c.flags &= ~(CBUFM_IN_USE | CBUFM_TOUCHED);
+		}
 		goto again;
 	}
 
-	cm->c.thdid_owner = cos_get_thd_id();
-	cos_comp_info.cos_tmem_available[COMP_INFO_TMEM_CBUF]--;
+	if (tmem) {
+		cm->owner_nfo.thdid = cos_get_thd_id();
+		cos_comp_info.cos_tmem_available[COMP_INFO_TMEM_CBUF]--;
+		assert(cm->nfo.c.flags & CBUFM_TMEM);
+	} else {
+		cm->owner_nfo.c.nsent = cm->owner_nfo.c.nrecvd = 0;		
+	}
+	ret = (void*)(cm->nfo.c.ptr << PAGE_ORDER);
 
-	cm->c.flags  |= CBUFM_OWNER; /* set to indicate that this cbuf is owned by requested spd */
-
-	ret = (void*)(cm->c.ptr << PAGE_ORDER);
 done:
 	*cb = cbuf_cons(cbid, len);
 	CBUF_RELEASE();
@@ -339,47 +522,101 @@ done:
 	return ret;
 }
 
+static inline void *
+cbuf_alloc(unsigned int sz, cbuf_t *cb) { return __cbuf_alloc(sz, cb, 1); }
+static inline void *
+cbufp_alloc(unsigned int sz, cbufp_t *cb)  { return __cbuf_alloc(sz, (cbuf_t*)cb, 0); }
+
+/* 
+ * precondition:  cbuf lock must be taken.
+ * postcondition: cbuf lock has been released.
+ */
 static inline void
-cbuf_free(void *buf)
+__cbuf_done(int cbid, int tmem, struct cbuf_alloc_desc *d)
+{
+	struct cbuf_meta *cm;
+	int owner, relinq = 0;
+
+	cm = cbuf_vect_lookup_addr(cbid_to_meta_idx(cbid), tmem);
+	assert(!d || !__cbuf_alloc_meta_inconsistent(d, cm));
+	/* 
+	 * If this assertion triggers, one possibility is that you did
+	 * not successfully map it in (cbufp2buf or cbufp_alloc).
+	 */
+	assert(cm->nfo.c.flags & CBUFM_IN_USE);
+	owner = cm->nfo.c.flags & CBUFM_OWNER;
+	assert(!(tmem & !owner)); /* Shouldn't be calling free... */
+
+	if (tmem && d && owner) {
+		struct cbuf_alloc_desc *fl;
+
+		fl = d->flhead;
+		assert(fl);
+		ADD_LIST(fl, d, next, prev);
+		cm->owner_nfo.thdid = 0;
+	}
+	/* do this last, so that we can guarantee the manager will not steal the cbuf before now... */
+	cm->nfo.c.flags &= ~CBUFM_IN_USE;
+	if (tmem) cos_comp_info.cos_tmem_available[COMP_INFO_TMEM_CBUF]++;
+	else      relinq = cm->nfo.c.flags & CBUFM_RELINQ;
+	CBUF_RELEASE();
+	
+	/* Does the manager want the memory back? */
+	if (tmem) {
+		if (unlikely(cos_comp_info.cos_tmem_relinquish[COMP_INFO_TMEM_CBUF])) {
+			cbuf_c_delete(cos_spd_id(), cbid);
+			assert(lock_contested(&cbuf_lock) != cos_get_thd_id());
+			return;
+		}
+	} else if (unlikely(relinq)) {
+		cbufp_delete(cos_spd_id(), cbid);
+		assert(lock_contested(&cbuf_lock) != cos_get_thd_id());
+		return;
+	}
+	
+	return;
+}
+
+static inline void
+cbufp_deref(cbufp_t cbid) 
+{ 
+	u32_t id;
+	
+	cbuf_unpack(cbid, &id);
+	CBUF_TAKE();
+	__cbuf_done((int)id, 0, NULL);
+}
+
+static inline void
+__cbuf_free(void *buf, int tmem)
 {
 	u32_t idx = ((u32_t)buf) >> PAGE_ORDER;
-	struct cbuf_alloc_desc *d, *fl;
-	union cbuf_meta *cm;
+	struct cbuf_alloc_desc *d;
+	int cbid;
 
 	CBUF_TAKE();
 	d  = __cbuf_alloc_lookup(idx);
 	assert(d);
-	cm = cbuf_vect_lookup_addr(&meta_cbuf, cbid_to_meta_idx(d->cbid));
-	assert(!__cbuf_alloc_meta_inconsistent(d, cm));
-	assert(cm->c.flags & CBUFM_IN_USE);
+	if (unlikely(d->tmem != tmem)) goto err;
+	cbid = d->cbid;
+	/* note: lock released in function */
+	__cbuf_done(cbid, tmem, d);
 
-	/* check if this spd is the owner, 0 for not the owner */
-	if (cm->c.flags & CBUFM_OWNER) {
-		if (!cbuf_c_introspect(cos_spd_id(), d->cbid, 0, CBUF_INTRO_OWNER)) {
-			CBUF_RELEASE();
-			return;
-		}
-	}
-	
-	fl = d->flhead;
-	assert(fl);
-	ADD_LIST(fl, d, next, prev);
-	/* do this last, so that we can guarantee the manager will not steal the cbuf before now... */
-	cm->c.flags &= ~CBUFM_IN_USE;
-	cm->c.flags &= ~CBUFM_OWNER;
-	cm->c.thdid_owner = 0;
-	cos_comp_info.cos_tmem_available[COMP_INFO_TMEM_CBUF]++;
+	return;
+err:
 	CBUF_RELEASE();
-
-	/* Does the manager want the memory back? */
-	if (unlikely(cos_comp_info.cos_tmem_relinquish[COMP_INFO_TMEM_CBUF])) {
-		cbuf_c_delete(cos_spd_id(), d->cbid);
-		assert(lock_contested(&cbuf_lock) != cos_get_thd_id());
-		return;
-	} 
+	return;
 }
 
-/* Is it a cbuf?  If so, what's its id? */
+static inline void
+cbuf_free(void *buf) { __cbuf_free(buf, 1); }
+
+/* 
+ * Is it a cbuf?  If so, what's its id? 
+ *
+ * This only works in the allocating component (with the freelist
+ * descriptor).
+ */
 static inline int 
 cbuf_id(void *buf)
 {
@@ -401,56 +638,6 @@ static inline int
 cbuf_is_cbuf(void *buf)
 {
 	return cbuf_id(buf) != 0;
-}
-
-static inline int 
-cbuf_claim(cbuf_t cb)
-{
-	int ret = 0;
-	int sz;
-	u32_t id;
-
-	CBUF_TAKE();
-
-	cbuf_unpack(cb, &id, (u32_t*)&sz);
-	ret = cbuf_c_claim(cos_spd_id(), id);
-	
-	CBUF_RELEASE();
-	
-	return ret;
-}
-
-static inline int 
-cbuf_add_record(cbuf_t cb, int len, unsigned int offset, int id)
-{
-	int ret = 0;
-	int sz;
-	u32_t cbid;
-	if (unlikely(!len)) {
-		printc("saved info can not have zero length\n");
-		return -1;
-	}
-
-	CBUF_TAKE();
-
-	cbuf_unpack(cb, &cbid, (u32_t*)&sz);
-	ret = cbuf_c_record(cbid, len, offset, id);
-	
-	CBUF_RELEASE();
-	
-	return ret;
-}
-
-static inline int 
-cbuf_rem_record(int fid)  	/* torrent related */
-{
-	int ret = 0;
-
-	CBUF_TAKE();
-	ret = cbuf_c_remrecord(fid);
-	CBUF_RELEASE();
-	
-	return ret;
 }
 
 #endif /* CBUF_H */

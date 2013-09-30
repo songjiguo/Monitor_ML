@@ -9,24 +9,8 @@
 #define TORRENT_H
 
 #include <cos_component.h>
-#include <cbuf_c.h>
 #include <cbuf.h>
 #include <evt.h>
-
-
-//#define TSPLIT_FAULT
-//#define TWRITE_FAULT
-//#define TREAD_FAULT
-//#define TRELEASE_FAULT
-
-#define TEST_0	   /* unit test */
-//#define TEST_1   /* single thread fails (T writes to foo/bar/who) */
-//#define TEST_2   /* 2 threads, operate on the same files, one fails, (Both writes to foo/bar/who) */
-//#define TEST_3   /* 2 threads, operate on the different files(T1 writes foo/bar/who, T2 writes foo/boo/who) */
-#ifdef TEST_3
-#define TEST_4     /* two component A and B, A writes and B will fault later */
-#endif
-
 
 /* torrent descriptor */
 typedef int td_t;
@@ -40,14 +24,13 @@ typedef enum {
 } tor_flags_t;
 
 td_t tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
-
 void trelease(spdid_t spdid, td_t tid);
 int tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len);
 int tread(spdid_t spdid, td_t td, int cbid, int sz);
+int treadp(spdid_t spdid, td_t td, int *off, int *sz);
 int twrite(spdid_t spdid, td_t td, int cbid, int sz);
-
-/* FIXME: this should be more general */
-int twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag);
+int trmeta(spdid_t spdid, td_t td, const char *key, unsigned int klen, char *retval, unsigned int max_rval_len);
+int twmeta(spdid_t spdid, td_t td, const char *key, unsigned int klen, const char *val, unsigned int vlen);
 
 static inline int
 tread_pack(spdid_t spdid, td_t td, char *data, int len)
@@ -59,15 +42,14 @@ tread_pack(spdid_t spdid, td_t td, char *data, int len)
 	d = cbuf_alloc(len, &cb);
 	if (!d) return -1;
 
-	/* int sz; */
-	/* u32_t id; */
-	/* cbuf_unpack(cb, &id, (u32_t*)&sz); */
-	/* /\* printc("\n read: cbid is %d\n", id); *\/ */
-
 	ret = tread(spdid, td, cb, len);
-	memcpy(data, d, len);
-	cbuf_free(d);
-	
+        if (ret < 0) goto free;
+        if (ret > len) {
+                ret = len; /* FIXME: this is broken, and we should figure out a better solution */
+        }
+	memcpy(data, d, ret);
+free:
+	cbuf_free(d);	
 	return ret;
 }
 
@@ -81,17 +63,12 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 	d = cbuf_alloc(len, &cb);
 	if (!d) return -1;
 
-	/* int sz; */
-	/* u32_t id; */
-	/* cbuf_unpack(cb, &id, (u32_t*)&sz); */
-	/* printc("\n write: cbid is %d\n", id); */
-
 	memcpy(d, data, len);
 	ret = twrite(spdid, td, cb, len);
 	cbuf_free(d);
+	
 	return ret;
 }
-
 
 /* //int trmeta(td_t td, char *key, int flen, char *value, int vlen); */
 /* struct trmeta_data { */
@@ -99,5 +76,12 @@ twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 /* 	char data[0]; */
 /* }; */
 /* int trmeta(td_t td, int cbid, int sz); */
+
+/* //int twmeta(td_t td, char *key, int flen, char *value, int vlen); */
+/* struct twmeta_data { */
+/* 	short int value, end; /\* offsets into data *\/ */
+/* 	char data[0]; */
+/* }; */
+/* int twmeta(td_t td, int cbid, int sz); */
 
 #endif /* TORRENT_H */ 

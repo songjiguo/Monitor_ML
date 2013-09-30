@@ -16,7 +16,8 @@ cos_lock_t synth_lock;
 
 #include <stdlib.h>
 
-//#define I7 
+#define I7 
+
 #define SUSPENSION 
 #define MAXULONG (~0)
 #define TOTAL_AMNT 128		/* power of 2 */
@@ -35,7 +36,7 @@ unsigned int prop_call_ss = 10;    /* 10: %7 0: never call ss, 128: always call 
 #define NCBUF 1   // number of cbufs to create each time
 
 #define ALLOC_CBUF
-#define CBUF2BUF
+//#define CBUF2BUF
 
 //#define DEBUG_SYNTH
 
@@ -164,7 +165,7 @@ static unsigned long do_action(unsigned long exe_time_left, const unsigned long 
 	static int first = 1;
 
 	unsigned long has_run;   /* thread has run cycles in this inv */
-	u32_t id, idx;
+	u32_t id;
 	cbuf_t cbt[NCBUF];
 	memset(cbt, 0 , NCBUF*sizeof(cbuf_t));
 
@@ -264,7 +265,7 @@ static unsigned long do_action(unsigned long exe_time_left, const unsigned long 
 				rdtscll(start);
 				mt[i] = cbuf_alloc(len, &cbt[i]);
 				rdtscll(end);
-				cbuf_unpack(cbt[i], &id, &idx);
+				cbuf_unpack(cbt[i], &id);
 				DOUTs("alloc cbid done !%ld\n", id);
 				memset(mt[i], 'a', len);
 				get[i] = 1;

@@ -12,16 +12,12 @@ struct cobj_header *hs[MAX_NUM_SPDS+1];
 
 /* dependencies */
 #include <boot_deps.h>
+
 #include <cobj_format.h>
 
 /* interfaces */
 //#include <failure_notif.h>
 #include <cgraph.h>
-
-#include <recovery_upcall.h>
-
-//#define MEAS_MEM_COST
-//#define MEAS_REC_RAMFS
 
 /* local meta-data to track the components */
 struct spd_local_md {
@@ -155,78 +151,42 @@ boot_spd_end(struct cobj_header *h)
 static int 
 boot_spd_map_memory(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
 {
-	unsigned int i, use_kmem, comp_sz = 0;
+	unsigned int i, use_kmem;
 	vaddr_t dest_daddr, prev_map = 0;
-	char *hp, *hp_end;
+	char *dsrc;
 
 	local_md[spdid].spdid      = spdid;
 	local_md[spdid].h          = h;
-	hp                         = cos_get_heap_ptr();
-	local_md[spdid].page_start = hp;
+	local_md[spdid].page_start = cos_get_heap_ptr();
 	local_md[spdid].comp_info  = comp_info;
-
-	/* Make comp_sz = how much room we need for the component */
 	for (i = 0 ; i < h->nsect ; i++) {
 		struct cobj_sect *sect;
-		char *dsrc;
 		int left;
-
-		use_kmem   = 0;
-		sect       = cobj_sect_get(h, i);
-		dest_daddr = sect->vaddr;
-		left       = cobj_sect_size(h, i);
-		/* previous section overlaps with this one, don't remap! */
-		if (round_to_page(dest_daddr) == prev_map) {
-			left      -= (prev_map + PAGE_SIZE - dest_daddr);
-			dest_daddr = prev_map + PAGE_SIZE;
-		} 
-		while (left > 0) {
-			prev_map    = dest_daddr;
-			dest_daddr += PAGE_SIZE;
-			left       -= PAGE_SIZE;
-		}
-	}
-	comp_sz = dest_daddr - cobj_sect_get(h, 0)->vaddr;
-	cos_set_heap_ptr_conditional(hp, hp + comp_sz);
-	assert(cos_get_heap_ptr() == hp + comp_sz);
-	hp_end = cos_get_heap_ptr();
-	assert(comp_sz);
-
-	/* Once we know the size, actually map the memory! */
-	for (i = 0 ; i < h->nsect ; i++) {
-		struct cobj_sect *sect;
-		char *dsrc;
-		int left;
-
+		
 		use_kmem   = 0;
 		sect       = cobj_sect_get(h, i);
 		if (sect->flags & COBJ_SECT_KMEM) use_kmem = 1;
 		dest_daddr = sect->vaddr;
 		left       = cobj_sect_size(h, i);
-
 		/* previous section overlaps with this one, don't remap! */
 		if (round_to_page(dest_daddr) == prev_map) {
-			left      -= (prev_map + PAGE_SIZE - dest_daddr);
+			left -= (prev_map + PAGE_SIZE - dest_daddr);
 			dest_daddr = prev_map + PAGE_SIZE;
 		} 
-
 		while (left > 0) {
-			dsrc = hp;
-			hp  += PAGE_SIZE;
-			assert(dsrc <= hp_end);
+			dsrc = cos_get_vas_page();
 			/* TODO: if use_kmem, we should allocate
 			 * kernel-accessible memory, rather than
 			 * normal user-memory */
 			if ((vaddr_t)dsrc != __mman_get_page(cos_spd_id(), (vaddr_t)dsrc, 0)) BUG();
 			if (dest_daddr != (__mman_alias_page(cos_spd_id(), (vaddr_t)dsrc, spdid, dest_daddr))) BUG();
 
-			prev_map    = dest_daddr;
+			prev_map = dest_daddr;
 			dest_daddr += PAGE_SIZE;
 			left       -= PAGE_SIZE;
 		}
 	}
-	local_md[spdid].page_end = (void*)dest_daddr;
-	assert(hp_end == hp); 	/* make sure the mapped memory is the same as the reservation size */
+	local_md[spdid].page_end = dsrc + PAGE_SIZE;
 
 	return 0;
 }
@@ -272,7 +232,6 @@ boot_spd_map_populate(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info, i
 			boot_process_cinfo(h, spdid, boot_spd_end(h), start_addr + (comp_info-init_daddr), comp_info);
 		}
 	}
-
  	return 0;
 }
 
@@ -284,38 +243,6 @@ boot_spd_map(struct cobj_header *h, spdid_t spdid, vaddr_t comp_info)
 
 	return 0;
 }
-
-static int 
-boot_spd_reserve_caps(struct cobj_header *h, spdid_t spdid)
-{
-	if (cos_spd_cntl(COS_SPD_RESERVE_CAPS, spdid, h->ncap, 0)) BUG();
-	return 0;
-}
-
-/* /\* Deactivate or activate all capabilities to an spd (i.e. call faults */
-/*  * on invocation, or use normal stubs) *\/ */
-/* static int boot_spd_caps_chg_activation(spdid_t spdid, int activate) */
-/* { */
-/* 	int i; */
-
-/* 	/\* Find all capabilities to spdid *\/ */
-/* 	for (i = 0 ; hs[i] != NULL ; i++) { */
-/* 		unsigned int j; */
-
-/* 		if (hs[i]->id == spdid) continue; */
-/* 		for (j = 0 ; j < hs[i]->ncap ; j++) { */
-/* 			struct cobj_cap *cap; */
-
-/* 			cap = cobj_cap_get(hs[i], j); */
-/* 			if (cobj_cap_undef(cap)) break; */
-
-/* 			if (cap->dest_id != spdid) continue; */
-
-/* 			cos_cap_cntl(COS_CAP_SET_SSTUB, hs[i]->id, cap->cap_off, activate ? cap->sstub : 1); */
-/* 		} */
-/* 	} */
-/* 	return 0; */
-/* } */
 
 static void
 boot_edge_create(spdid_t src, spdid_t dest)
@@ -338,9 +265,6 @@ static int boot_spd_caps(struct cobj_header *h, spdid_t spdid)
 	struct cobj_cap *cap;
 	unsigned int i;
 
-	volatile unsigned long long start, end;
-	rdtscll(start);
-
 	for (i = 0 ; i < h->ncap ; i++) {
 		cap = cobj_cap_get(h, i);
 
@@ -356,13 +280,8 @@ static int boot_spd_caps(struct cobj_header *h, spdid_t spdid)
 		    cos_cap_cntl(COS_CAP_SET_SSTUB, spdid, cap->cap_off, cap->sstub) ||
 		    cos_cap_cntl(COS_CAP_ACTIVATE, spdid, cap->cap_off, cap->dest_id)) BUG();
 		
-		/* printc("cli (spd %d): cap id %d\n", spdid, cap->cap_off); */
-		
 		boot_edge_create(spdid, cap->dest_id);
 	}
-
-	rdtscll(end);
-	printc("COST-- mem op(boot_spd_caps spdid %d) : %llu\n", spdid, end - start);
 
 	return 0;
 }
@@ -374,10 +293,9 @@ static int
 boot_spd_thd(spdid_t spdid)
 {
 	union sched_param sp = {.c = {.type = SCHEDP_RPRIO, .value = 1}};
-	
+
 	/* Create a thread IF the component requested one */
 	if ((sched_create_thread_default(spdid, sp.v, 0, 0)) < 0) return -1;
-	/* if ((sched_create_thread_default(spdid, sp.v, 0, 99)) < 0) return -1; /\* test only *\/ */
 	return 0;
 }
 
@@ -394,6 +312,7 @@ boot_find_cobjs(struct cobj_header *h, int n)
 
 		size = h->size;
 		for (j = 0 ; j < (int)h->nsect ; j++) {
+			//printc("\tsection %d, size %d\n", j, cobj_sect_size(h, j));
 			tot += cobj_sect_size(h, j);
 		}
 		printc("cobj %s:%d found at %p:%x, size %x -> %x\n", 
@@ -425,16 +344,15 @@ boot_create_system(void)
 		
 		h = hs[i];
 		if ((spdid = cos_spd_cntl(COS_SPD_CREATE, 0, 0, 0)) == 0) BUG();
+		//printc("spdid %d, h->id %d\n", spdid, h->id);
 		assert(spdid == h->id);
+
 		sect = cobj_sect_get(h, 0);
 		if (cos_spd_cntl(COS_SPD_LOCATION, spdid, sect->vaddr, SERVICE_SIZE)) BUG();
 
-		/* printc("spdid %d, flags %x\n", spdid, sect->flags); */
-
 		if (boot_spd_symbs(h, spdid, &comp_info))        BUG();
 		if (boot_spd_map(h, spdid, comp_info))           BUG();
-		if (boot_spd_reserve_caps(h, spdid))             BUG();
-		if (cos_spd_cntl(COS_SPD_ACTIVATE, spdid, 0, 0)) BUG();
+		if (cos_spd_cntl(COS_SPD_ACTIVATE, spdid, h->ncap, 0)) BUG();
 	}
 
 	for (i = 0 ; hs[i] != NULL ; i++) {
@@ -443,27 +361,26 @@ boot_create_system(void)
 
 		if (boot_spd_caps(h, h->id)) BUG();
 	}
-	/* printc("booter: thd %d and spd %d\n", cos_get_thd_id(), cos_spd_id()); */
+	
 	if (!boot_sched) return;
+
 	for (i = 0 ; boot_sched[i] != 0 ; i++) {
 		struct cobj_header *h;
 		int j;
-
 		h = NULL;
 		for (j = 0 ; hs[j] != NULL; j++) {
 			if (hs[j]->id == boot_sched[i]) h = hs[j];
-		}
+		}		
+
 		assert(h);
 		if (h->flags & COBJ_INIT_THD) boot_spd_thd(h->id);
 	}
-	/* printc("return accc\n"); */
 }
 
 void 
 failure_notif_wait(spdid_t caller, spdid_t failed)
 {
 	/* wait for the other thread to finish rebooting the component */
-	/* printc("failure notif wait\n"); */
 	LOCK();	
 	UNLOCK();
 }
@@ -472,53 +389,25 @@ failure_notif_wait(spdid_t caller, spdid_t failed)
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed)
 {
-	/* printc("failure notif fail caller %d failed %d\n", caller, failed); */
 	struct spd_local_md *md;
-	/* spdid_t home_spd = 0; */
-
-	volatile unsigned long long start, end;
 
 	LOCK();
 
-#ifdef MEAS_MEM_COST	
-	printc("starting measuring memOP cost ... thd %d\n", cos_get_thd_id());
-	rdtscll(start);
-#endif
+//	boot_spd_caps_chg_activation(failed, 0);
 	md = &local_md[failed];
 	assert(md);
 	if (boot_spd_map_populate(md->h, failed, md->comp_info, 0)) BUG();
-
 	/* can fail if component had no boot threads: */
-	/* For now, just add ININTONCE in cos_loader.c */
-	/* So this can be avoided during the reinitialzation */
-	/* if (boot_spd_caps(md->h, failed)) BUG();  /\* do this first ??? *\/ */
+	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed); 	
+	if (boot_spd_caps(md->h, failed)) BUG();
+//	boot_spd_caps_chg_activation(failed, 1);
 
-#ifdef MEAS_MEM_COST
-	rdtscll(end);
-	printc("COST (memOp): %llu\n", end - start);
-#endif
-	//Jiguo: check if the failed spd is the home spd of the thread
-	/* home_spd = cos_thd_cntl(COS_THD_INV_FRAME, cos_get_thd_id(), 2, 0); */
-	/* if (home_spd != failed) { */
-	if (md->h->flags & COBJ_INIT_THD) boot_spd_thd(failed);
-	/* } */
-
-	/* ramfs eager recovery */
-#if (!LAZY_RECOVERY)
-	if (failed == 14){	/* hard coded, 14 = ramfs */
-#ifdef MEAS_REC_RAMFS
-		printc("starting measuring rec cost ...\n");
-		/* TODO: use constructor and go through all spds */
-		rdtscll(start);
-#endif
-		recovery_upcall(cos_spd_id(), COS_UPCALL_EAGER_RECOVERY, 15, 0);
-#ifdef MEAS_REC_RAMFS
-		rdtscll(end);
-		printc("COST(Lazy fs recovery): %llu (thd %d)\n", (end-start), cos_get_thd_id());
-#endif
-	}
-#endif
 	UNLOCK();
+}
+
+int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
+{
+        return 0;
 }
 
 struct deps { short int client, server; };
@@ -557,8 +446,8 @@ void cos_init(void)
 	struct cobj_header *h;
 	int num_cobj, i;
 
-	printc("thd in booter cos_init %d\n", cos_get_thd_id());
 	LOCK();
+
 	boot_deps_init();
 	h         = (struct cobj_header *)cos_comp_info.cos_poly[0];
 	num_cobj  = (int)cos_comp_info.cos_poly[1];
@@ -584,11 +473,12 @@ void cos_init(void)
 	printc("h @ %p, heap ptr @ %p\n", h, cos_get_heap_ptr());
 	printc("header %p, size %d, num comps %d, new heap %p\n", 
 	       h, h->size, num_cobj, cos_get_heap_ptr());
+
 	/* Assumes that hs have been setup with boot_find_cobjs */
 	boot_create_system();
+	printc("booter: done creating system.\n");
 
 	UNLOCK();
-
 	boot_deps_run();
 
 	return;

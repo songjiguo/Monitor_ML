@@ -14,7 +14,7 @@ void cos_init(void)
 {
 	static int flag = 0;
 	union sched_param sp;
-	int i, thdid;
+	int i;
 
 	if(flag == 0){
 		printc("<<< CONTEXT SWITCH MICRO BENCHMARK TEST  >>>\n");

@@ -36,14 +36,10 @@
 #include <cos_alloc.h>
 #include <print.h>
 
-// Jiguo: for context switch
-#ifdef LOG_MONITOR
-#define MM_LL_LOG
-#endif
-
 #include <cos_list.h>
 #include "../../sched/cos_sched_ds.h"
 #include "../../sched/cos_sched_sync.h"
+
 #define LOCK()   if (cos_sched_lock_take())    assert(0);
 #define UNLOCK() if (cos_sched_lock_release()) assert(0);
 
@@ -254,6 +250,7 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to)
 
 	assert(!p || p->f == f);
 	assert(dest && to);
+
 	/* no vas structure for this spd yet... */
 	if (!cv) {
 		cv = cvas_alloc(dest);
@@ -261,8 +258,8 @@ mapping_crt(struct mapping *p, struct frame *f, spdid_t dest, vaddr_t to)
 		assert(cv == cvas_lookup(dest));
 	}
 	assert(cv->pages);
-
 	if (cvect_lookup(cv->pages, idx)) goto collision;
+
 	cvas_ref(cv);
 	m = cslab_alloc_mapping();
 	if (!m) goto collision;
@@ -324,10 +321,8 @@ __mapping_destroy(struct mapping *m)
 	assert(m == cvect_lookup(cv->pages, m->addr >> PAGE_SHIFT));
 	cvect_del(cv->pages, m->addr >> PAGE_SHIFT);
 	cvas_deref(cv);
+
 	idx = cos_mmap_cntl(COS_MMAP_REVOKE, 0, m->spdid, m->addr, 0);
-	/* if (!idx) return; 	/\* FIXME: fault makes the pte not presented in pgtbl, but mm still can see it *\/ */
-	/* printc("thread %d idx %d frame_idx %d\n", cos_get_thd_id(), idx, frame_index(m->f)); */
-	if (idx != frame_index(m->f)) printc("thread %d idx %d frame_idx %d m->spdid %d m->addr %p\n", cos_get_thd_id(), idx, frame_index(m->f), m->spdid, (void *)m->addr);
 	assert(idx == frame_index(m->f));
 	frame_deref(m->f);
 	cslab_free_mapping(m);
@@ -367,14 +362,6 @@ mapping_del(struct mapping *m)
 /**********************************/
 /*** Public interface functions ***/
 /**********************************/
-void some_delay()  		/* only used to compared with FT-version when injection presents */
-{
-/* #if  (SWIFI_ENABLE == 1) */
-/* 	unsigned int ccc = 0; */
-/* 	while(ccc++ < 100000) {;}; */
-/* #endif */
-	return;
-}
 
 vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 {
@@ -383,11 +370,9 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	vaddr_t ret = -1;
 
 	LOCK();
-	some_delay();
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
 	assert(frame_nrefs(f) == 0);
-	frame_ref(f);
 	m = mapping_crt(NULL, f, spd, addr);
 	if (!m) goto dealloc;
 	f->c.m = m;
@@ -409,7 +394,6 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	vaddr_t ret = 0;
 
 	LOCK();
-	some_delay();
 	m = mapping_lookup(s_spd, s_addr);
 	if (!m) goto done; 	/* -EINVAL */
 	n = mapping_crt(m, m->f, d_spd, d_addr);
@@ -430,7 +414,6 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	int ret = 0;
 
 	LOCK();
-	some_delay();
 	m = mapping_lookup(spd, addr);
 	if (!m) {
 		ret = -1;	/* -EINVAL */
@@ -494,15 +477,26 @@ void mman_release_all(void)
 
 #include <sched_hier.h>
 
-/* int  sched_init(int reboot)   { return 0; } */
-extern void parent_sched_init(int reboot);
-int  sched_init(int reboot)   { parent_sched_init(reboot); return 0;}
+extern void parent_sched_init(void);
+int  sched_init(void)   { parent_sched_init(); return 0;}
 
 extern void parent_sched_exit(void);
+
+PERCPU_ATTR(static volatile, int, initialized_core); /* record the cores that still depend on us */
+
 void 
 sched_exit(void)   
 {
-	mman_release_all();
+	int i;
+
+	*PERCPU_GET(initialized_core) = 0;
+	if (cos_cpuid() == INIT_CORE) {
+		/* The init core waiting for all cores to exit. */
+		for (i = 0; i < NUM_CPU ; i++)
+			if (*PERCPU_GET_TARGET(initialized_core, i)) i = 0;
+		/* Don't delete the memory until all cores exit */
+		mman_release_all(); 
+	}
 	parent_sched_exit();
 }
 
@@ -517,7 +511,6 @@ int
 sched_child_cntl_thd(spdid_t spdid) 
 { 
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
-	if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0;
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 
@@ -531,7 +524,19 @@ void cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_BOOTSTRAP:
-		mm_init(); break;
+		if (cos_cpuid() == INIT_CORE) {
+			int i;
+			for (i = 0; i < NUM_CPU; i++)
+				*PERCPU_GET_TARGET(initialized_core, i) = 0;
+			mm_init(); 
+		} else {
+			/* Make sure that the initializing core does
+			 * the initialization before any other core
+			 * progresses */
+			while (*PERCPU_GET_TARGET(initialized_core, INIT_CORE) == 0) ;
+		}
+		*PERCPU_GET(initialized_core) = 1;
+		break;			
 	default:
 		BUG(); return;
 	}

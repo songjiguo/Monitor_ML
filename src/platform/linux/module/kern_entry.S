@@ -12,6 +12,7 @@
 #include <linux/linkage.h>
 #include "asym_exec_dom.h"
 #include "../../../kernel/include/asm_ipc_defs.h"
+#include "../../../kernel/include/shared/cos_config.h"
 
 #define ASM_PAGE_MASK (~(4096-1))
 	
@@ -94,7 +95,6 @@ VM_MASK		= 0x00020000
 ALIGN
 ENTRY(sysenter_interposition_entry)
 	movl TSS_sysenter_sp0(%esp),%esp
-
 	/*
 	 * Composite invocations are indicated by the contents of %eax:
 	 * +-------------+----+--...
@@ -107,6 +107,7 @@ ENTRY(sysenter_interposition_entry)
 	 * cap_inv:	The capability to invoke
 	 * sc:	 Make a composite OS system-call
 	 */
+
 	cmpl $((1<<COS_CAPABILITY_OFFSET)-1), %eax /* 2^20-1 shift for capability invocations */
 	ja composite_call_ipc /* component invocation */
 	je composite_ret_ipc  /* component return */
@@ -169,9 +170,6 @@ ENTRY(name##_interposition)					\
 	iret;							\
 1:	/* linux path */					\
 	RESTORE_REGS;						\
-	addl $8, %esp;						\
-	popl %fs;						\
-	popl %gs;						\
 	addl $4, %esp;						\
 	jmp *(cos_default_##name##_handler)	
 	
@@ -197,18 +195,13 @@ ENTRY(name##_interposition)					\
 1:	/* linux path */					\
 	RESTORE_REGS;						\
 	jmp *(cos_default_##name##_handler)	
-
-/*
-	RESTORE_INT_REGS;					\
-	addl $8, %esp;						\
-	popl %fs;						\
-	popl %gs;						\
-	jmp *(cos_default_##name##_handler)	
-*/
 	
 COS_CREATE_TRAP_NO_ERRCODE(div_fault)
 COS_CREATE_TRAP_ERRCODE(page_fault)
 COS_CREATE_TRAP_NO_ERRCODE(reg_save)
+#ifdef FPU_ENABLED
+COS_CREATE_TRAP_ERRCODE(fpu_not_available)
+#endif
 
 /* The page fault trampoline for kernel faults.  See explanation in relocate_page_fault_handler:hw_ints.c */
 .data

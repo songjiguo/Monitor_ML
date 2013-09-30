@@ -258,8 +258,6 @@ long evt_wait(spdid_t spdid, long evt_id)
 	return ret; 
 }
 
-
-static unsigned long long ttt = 0;
 int
 evt_trigger(spdid_t spdid, long evt_id)
 {
@@ -267,7 +265,6 @@ evt_trigger(spdid_t spdid, long evt_id)
 	lock_take(&evt_lock);
 	ret = __evt_trigger(spdid, evt_id);
 	lock_release(&evt_lock);
-	/* if (ttt++ % 100 == 0) printc("evt: to trigger the event (thd %d)\n", cos_get_thd_id()); */
 	if (ret && sched_wakeup(cos_spd_id(), ret)) BUG();
 	return 0;
 }

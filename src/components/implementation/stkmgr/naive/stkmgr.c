@@ -362,7 +362,6 @@ resolve_dependency(struct spd_tmem_info *sti, int skip_stk)
 	/* Remove the assert? thdid_owner is postibly to be 0, which
 	 * means there is available stacks in the local freelist. */
 
-	/* printc("%d %d\n", stk_item->stk->thdid_owner, cos_get_thd_id()); */
 	assert(stk_item->stk->thdid_owner != cos_get_thd_id());
 	if (!(stk_item->stk->flags & IN_USE)) goto cache;
 	assert(stk_item->stk->thdid_owner != 0);
@@ -413,7 +412,6 @@ stkmgr_grant_stack(spdid_t d_spdid)
 	assert(SPD_IS_MANAGED(info));
 	
 	/* Apply for transient memory. Might block! */
-	/* printc("stkmgr grant\n"); */
 	tmem_grant(info);
 	
 	RELEASE();

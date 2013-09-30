@@ -8,8 +8,7 @@
 #include <cos_asm_server_stub.h>
 	
 .text	
-#cos_asm_server_stub_spdid(evt_create)
-cos_asm_server_fn_stub_spdid(evt_create, __sg_evt_create)
+cos_asm_server_stub_spdid(evt_create)
 cos_asm_server_stub_spdid(evt_split)
 cos_asm_server_stub_spdid(evt_free)
 cos_asm_server_stub_spdid(evt_wait)

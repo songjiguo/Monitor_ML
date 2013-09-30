@@ -17,7 +17,6 @@
 #include "./consts.h"
 
 #include "../debug.h"
-#include "../measurement.h"
 
 #ifndef COS_BASE_TYPES
 #define COS_BASE_TYPES
@@ -31,6 +30,39 @@ typedef signed int       s32_t;
 typedef signed long long s64_t;
 #endif
 
+/* Macro used to define per core variables */
+#define PERCPU(type, name)                              \
+	PERCPU_DECL(type, name);                        \
+	PERCPU_VAR(name)
+
+#define PERCPU_DECL(type, name)                         \
+struct __##name##_percore_decl {                        \
+	type name;                                      \
+} CACHE_ALIGNED
+
+#define PERCPU_VAR(name)                                \
+struct __##name##_percore_decl name[NUM_CPU]
+
+/* With attribute */
+#define PERCPU_ATTR(attr, type, name)	   	        \
+	PERCPU_DECL(type, name);                        \
+	PERCPU_VAR_ATTR(attr, name)
+
+#define PERCPU_VAR_ATTR(attr, name)                     \
+attr struct __##name##_percore_decl name[NUM_CPU]
+
+/* when define an external per cpu variable */
+#define PERCPU_EXTERN(name)		                \
+	PERCPU_VAR_ATTR(extern, name)
+
+/* We have different functions for getting current CPU in user level
+ * and kernel. Thus the GET_CURR_CPU is used here. It's defined
+ * separately in user(cos_component.h) and kernel(per_cpu.h).*/
+#define PERCPU_GET(name)                (&(name[GET_CURR_CPU].name))
+#define PERCPU_GET_TARGET(name, target) (&(name[target].name))
+
+#include "../measurement.h"
+
 struct shared_user_data {
 	unsigned int current_thread;
 	void *argument_region;
@@ -40,11 +72,6 @@ struct shared_user_data {
 
 struct cos_sched_next_thd {
 	volatile u16_t next_thd_id, next_thd_flags;
-};
-
-struct user_thread_id {
-	unsigned int id;
-	struct user_thread_id *next;
 };
 
 #define COS_SCHED_EVT_NEXT(evt)    (evt)->nfu.v.next
@@ -111,16 +138,15 @@ struct cos_event_notification {
  * the cos_se_values, which in this case limits us to 256.
  */
 #define NUM_SCHED_EVTS 128 //256
-#if NUM_SCHED_EVTS < MAX_NUM_THREADS
-#error "Cannot have more threads than there are event slots for the scheduler."
-#endif
 
 struct cos_sched_data_area {
 	struct cos_sched_next_thd cos_next;
 	union cos_synchronization_atom cos_locks;
 	struct cos_event_notification cos_evt_notif;
 	struct cos_sched_events cos_events[NUM_SCHED_EVTS]; // maximum of PAGE_SIZE/sizeof(struct cos_sched_events) - ceil(sizeof(struct cos_sched_curr_thd)/(sizeof(struct cos_sched_events)+sizeof(locks)))
-} __attribute__((packed,aligned(4096)));//[NUM_CPUS]
+} __attribute__((packed,aligned(4096)));
+
+PERCPU_DECL(struct cos_sched_data_area, cos_sched_notifications);
 
 #ifndef NULL
 #define NULL ((void*)0)
@@ -163,28 +189,6 @@ typedef struct {
 	} __attribute__((packed)) packets[RB_SIZE];
 } __attribute__((aligned(4096))) ring_buff_t ;
 
-//////////////////////////////
-// Jiguo: For tracking
-
-enum {
-	MEAS_ARRIVAL_ADDPENDING = 5,
-	MEAS_ARRIVAL_IMMEDIATE_UPCALL,
-	MEAS_ARRIVAL_CONTINUE_PREV,
-	MEAS_COMPLET_EXEC_PENDING,
-	MEAS_COMPLET_UPCALL_SCHED,
-	MEAS_COMPLET_INTERRUPTED_THD
-};
-
-#define RB_SIZE_TRACK (4096/ 16) /* 4096 / sizeof(struct rb_buff_t), or 256 */
-typedef struct {
-	unsigned int curr_tail;
-	struct rb_buff_track_t {
-		unsigned long long time_stamp;
-		unsigned int meas_mode;
-	}packets[RB_SIZE_TRACK];
-} __attribute__((aligned(4096))) ring_buff_track_t ;
-//////////////////////////////
-
 #define XMIT_HEADERS_GATHER_LEN 32 
 struct gather_item {
 	void *data;
@@ -201,8 +205,7 @@ struct cos_net_xmit_headers {
 enum {
 	COS_BM_XMIT,
 	COS_BM_XMIT_REGION,
-	COS_BM_RECV_RING,
-	COS_BM_RECV_RING_TRACK
+	COS_BM_RECV_RING
 };
 
 /*
@@ -255,7 +258,7 @@ struct restartable_atomic_sequence {
 struct usr_inv_cap {
 	vaddr_t invocation_fn, service_entry_inst;
 	unsigned int invocation_count, cap_no;
-} HALF_CACHE_ALIGNED; 
+} __attribute__((aligned(16))); 
 
 #define COMP_INFO_POLY_NUM 10
 #define COMP_INFO_INIT_STR_LEN 128
@@ -292,7 +295,7 @@ struct cos_component_information {
 	vaddr_t cos_heap_ptr, cos_heap_limit;
 	vaddr_t cos_heap_allocated, cos_heap_alloc_extent;
 	vaddr_t cos_upcall_entry;
-	struct cos_sched_data_area *cos_sched_data_area;
+//	struct cos_sched_data_area *cos_sched_data_area;
 	vaddr_t cos_user_caps;
 	struct restartable_atomic_sequence cos_ras[COS_NUM_ATOMIC_SECTIONS/2];
 	vaddr_t cos_poly[COMP_INFO_POLY_NUM];
@@ -301,17 +304,15 @@ struct cos_component_information {
 
 typedef enum {
 	COS_UPCALL_BRAND_EXEC,
-	COS_UPCALL_IDLE,
 	COS_UPCALL_BRAND_COMPLETE,
 	COS_UPCALL_BOOTSTRAP,
 	COS_UPCALL_CREATE,
 	COS_UPCALL_DESTROY,
+	COS_UPCALL_UNHANDLED_FAULT,
 	COS_UPCALL_RECOVERY,	   /* for mm recovery */
 	COS_UPCALL_REBOOT,	   /* for sched recovery */
 	COS_UPCALL_EAGER_RECOVERY, /* for compare lazy and eager */
 	COS_UPCALL_LOG_PROCESS,    /* for log monitor process*/
-	COS_UPCALL_FAILURE_NOTIF,
-	COS_UPCALL_UNHANDLED_FAULT
 } upcall_type_t;
 
 /* operations for cos_brand_cntl and cos_brand_upcall */
@@ -319,15 +320,6 @@ enum {
 /* cos_brand_cntl -> */
 	COS_BRAND_CREATE,
 	COS_BRAND_ADD_THD,
-	COS_BRAND_REMOVE_THD,
-	COS_BRAND_ACTIVATE_UC,
-	/* 
-	   SWIFI related
-	 */
-	COS_BRAND_INTRO_BID,
-	COS_BRAND_INTRO_TID,
-	COS_BRAND_INTRO_STATUS,
-
 	COS_BRAND_CREATE_HW,
 /* cos_brand_upcall -> */
 	COS_BRAND_TAILCALL,  /* tailcall brand to upstream spd
@@ -348,7 +340,6 @@ enum {
 	COS_THD_INVFRM_SET_IP,
 	COS_THD_INVFRM_SP,	/* get the stack pointer in an inv frame  */
 	COS_THD_INVFRM_SET_SP,
-	COS_THD_HOME_SPD,  //Jiguo: used to find home spd
 	/* 
 	 * For SWIFI only
 	 */
@@ -393,8 +384,6 @@ enum {
 enum {
 	COS_SPD_CREATE,
 	COS_SPD_DELETE,
-	COS_SPD_RESERVE_CAPS,
-	COS_SPD_RELEASE_CAPS,
 	COS_SPD_LOCATION,
 	COS_SPD_ATOMIC_SECT,
 	COS_SPD_UCAP_TBL,
@@ -428,12 +417,6 @@ enum {
 	COS_UC_NOTIF
 };
 
-/* thread flags */
-enum {
-	COS_THD_STATE_ACTIVE,
-	COS_THD_STATE_READY
-};
-
 /* operations for cos_sched_cntl */
 enum {
 	COS_SCHED_EVT_REGION,
@@ -443,34 +426,8 @@ enum {
 	COS_SCHED_GRANT_SCHED,
 	COS_SCHED_REVOKE_SCHED,
 	COS_SCHED_REMOVE_THD,
-	COS_SCHED_RECORD_PRIO,
-	COS_SCHED_UPDATE_PRIO,
-	COS_SCHED_RECORD_VALUE,
-	COS_SCHED_RECORD_THD,
-	COS_SCHED_RECORD_BES_THD,
 	COS_SCHED_BREAK_PREEMPTION_CHAIN
 };
-
-/* operations for sched introspect */
-enum {
-	COS_SCHED_HAS_PARENT,
-	COS_SCHED_THD_EXIST,
-	COS_SCHED_THD_GET,
-	COS_SCHED_THD_NUMBERS,
-	COS_SCHED_THD_FN,
-	COS_SCHED_THD_DEST,
-	COS_SCHED_THD_PARA,
-	COS_SCHED_THD_PRIO,
-	/* for best effort threads */
-	COS_SCHED_BES_THD_EXIST,
-	COS_SCHED_BES_THD_GET,
-	COS_SCHED_BES_THD_NUMBERS,
-	COS_SCHED_BES_THD_FN,
-	COS_SCHED_BES_THD_DEST,
-	COS_SCHED_BES_THD_PARA,
-	COS_SCHED_BES_THD_PRIO
-};
-
 
 enum {
 	COS_TRANS_DIR_INVAL = 0,
@@ -482,6 +439,8 @@ enum {
 enum {
 	COS_TRANS_SERVICE_PRINT   = 0,
 	COS_TRANS_SERVICE_TERM,
+	COS_TRANS_SERVICE_PING,
+	COS_TRANS_SERVICE_PONG,
 	COS_TRANS_SERVICE_MAX     = 10
 };
 
@@ -533,25 +492,9 @@ enum {
 				 * for the current thread. */
 };
 
-/* operations for general fault notification */
-enum {
-	COS_SPD_FAULT_TRIGGER,
-	COS_CAP_FAULT_UPDATE
-};
-
-/* fault notification types */
-enum {
-	COS_FAULT_TYPE_INV,
-	COS_FAULT_TYPE_RET,
-	COS_FAULT_TYPE_CSW,
-	COS_FAULT_TYPE_INT
-};
-
-
 enum {
 	COS_MMAP_GRANT,
 	COS_MMAP_REVOKE,
-	COS_MMAP_RW,
 	COS_MMAP_TLBFLUSH
 };
 
@@ -577,25 +520,6 @@ typedef enum {
 	COS_FLT_FLT_NOTIF,
 	COS_FLT_MAX
 } cos_flt_off; /* <- this indexes into cos_flt_handlers in the loader */
-
-/* operations for mmap introspect */
-enum {
-	COS_MMAP_INTROSPECT_ADDR,
-	COS_MMAP_INTROSPECT_SPD,
-	COS_MMAP_INTROSPECT_FRAME
-};
-
-/* mmap: page set related flags */
-enum {
-	COS_MMAP_SET_ROOT        = 0x1,
-	COS_MMAP_PFN_READ        = 0x2,
-	COS_MMAP_PFN_WRITE       = 0x4,
-	COS_MMAP_PFN_EXE         = 0x8,
-	COS_MMAP_PFN_NONALIAS    = 0x10,
-	COS_MMAP_PFN_RW          = COS_MMAP_PFN_READ | COS_MMAP_PFN_WRITE,
-	COS_MMAP_PFN_RO          = COS_MMAP_PFN_READ & ~COS_MMAP_PFN_WRITE,
-	COS_MMAP_PFN_ALL         = COS_MMAP_PFN_RW | COS_MMAP_PFN_EXE
-};
 
 #define IL_INV_UNMAP (0x1) // when invoking, should we be unmapped?
 #define IL_RET_UNMAP (0x2) // when returning, should we unmap?

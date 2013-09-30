@@ -128,6 +128,11 @@ monevt_enqueue(int param, int func_num, int dep)
 
 	monevt_conf(&monevt, param, func_num, dep);
 
+	if (func_num == 22 || func_num == 212) {
+		printc("ADD EVT: ");
+		print_evt(&monevt);
+	}
+
 	/* if (dep) { */
 	/* 	printc("ADD EVT: "); */
 	/* 	print_evt(&monevt); */
@@ -189,7 +194,7 @@ moncs_enqueue(unsigned short int thd_id, int flags)
 {
 	struct cs_info moncs;
 
-	assert(thd_id);
+	/* assert(thd_id); */
 
 	if (cos_get_thd_id() == thd_id) return;
 

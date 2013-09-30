@@ -63,12 +63,6 @@
 #include <net_portns.h>
 #include <timed_blk.h>
 
-
-unsigned long long start, end;
-//#define MEAS_TREAD
-//#define MEAS_TWRITE
-//#define MEAS_TSPLIT
-
 cos_lock_t net_lock;
 
 #define NET_LOCK_TAKE()    \
@@ -1197,9 +1191,9 @@ static void cos_net_interrupt(char *packet, int sz)
 #ifdef TEST_TIMING
 	unsigned long long ts;
 #endif
-	/* printc(">>> %d\n", net_lock.lock_id); */
+//	printc(">>> %d\n", net_lock.lock_id);
 	NET_LOCK_TAKE();
-	/* printc("<<< %d\n", net_lock.lock_id); */
+//	printc("<<< %d\n", net_lock.lock_id);
 
 	assert(packet);
 	ih = (struct ip_hdr*)packet;
@@ -1257,15 +1251,12 @@ done:
 #include <torlib.h>
 
 extern td_t parent_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
-/* extern td_t parent___tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid, int flag); */
 extern int parent_twrite(spdid_t spdid, td_t td, int cbid, int sz);
 extern int parent_tread(spdid_t spdid, td_t td, int cbid, int sz);
 
 static volatile int event_thd = 0;
 static td_t ip_td = 0;
 
-
-unsigned long long mmm = 0;
 static int cos_net_evt_loop(void)
 {
 	int alloc_sz = MTU;
@@ -1273,43 +1264,20 @@ static int cos_net_evt_loop(void)
 	cbuf_t cb;
 
 	assert(event_thd > 0);
-	/* printc("cos_net: calling tsplit\n"); */
-	printc("cos_net_evt_loop thd %d init\n", cos_get_thd_id());
-
-#ifdef MEAS_TSPLIT
-	rdtscll(start);
-#endif
 	ip_td = parent_tsplit(cos_spd_id(), td_root, "", 0, TOR_ALL, -1);
-#ifdef MEAS_TSPLIT
-	rdtscll(end);
-	printc("tnet_tip_tsplit %llu\n", end-start);
-#endif
-
 	assert(ip_td > 0);
-	printc("network uc %d starting\n", cos_get_thd_id());
+	printc("network uc %d starting...\n", cos_get_thd_id());
 	alloc_sz = sizeof(struct cos_array) + MTU;
 	while (1) {
 		int sz;
 
-		/* printc("cos_net: evt_loop spinning %d\n", cos_get_thd_id()); */
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
-		/* printc("cos_net: calling tread\n"); */
-#ifdef MEAS_TREAD
-		rdtscll(start);
-#endif
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
-#ifdef MEAS_TREAD
-		rdtscll(end);
-		printc("tnet_tip_tread %llu (thd %d)\n", end-start, cos_get_thd_id());
-#endif
-		if (likely(sz > 0)) {
-		/* assert(sz > 0); */
-			cos_net_interrupt(data, sz);
-			assert(lock_contested(&net_lock) != cos_get_thd_id());
-		}
+		assert(sz > 0);
+		cos_net_interrupt(data, sz);
+		assert(lock_contested(&net_lock) != cos_get_thd_id());
 		cbuf_free(data);
-		/* printc("ready to for the next coming package\n"); */
 	}
 
 	return 0;
@@ -1353,15 +1321,8 @@ static err_t cos_net_stack_send(struct netif *ni, struct pbuf *p, struct ip_addr
 		p = p->next;
 	}
 
-#ifdef MEAS_TWRITE
-	rdtscll(start);
-#endif
+	
 	sz = parent_twrite(cos_spd_id(), ip_td, cb, tot_len);
-#ifdef MEAS_TWRITE
-	rdtscll(end);
-	printc("tnet_tip_twrite %llu\n", end-start);
-#endif
-
 	if (sz <= 0) {
 		printc("<<transmit returns %d -> %d>>\n", sz, tot_len);
 	}
@@ -1456,8 +1417,7 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	struct torrent *t;
 	net_connection_t nc = 0;
 	int accept = 0;
-	/* printc("cos_net: tsplit\n"); */
-	/* printc("spdid %d tid, %d param %s len %d tflags %d evtid %d\n", spdid, tid, param, len, tflags, evtid); */
+
 	if (tor_isnull(tid)) return -EINVAL;
 
 	NET_LOCK_TAKE();
@@ -1494,19 +1454,11 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 done:
 	NET_LOCK_RELEASE();
 	assert(lock_contested(&net_lock) != cos_get_thd_id());
-		
 	return ret;
 free:
 	net_close(spdid, nc);
 	goto done;
 }
-
-/* td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, */
-/* 	      tor_flags_t tflags, long evtid, int flag) */
-/* { */
-/* 	printc("cos_net: __tsplit\n"); */
-/* 	return parent___tsplit(spdid, tid, param, len, tflags, evtid, flag); */
-/* } */
 
 void
 trelease(spdid_t spdid, td_t td)
@@ -1526,12 +1478,6 @@ done:
 	NET_LOCK_RELEASE();
 	assert(lock_contested(&net_lock) != cos_get_thd_id());
 	return;
-}
-
-int 
-twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
-{
-	return -ENOTSUP;
 }
 
 int
@@ -1554,8 +1500,6 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret = -1;
-
-	/* printc("cos_net twrite >>>\n"); */
 
 	buf = cbuf2buf(cbid, sz);
 	if (!buf)           return -EINVAL;
@@ -1582,7 +1526,6 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret;
-	/* printc("cos_net: in tread (thd %d)\n", cos_get_thd_id()); */
 	
 	buf = cbuf2buf(cbid, sz);
 	if (!buf)           return -EINVAL;
@@ -1621,14 +1564,9 @@ static void init_lwip(void)
 	lwip_init();
 	tcp_mem_free(lwip_free_payload);
 
-	/* IP4_ADDR(&ip, 128,164,157,179); */
-	/* IP4_ADDR(&gw, 128,164,159,254); */
-	/* IP4_ADDR(&mask, 255,255,255,0); */
-
 	/* setting the IP address */
 	IP4_ADDR(&ip, 10,0,2,8);
 	IP4_ADDR(&gw, 10,0,1,1);
-
 	/* IP4_ADDR(&ip, 192,168,1,128); */
 	/* IP4_ADDR(&gw, 192,168,1,1); */
 	IP4_ADDR(&mask, 255,255,255,0);
@@ -1641,32 +1579,31 @@ static void init_lwip(void)
 static void cos_net_create_netif_thd(void)
 {
 	union sched_param sp;
-
+	
 	sp.c.type  = SCHEDP_PRIO;
 	sp.c.value = 4;
 	if (0 > (event_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0))) BUG();
 }
 
-unsigned long long ttt = 0;
 static int init(void) 
 {
 	int cnt = 0;
 #ifdef LWIP_STATS
 	int stats_cnt = 0;
 #endif
+
 	lock_static_init(&net_lock);
+	printc("netlock id %d\n", net_lock.lock_id);
 	NET_LOCK_TAKE();
 
 	torlib_init();
 	net_conn_init();
-	printc("cos_net thd %d init\n", cos_get_thd_id());
 	cos_net_create_netif_thd();
 	init_lwip();
 
 	NET_LOCK_RELEASE();
 	/* Start the tcp timer */
 	while (1) {
-		/* if (ttt++ % 10 == 0) printc("tcp timer %d spinning \n", cos_get_thd_id()); */
 		/* Sleep for a quarter of seconds as prescribed by lwip */
 		NET_LOCK_TAKE();
 
@@ -1694,25 +1631,15 @@ static int init(void)
 
 void cos_init(void *arg)
 {
-	static volatile int first = 0;
-	union sched_param sp;
-	int tcp_thd;
+	static volatile int first = 1;
 
 	if (cos_get_thd_id() == event_thd) cos_net_evt_loop();
 
-	if (first == 0) {
-		first = 1;
-
-		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 28;
-		tcp_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
-		printc("tcp creates a thread %d\n", tcp_thd);
-
-		return;
-	} else {
-		printc("tcp: thread %d\n", cos_get_thd_id());
+	if (first) {
+		first = 0;
 		init();
 		BUG();
+	} else {
 		prints("net: not expecting more than one bootstrap.");
 	}
 }

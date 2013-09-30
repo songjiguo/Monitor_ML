@@ -7,8 +7,6 @@
 #include <valloc.h>
 #include <sched.h>
 
-#include <log.h>
-
 cos_lock_t l;
 #define LOCK() if (lock_take(&l)) BUG();
 #define UNLOCK() if (lock_release(&l)) BUG();
@@ -21,12 +19,6 @@ struct channel_info {
 	struct torrent *t; 	
 	struct cringbuf rb;
 } channels[10];
-
-td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, 
-	      tor_flags_t tflags, long evtid, int flag)
-{
-	return 0;
-}
 
 td_t 
 tsplit(spdid_t spdid, td_t td, char *param, 
@@ -69,13 +61,6 @@ free:
 	tor_free(nt);
 	goto done;
 }
-
-int 
-twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
-{
-	return -ENOTSUP;
-}
-
 
 int 
 tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
@@ -201,7 +186,6 @@ static int channel_init(int channel)
 		while (1) {
 			int ret;
 			if (-1 == (ret = cos_brand_wait(bid))) BUG();
-			moncs_enqueue(cos_get_thd_id(), COS_SCHED_BRAND_WAIT); // jiguo: cs monitoring
 			assert(channels[channel].t);
 			evt_trigger(cos_spd_id(), channels[channel].t->evtid);
 		}

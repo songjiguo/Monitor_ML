@@ -1,7 +1,7 @@
 MAKEFLAGS=--no-print-directory -I$(PWD)
 #$(info Make flags $(MAKEFLAGS))
 
-all: kern
+all: kern cp
 comps: 
 	$(info )
 	$(info ***********************************************)
@@ -30,6 +30,7 @@ distclean: clean
 	$(MAKE) $(MAKEFLAGS) -C components distclean	
 
 init:
+	@cd ..; git submodule init; git submodule update; cd src/
 	$(MAKE) $(MAKEFLAGS) -C components init
 	$(MAKE) $(MAKEFLAGS) -C platform init
 
@@ -44,5 +45,11 @@ config:
 	@echo "LDIR=\$$(CODE_DIR)/linux-2.6.36/" >> Makefile.cosconfig
 	@echo "TEST_DIR=/root/experiments/" >> Makefile.cosconfig
 
+idl:
+	$(MAKE) $(MAKEFLAGS) -C components idl
+
 ltests:
 	$(MAKE) $(MAKEFLAGS) -C platform ltests
+
+cltests:
+	$(MAKE) $(MAKEFLAGS) -C platform cltests

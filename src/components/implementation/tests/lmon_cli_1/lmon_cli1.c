@@ -16,7 +16,8 @@ int warm;
 
 //#define NORM
 //#define MEAS_OVERHEAD
-#define EXAMINE_PI
+//#define EXAMINE_PI
+#define EXAMINE_DEADLINE
 
 
 #ifdef MEAS_OVERHEAD
@@ -24,6 +25,7 @@ int warm;
 #define RUNITER 10000
 #endif
 
+#define US_PER_TICK 10000
 
 void 
 cos_init(void)
@@ -84,6 +86,30 @@ cos_init(void)
 		if (cos_get_thd_id() == low) {
 			printc("<<<low thd %d>>>\n", cos_get_thd_id());
 			timed_event_block(cos_spd_id(), 2);
+			lmon_ser1_test();
+		}
+#endif
+#ifdef EXAMINE_DEADLINE   //  periodic task
+		if (cos_get_thd_id() == high) {
+			printc("<<<high thd %d 10>>>\n", cos_get_thd_id());
+			int this_ticks = 10;
+			periodic_wake_create(cos_spd_id(), this_ticks);  // c/t =  2/10   (20%)
+			timed_event_block(cos_spd_id(), 5);
+			lmon_ser1_test();
+		}
+
+		if (cos_get_thd_id() == med) {
+			printc("<<<med thd %d 22>>>\n", cos_get_thd_id());
+			int this_ticks = 22;
+			periodic_wake_create(cos_spd_id(), this_ticks);   // c/t = 4/22 (18%)
+			timed_event_block(cos_spd_id(), 2);
+			lmon_ser1_test();
+		}
+
+		if (cos_get_thd_id() == low) {
+			printc("<<<low thd %d 56>>>\n", cos_get_thd_id());
+			int this_ticks = 56;
+			periodic_wake_create(cos_spd_id(), this_ticks);     // c/t = 12/56 (21%)
 			lmon_ser1_test();
 		}
 #endif

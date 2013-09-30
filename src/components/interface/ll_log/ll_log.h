@@ -39,6 +39,15 @@ struct thd_trace {
 	int block_dep;
 	unsigned long long pi_duration;  // how long this thread has been in PI?
 
+	// parameters for periodic tasks
+	unsigned long long period;
+	unsigned long long execution;
+
+	unsigned long long release;
+	unsigned long long runtime;
+	unsigned long long completion;
+	int wait_for_block;
+
 	unsigned long long alpha_exec[MAX_NUM_SPDS];  // initial entry in a spd
 	unsigned long long avg_exec[MAX_NUM_SPDS]; // not moving avg FIXME:
 	unsigned long long last_exec[MAX_NUM_SPDS];  // tmp use

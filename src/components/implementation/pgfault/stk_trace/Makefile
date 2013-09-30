@@ -1,7 +1,7 @@
 C_OBJS=pgfault.o
 ASM_OBJS=
 COMPONENT=pfs.o
-INTERFACES=pgfault
+INTERFACES=pgfault faults
 DEPENDENCIES=printc stkmgr sched lock mem_mgr_large valloc ll_log
 IF_LIB=
 

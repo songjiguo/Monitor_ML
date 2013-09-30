@@ -14,3 +14,7 @@ init: clean default
 
 ltests:
 	$(MAKE) -C tests 
+
+#clean the linux tests
+cltests:
+	$(MAKE) -C tests clean

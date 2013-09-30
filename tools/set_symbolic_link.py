@@ -8,7 +8,7 @@ import os
 import sys
 
 #names = ['mem_mgr','torrent', 'sched']
-names = ['mem_mgr','rtorrent', 'sched', 'timed_blk']
+names = ['mem_mgr','rtorrent', 'sched', 'timed_blk', 'periodic_wake']
 
 # interface
 interface_path = '/src/components/interface/'
@@ -50,6 +50,12 @@ te_component_path = '/src/components/implementation/timed_blk/timed_evt/'
 te_rec_c = '__timed_event_rec'
 te_nor_c = '__timed_event'
 te_c = 'timed_event.c'
+
+#PE
+pe_component_path = '/src/components/implementation/timed_blk/timed_evt/'
+pe_rec_c = '__timed_event_rec'
+pe_nor_c = '__timed_event'
+pe_c = 'timed_event.c'
 
 def query(name, default = "0"):
 
@@ -186,6 +192,20 @@ def main():
                 os.system("ln -s " + te_rec_c + " " + te_c)
             else:
                 os.system("ln -s " + te_nor_c + " " + te_c)
+
+        # # component PE
+        # if (names[i] == 'periodic_wake'):
+        #     prefix_pe = path + pe_component_path
+
+        #     os.chdir(prefix_pe)
+        #     if os.path.exists(pe_c):
+        #         os.unlink(pe_c)
+        #     if (ret == 'normal') or (ret == 'n'):
+        #         os.system("ln -s " + pe_nor_c + " " + pe_c)
+        #     elif (ret == 'recovery') or (ret == 'r'):
+        #         os.system("ln -s " + pe_rec_c + " " + pe_c)
+        #     else:
+        #         os.system("ln -s " + pe_nor_c + " " + pe_c)
 
 main()
 

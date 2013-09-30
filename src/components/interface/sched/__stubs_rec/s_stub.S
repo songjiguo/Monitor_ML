@@ -31,3 +31,11 @@ cos_asm_server_stub_spdid(sched_component_take)
 cos_asm_server_stub_spdid(sched_component_release)
 
 cos_asm_server_stub(sched_create_thd_again)
+
+cos_asm_server_stub_spdid(sched_cs_state) // Jiguo: check the cs holding status
+
+cos_asm_server_stub(sched_active_uc)
+
+// added to wake up all threads calling from the same spd	
+cos_asm_server_stub(sched_wakeup_spd_all)
+

@@ -94,16 +94,8 @@ __lock_release(cos_lock_t *l, int smp) {
 	do {
 		assert(sizeof(union cos_lock_atomic_struct) == sizeof(u32_t));
 		prev_val.v = l->atom.v; /* local copy of lock */
-		
-		/* Jiguo: If spd failed, the lock owner might be zero..., so just return??? */
-		if (unlikely(prev_val.c.owner == 0)) return 0;
-		
-
 		/* If we're here, we better own the lock... */
-		if (unlikely(prev_val.c.owner != curr)) {
-			printc("prev_val.c.owner %d curr %d spd %lu\n", prev_val.c.owner, cos_get_thd_id(), cos_spd_id());
-			BUG();
-		}
+		if (unlikely(prev_val.c.owner != curr)) BUG();
 		if (unlikely(prev_val.c.contested)) {
 			return lock_release_contention(l, &prev_val);
 		}
@@ -171,7 +163,7 @@ lock_static_init(cos_lock_t *l)
 {
 	lock_init(l);
 	l->lock_id = lock_id_get();
-	/* printc("lock ... after alloc\n"); */
+
 	return l->lock_id;
 }
 

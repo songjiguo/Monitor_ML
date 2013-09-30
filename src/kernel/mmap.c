@@ -6,26 +6,20 @@
  */
 
 #include "include/mmap.h"
+#include "include/chal.h"
 
 static struct cos_page cos_pages[COS_MAX_MEMORY];
-
-extern void *cos_alloc_page(void);
-extern void *cos_free_page(void *page);
-extern void *va_to_pa(void *va);
-extern void *pa_to_va(void *pa);
 
 void cos_init_memory(void) 
 {
 	int i;
 
 	for (i = 0 ; i < COS_MAX_MEMORY ; i++) {
-		void *r = cos_alloc_page();
+		void *r = chal_alloc_page();
 		if (NULL == r) {
 			printk("cos: ERROR -- could not allocate page for cos memory\n");
 		}
-		cos_pages[i].addr = (paddr_t)va_to_pa(r);
-		cos_pages[i].rt_spdid = 0;
-		cos_pages[i].rt_vaddr = (vaddr_t) 0;
+		cos_pages[i].addr = (paddr_t)chal_va2pa(r);
 	}
 
 	return;
@@ -37,7 +31,7 @@ void cos_shutdown_memory(void)
 
 	for (i = 0 ; i < COS_MAX_MEMORY ; i++) {
 		paddr_t addr = cos_pages[i].addr;
-		cos_free_page(pa_to_va((void*)addr));
+		chal_free_page(chal_pa2va((void*)addr));
 		cos_pages[i].addr = 0;
 	}
 }
@@ -70,50 +64,4 @@ paddr_t cos_access_page(unsigned long cap_no)
 	assert(addr);
 
 	return addr;
-}
-
-/* 
-   record the frame id, spd id and its corresponding addr
-   info should be able to be looked up during recovery
- */
-
-void
-cos_add_root_info(int spdid, vaddr_t vaddr, unsigned long frame_id)
-{	
-	/* if (spdid != 5) printk("cos: root info added spd %d addr %p at frame %lu\n", spdid, vaddr, frame_id); */
-	cos_pages[frame_id].rt_spdid = spdid;
-	cos_pages[frame_id].rt_vaddr = vaddr;
-}
-void 
-cos_remove_root_info(unsigned long frame_id)
-{	
-	/* printk("cos: root info removed at frame %lu\n", frame_id); */
-	cos_pages[frame_id].rt_spdid = 0;
-	cos_pages[frame_id].rt_vaddr = 0;
-}
-
-vaddr_t 
-cos_lookup_root_page(unsigned long frame_id)
-{
-	/* printk("cos: root info lookup fr_id %d addr %p\n", frame_id, cos_pages[frame_id].rt_vaddr); */
-	return cos_pages[frame_id].rt_vaddr;
-}
-
-int 
-cos_lookup_root_spd(unsigned long frame_id)
-{
-	/* printk("cos: root info lookup fr_id %d spdid %d\n", frame_id, cos_pages[frame_id].rt_spdid); */
-	return cos_pages[frame_id].rt_spdid;
-}
-
-int 
-cos_is_rootpage(int spdid, vaddr_t vaddr, unsigned long frame_id)
-{
-	int ret = 0;
-
-	if ((cos_pages[frame_id].rt_spdid == spdid) &&
-	    (cos_pages[frame_id].rt_vaddr == vaddr))
-		ret = 1;
-
-	return ret;
 }

@@ -116,7 +116,7 @@ tar_parse_record(struct tar_record *r, struct fsobj **o, struct fsobj *root)
 	new = FS_ALLOC(sizeof(struct fsobj));
 	if (!new) return NULL;
 	if (fsobj_cons(new, parent, name, t,
-		       sz, sz ? (char*)&r[1] : NULL)) BUG();
+			sz, sz ? (char*)&r[1] : NULL)) BUG();
 	*o = new;
 
 	return &r[records_sz+1];

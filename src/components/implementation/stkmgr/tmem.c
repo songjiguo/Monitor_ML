@@ -1,3 +1,12 @@
+/**
+ * Copyright 2012 by The George Washington University.  All rights reserved.
+ *
+ * Redistribution of this file is permitted under the GNU General
+ * Public License v2.
+ *
+ * Author: Qi Wang, interwq@gwu.edu, 2012
+ */
+
 #include <cos_component.h>
 #include <print.h>
 #include <cos_alloc.h>
@@ -49,7 +58,8 @@ get_mem(void)
 	tmem_item *tmi;
 	void *l_addr;
 
-	/* Do we need to maintain global stack target? If we set a
+	/* 
+	 * Do we need to maintain global stack target? If we set a
 	 * limit to each component, can we get a global target as
 	 * well? Disable this first because it prevents
 	 * self-suspension stacks over-quota allocation, which is
@@ -75,7 +85,8 @@ get_mem(void)
 	return tmi;
 }
 
-void event_waiting()
+void
+event_waiting(void)
 {
 	while (1) {
 		mempool_tmem_mgr_event_waiting(cos_spd_id());
@@ -235,7 +246,7 @@ tmem_wait_for_mem(struct spd_tmem_info *sti)
 	return 1;
 }
 
-inline tmem_item *
+tmem_item *
 tmem_grant(struct spd_tmem_info *sti)
 {
 	tmem_item *tmi = NULL, *local_cache = NULL;
@@ -254,7 +265,7 @@ tmem_grant(struct spd_tmem_info *sti)
 		tmi = free_mem_in_local_cache(sti);
 		if (tmi) {
 			local_cache = tmi;
-			/* printc("found one cached!! \n"); */
+			DOUT("found one cached!! \n");
 			break;
 		}
 
@@ -265,7 +276,6 @@ tmem_grant(struct spd_tmem_info *sti)
 
 		if (sti->num_allocated < sti->num_desired &&
 		    (empty_comps < (MAX_NUM_MEM - tmems_allocated) || sti->num_allocated == 0)) {
-			DOUT("alloooooooooo!!\n");
 			/* We are eligible for allocation! */
 			eligible = 1;
 			tmi = get_mem();

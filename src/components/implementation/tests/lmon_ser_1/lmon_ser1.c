@@ -35,14 +35,8 @@ cos_lock_t t_lock;
 #define LOCK_RELEASE() lock_release(&t_lock)
 #define LOCK_INIT()    lock_static_init(&t_lock);
 
-/* #define LOCK_TAKE()   if(sched_component_take(cos_spd_id())) BUG(); */
-/* #define LOCK_RELEASE() if(sched_component_release(cos_spd_id())) BUG(); */
-/* #define LOCK_INIT() */
-
 volatile int spin = 1;
-volatile int kevin, andy, qq;
-
-unsigned long long start, end;
+unsigned long long start, end, sum;
 
 static void try_crisec_hp(void)
 {
@@ -112,11 +106,64 @@ static void try_crisec_lp(void)
 	return;
 }
 
+#define US_PER_TICK 10000
+
+static int blk_num = 0;
+
+static void periodic_doing(int exe_t, int period)  // in ticks
+{
+	volatile unsigned long i = 0;
+
+	unsigned long exe_cycle;
+	exe_cycle = exe_t*sched_cyc_per_tick();
+
+	printc("In spd %ld Thd %d, period %d, execution time %d in %lu cycles\n", cos_spd_id(),cos_get_thd_id(), period, exe_t, exe_cycle);
+
+	while(1) {
+		periodic_wake_wait(cos_spd_id());
+		printc("thread %d is doing something\n", cos_get_thd_id());
+		start = end = sum = 0;
+		while(1) {
+			rdtscll(start);
+			while(i++ < 1000);
+			rdtscll(end);
+			sum += end-start;
+			if (sum >= exe_cycle) break;
+		}
+		/* while (i++ < exe_cycle); */
+		/* if (cos_get_thd_id() == hig && blk_num++ > 10) sched_block(cos_spd_id(), 0); */
+		i = 0;		
+	}
+	return;
+}
+
+static void hp_deadline(void)   // c/t  = 2/10
+{
+	periodic_doing(2,10);
+	return;
+}
+
+static void mp_deadline(void)    // ct/t 4/22
+{
+	periodic_doing(4,22);
+	return;
+}
+
+static void lp_deadline(void)    // ct/t 12/56
+{
+	periodic_doing(12,56);
+	return;
+}
+
 vaddr_t lmon_ser1_test(void)
 {
-	if (cos_get_thd_id() == hig) try_crisec_hp();
-	if (cos_get_thd_id() == mid) try_crisec_mp();
-	if (cos_get_thd_id() == low) try_crisec_lp();
+	/* if (cos_get_thd_id() == hig) try_crisec_hp(); */
+	/* if (cos_get_thd_id() == mid) try_crisec_mp(); */
+	/* if (cos_get_thd_id() == low) try_crisec_lp(); */
+
+	if (cos_get_thd_id() == hig) hp_deadline();
+	if (cos_get_thd_id() == mid) mp_deadline();
+	if (cos_get_thd_id() == low) lp_deadline();
 
 	return 0;
 }

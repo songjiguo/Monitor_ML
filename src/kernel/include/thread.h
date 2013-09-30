@@ -11,6 +11,9 @@
 #include "spd.h"
 #include "debug.h"
 #include "shared/consts.h"
+#include "per_cpu.h"
+#include "shared/cos_config.h"
+#include "fpu_regs.h"
 
 #include <linux/kernel.h>
 
@@ -35,9 +38,6 @@ struct thd_invocation_frame {
 	 */
 	struct spd *spd;
 	vaddr_t sp, ip;
-	/* unsigned long fault_cnt; */
-	struct fault_counter fault;	 /* when pop/invocation */
-	struct fault_counter curr_fault; /* when context switch */
 }; //HALF_CACHE_ALIGNED;
 
 /* 
@@ -48,13 +48,6 @@ struct thd_sched_info {
 	struct spd *scheduler;
 	struct cos_sched_events *thread_notifications;
 	int notification_offset;
-	
-	/* add the parameters for all threads that not created through
-	 * the interface */
-	int thread_user_prio;
-	int thread_value;
-	void *thread_fn;
-	void *thread_dest;
 };
 
 #define THD_STATE_PREEMPTED     0x1   /* Complete register info is saved in regs */
@@ -64,7 +57,7 @@ struct thd_sched_info {
 #define THD_STATE_BRAND         0x10  /* This thread is used as a brand */
 #define THD_STATE_SCHED_RETURN  0x20  /* When the sched switches to this thread, ret from ipc */
 #define THD_STATE_FAULT         0x40  /* Thread has had a (e.g. page) fault which is being serviced */
-#define THD_STATE_HW_BRAND      0x80  /* Actual hardware should be making this brand */
+#define THD_STATE_HW_BRAND      0x80 /* Actual hardware should be making this brand */
 #define THD_STATE_CYC_CNT       0x100 /* This thread is being cycle tracked */
 
 /**
@@ -85,7 +78,8 @@ struct thread {
 	 * TODO: use offsetof to produce an include file at build time
 	 * to automtically generate the assembly offsets.
 	 */
-	struct pt_regs regs;
+        struct pt_regs regs;
+        struct cos_fpu fpu;
 
 	/* the first frame describes the threads protection domain */
 	struct thd_invocation_frame stack_base[MAX_SERVICE_DEPTH] HALF_CACHE_ALIGNED;
@@ -113,9 +107,6 @@ struct thread {
 	ring_buff_t *u_rb, *k_rb;
 	int rb_next; 		/* Next address entry */
 
-	ring_buff_track_t *u_rb_track, *k_rb_track;
-	int rb_next_track; 		/* Next address entry */
-
 	/* End Brand & Upcall fields */
 
 	/* flags & (THD_STATE_UPCALL|THD_STATE_BRAND) != 0: */
@@ -123,18 +114,6 @@ struct thread {
 	//struct thread *upcall_thread_ready, *upcall_thread_active;
 
 	struct thread *freelist_next;
-
-	/* fault tolerance related */
-
-	/* Linked list of the threads created in scheduler */
-	struct thread *sched_prev, *sched_next;
-	int thd_cnts;
-
-	/* thread creation chain */
-	struct thread *crt_tail_thd, *crt_next_thd;
-	struct spd *crt_in_spd;
-
-	struct thread *brand_thd; /* track the brand thread associated with this thread */
 } CACHE_ALIGNED;
 
 struct thread *thd_alloc(struct spd *spd);
@@ -151,11 +130,11 @@ static inline void thd_invocation_push(struct thread *curr_thd, struct spd *curr
 				       vaddr_t sp, vaddr_t ip)
 {
 	struct thd_invocation_frame *inv_frame;
-
-	/* printk("cos: Pushing onto %p, spd %p, cspd %p (sp %x, ip %x).\n",  */
-	/*        curr_thd, curr_spd, curr_spd->composite_spd,  */
-	/*        (unsigned int)sp, (unsigned int)ip); */
-
+/*
+	printk("cos: Pushing onto %p, spd %p, cspd %p (sp %x, ip %x).\n", 
+	       curr_thd, curr_spd, curr_spd->composite_spd, 
+	       (unsigned int)sp, (unsigned int)ip);
+*/
 	curr_thd->stack_ptr++;
 	inv_frame = &curr_thd->stack_base[curr_thd->stack_ptr];
 
@@ -183,10 +162,10 @@ static inline struct thd_invocation_frame *thd_invocation_pop(struct thread *cur
 	}
 
 	prev_frame = &curr_thd->stack_base[curr_thd->stack_ptr--];
-
-	/* printd("Popping off of %x, cspd %x (sp %x, ip %x, usr %x).\n", (unsigned int)curr_thd, */
-	/*        (unsigned int)prev_frame->current_composite_spd, (unsigned int)prev_frame->sp, (unsigned int)prev_frame->ip, (unsigned int)prev_frame->usr_def); */
-
+/*
+	printd("Popping off of %x, cspd %x (sp %x, ip %x, usr %x).\n", (unsigned int)curr_thd,
+	       (unsigned int)prev_frame->current_composite_spd, (unsigned int)prev_frame->sp, (unsigned int)prev_frame->ip, (unsigned int)prev_frame->usr_def);
+*/
 	return prev_frame;
 }
 
@@ -207,11 +186,6 @@ static inline struct thd_invocation_frame *thd_invstk_nth(struct thread *thd, in
 	if (idx < 0) return NULL;
 
 	return &thd->stack_base[idx];
-}
-
-static inline struct thd_invocation_frame *thd_invstk_base(struct thread *thd)
-{
-	return &thd->stack_base[0];
 }
 
 static inline void thd_invstk_move_nth(struct thread *thd, int nth, int rem)
@@ -237,7 +211,6 @@ static inline int thd_invstk_rem_nth(struct thread *thd, int nth)
 	struct spd_poly *cspd;
 	int first = 1;
 
-	/* printk("nth %d thd->stack_ptr %d\n",nth, thd->stack_ptr); */
 	if (nth < 0 || nth >= thd->stack_ptr) return -1;
 	/* release the composite spd */
 	cspd = thd->stack_base[idx].current_composite_spd;
@@ -250,19 +223,6 @@ static inline int thd_invstk_rem_nth(struct thread *thd, int nth)
 	thd->stack_ptr--;
 
 	return 0;
-}
-
-extern struct thread *current_thread;
-static inline struct thread *thd_get_current(void) 
-{
-	return current_thread;
-}
-
-static inline void thd_set_current(struct thread *thd)
-{
-	current_thread = thd;
-
-	return;
 }
 
 static inline struct spd *
@@ -280,7 +240,7 @@ thd_curr_spd_thd(struct thread *t)
 
 static inline struct spd *thd_curr_spd_noprint(void)
 {
-	return thd_curr_spd_thd(thd_get_current());
+	return thd_curr_spd_thd(core_get_curr_thd());
 }
 
 static inline vaddr_t thd_get_frame_ip(struct thread *thd, int frame_offset)
@@ -394,15 +354,6 @@ static inline struct spd_poly *thd_get_thd_spdpoly(struct thread *thd)
 	struct thd_invocation_frame *frame = thd_invstk_top(thd);
 
 	return frame->current_composite_spd;
-}
-
-static inline struct spd_poly *thd_get_current_spdpoly(void)
-{
-	struct thread *thd = thd_get_current();
-	if (NULL == thd) { 
-		return NULL;
-	}
-	return thd_get_thd_spdpoly(thd);
 }
 
 extern struct thread threads[MAX_NUM_THREADS];

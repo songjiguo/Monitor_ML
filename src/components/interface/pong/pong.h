@@ -1,6 +1,6 @@
-#ifndef UNIT_PONG_H
-#define UNIT_PONG_H
+#ifndef PONG_H
+#define PONG_H
 
-void pong(void);
+void call(void);
 
-#endif /* !UNIT_PONG_H */
+#endif /* !PONG_H */
