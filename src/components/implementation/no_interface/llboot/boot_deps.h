@@ -200,6 +200,14 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	return 0;
 }
 
+int
+fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
+{
+	assert(0);
+	return 0;
+}
+
+
 /* memory operations... */
 
 static vaddr_t init_hp = 0; 		/* initial heap pointer */

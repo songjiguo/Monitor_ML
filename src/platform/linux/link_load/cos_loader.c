@@ -78,11 +78,10 @@ const char *INIT_FILE_NAME = "init.tar";
 
 typedef enum {
 	LLBOOT_COMPN = 1,
-	LLBOOT_LOG   = 2,
-	LLBOOT_SCHED = 3,
-	LLBOOT_MM    = 4,
-	LLBOOT_PRINT = 5,
-	LLBOOT_BOOT  = 6
+	LLBOOT_SCHED = 2,
+	LLBOOT_MM    = 3,
+	LLBOOT_PRINT = 4,
+	LLBOOT_BOOT  = 5
 } llboot_component_ids;
 
 const char *ATOMIC_USER_DEF[NUM_ATOMIC_SYMBS] = 
@@ -149,8 +148,9 @@ typedef enum {
 	CTORS_S, 
 	DTORS_S, 
 	CRECOV_S, 
-	KMEM_CAPS_S, 
-	KMEM_SCHED_S, 
+	/* KMEM_S, */
+	KMEM_CAPS_S,
+	KMEM_SCHED_S,
 	CINFO_S, 
 	DATA_S, 
 	BSS_S, 
@@ -202,6 +202,11 @@ struct cos_sections section_info[MAXSEC_S+1] = {
 		.coalesce   = 1,
 		.sname      = ".crecov",
 	},
+	/* { */
+	/* 	.secid      = KMEM_S, */
+	/* 	.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_KMEM, */
+	/* 	.sname      = ".kmem" */
+	/* }, */
 	{
 		.secid      = KMEM_CAPS_S,
 		.cobj_flags = COBJ_SECT_READ | COBJ_SECT_WRITE | COBJ_SECT_KMEM | COBJ_SECT_INITONCE,
@@ -392,6 +397,7 @@ static unsigned long getsym(bfd *obj, char* symbol)
 	return 0;
 }
 
+#define DEBUG
 #ifdef DEBUG
 static void print_syms(bfd *obj)
 {
@@ -659,10 +665,13 @@ load_service(struct service_symbs *ret_data, unsigned long lower_addr, unsigned 
 		bfd_perror("object open failure");
 		return -1;
 	}
+
 	if(!bfd_check_format(obj, bfd_object)){
 		printl(PRINT_DEBUG, "Not an object file!\n");
 		return -1;
 	}
+
+	print_syms(obj);
 	/* 
 	 * Initialize some section info (note that only sizes of
 	 * sections are relevant now, as we haven't yet linked in
@@ -784,7 +793,9 @@ load_service(struct service_symbs *ret_data, unsigned long lower_addr, unsigned 
 	 * proper memory locations.
 	 */
 	genscript(1);
+	printl(PRINT_DEBUG, "1\n");
 	run_linker(service_name, tmp_exec);
+	printl(PRINT_DEBUG, "2\n");
 //	unlink(script);
 	objout = bfd_openr(tmp_exec, "elf32-i386");
 	if(!objout){
@@ -3071,7 +3082,7 @@ int main(int argc, char *argv[])
 		goto dealloc_exit;
 	}
 
-//	print_kern_symbs(services);
+	//print_kern_symbs(services);
 
 	setup_kernel(services);
 

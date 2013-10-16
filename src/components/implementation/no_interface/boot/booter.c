@@ -405,11 +405,6 @@ failure_notif_fail(spdid_t caller, spdid_t failed)
 	UNLOCK();
 }
 
-int fault_flt_notif_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
-{
-        return 0;
-}
-
 struct deps { short int client, server; };
 struct deps *deps;
 int ndeps;

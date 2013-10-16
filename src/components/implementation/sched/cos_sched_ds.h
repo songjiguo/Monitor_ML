@@ -3,6 +3,6 @@
 
 #include <cos_types.h>
 
-PERCPU_VAR_ATTR(__attribute__((section(".kmem"))), cos_sched_notifications);
+PERCPU_VAR_ATTR(__attribute__((section(".kmem_sched"))), cos_sched_notifications);
 
 #endif

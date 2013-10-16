@@ -1,0 +1,36 @@
+/**
+ * Copyright 2007 by Gabriel Parmer, gabep1@cs.bu.edu
+ *
+ * Redistribution of this file is permitted under the GNU General
+ * Public License v2.
+ */
+
+#ifndef MMAP_H
+#define MMAP_H
+
+#include "shared/cos_types.h"
+#include "shared/consts.h"
+
+struct cos_page {
+	int rt_spdid;             // rooted spd
+	vaddr_t rt_vaddr;         // rooted vpage for addr
+	paddr_t addr;
+};
+
+void cos_init_memory(void);
+void cos_shutdown_memory(void);
+static inline unsigned int cos_max_mem_caps(void)
+{
+	return COS_MAX_MEMORY;
+}
+paddr_t cos_access_page(unsigned long cap_no);
+int cos_paddr_to_cap(paddr_t pa);
+
+void cos_add_root_info(int spdid, vaddr_t vaddr, unsigned long frame_id);
+void cos_remove_root_info(unsigned long frame_id);
+vaddr_t cos_lookup_root_page(unsigned long frame_id);
+int cos_lookup_root_spd(unsigned long frame_id);
+
+int cos_is_rootpage(int spdid, vaddr_t vaddr, unsigned long frame_id);
+
+#endif
