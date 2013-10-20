@@ -13,7 +13,7 @@ cos_asm_server_fn_stub_spdid(tmerge, __sg_tmerge)
 	
 cos_asm_server_stub_spdid(tread)
 cos_asm_server_stub_spdid(twrite)
-cos_asm_server_stub_spdid(twmeta)
+//cos_asm_server_stub_spdid(twmeta)
 cos_asm_server_stub_spdid(trelease)
 	
 //cos_asm_server_fn_stub_spdid(tread, __sg_tread)

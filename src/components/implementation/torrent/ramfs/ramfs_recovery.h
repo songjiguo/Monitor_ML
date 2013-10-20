@@ -34,7 +34,6 @@ struct tor_list *all_tor_list = NULL;
 
 static int __twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag);
 
-
 static td_t
 tid_lookup(int fid)
 {

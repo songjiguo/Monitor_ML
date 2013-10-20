@@ -506,47 +506,47 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, rec_rd)
 	/* printc("tsplit done!!!\n\n"); */
 CSTUB_POST
 
-struct __sg_twmeta_data {
-	td_t td;
-	cbuf_t cb;
-	int sz;
-	int offset;
-	int flag;
-};
+/* struct __sg_twmeta_data { */
+/* 	td_t td; */
+/* 	cbuf_t cb; */
+/* 	int sz; */
+/* 	int offset; */
+/* 	int flag; */
+/* }; */
 
-CSTUB_FN_ARGS_6(int, twmeta, spdid_t, spdid, td_t, td, cbuf_t, cb, int, sz, int, offset, int, flag)
-        struct rec_data_tor *rd;
-	struct __sg_twmeta_data *d;
-	cbuf_t cb_m;
-	int sz_m = sizeof(struct __sg_twmeta_data);
-redo:
-	d = cbuf_alloc(sz_m, &cb_m);
-	if (!d) return -1;
+/* CSTUB_FN_ARGS_6(int, twmeta, spdid_t, spdid, td_t, td, cbuf_t, cb, int, sz, int, offset, int, flag) */
+/*         struct rec_data_tor *rd; */
+/* 	struct __sg_twmeta_data *d; */
+/* 	cbuf_t cb_m; */
+/* 	int sz_m = sizeof(struct __sg_twmeta_data); */
+/* redo: */
+/* 	d = cbuf_alloc(sz_m, &cb_m); */
+/* 	if (!d) return -1; */
 
-	/* int buf_sz; */
-	/* u32_t id; */
-	/* cbuf_unpack(cb, &id, (u32_t*)&buf_sz); */
-        /* printc("cbid is %d\n", id); */
+/* 	/\* int buf_sz; *\/ */
+/* 	/\* u32_t id; *\/ */
+/* 	/\* cbuf_unpack(cb, &id, (u32_t*)&buf_sz); *\/ */
+/*         /\* printc("cbid is %d\n", id); *\/ */
 
-	d->td	  = td;
-	d->cb	  = cb;
-        d->sz	  = sz;
-        d->offset = offset;
-        d->flag   = flag;
+/* 	d->td	  = td; */
+/* 	d->cb	  = cb; */
+/*         d->sz	  = sz; */
+/*         d->offset = offset; */
+/*         d->flag   = flag; */
 
-CSTUB_ASM_3(twmeta, spdid, cb_m, sz_m)
-        if (unlikely(fault)) {
-		fcounter++;
-		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) {
-			printc("set cap_fault_cnt failed\n");
-			BUG();
-		}
-		cbuf_free(d);
-                goto redo;
-	}
+/* CSTUB_ASM_3(twmeta, spdid, cb_m, sz_m) */
+/*         if (unlikely(fault)) { */
+/* 		fcounter++; */
+/* 		if (cos_fault_cntl(COS_CAP_FAULT_UPDATE, cos_spd_id(), uc->cap_no)) { */
+/* 			printc("set cap_fault_cnt failed\n"); */
+/* 			BUG(); */
+/* 		} */
+/* 		cbuf_free(d); */
+/*                 goto redo; */
+/* 	} */
 
-	cbuf_free(d);
-CSTUB_POST
+/* 	cbuf_free(d); */
+/* CSTUB_POST */
 
 struct __sg_tmerge_data {
 	td_t td;

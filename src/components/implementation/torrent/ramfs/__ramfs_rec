@@ -315,7 +315,7 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	/* 	find_restore(td); */
 	/* } */
 
-	cbuf_unpack(cb, &id, (u32_t*)&buf_sz);
+	cbuf_unpack(cb, &id);
 
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, done);
@@ -371,8 +371,8 @@ done:
 	return ret;
 }
 
-int 
-twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
+static int 
+__rec_twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
 {
 	struct torrent *t;
 	struct fsobj *fso;
@@ -438,7 +438,7 @@ __twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag)
 {
 	int ret = 0;
 	UNLOCK();
-	ret = twmeta(spdid, td, cbid, sz, offset, flag);
+	ret = __rec_twmeta(spdid, td, cbid, sz, offset, flag);
 	LOCK();
 
 	return ret;
