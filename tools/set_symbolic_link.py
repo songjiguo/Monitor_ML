@@ -11,7 +11,7 @@ RECOVERY = 0
 ########################################
 # interface
 #######################################
-service_names = ['mem_mgr','rtorrent', 'sched', 'timed_blk', 'periodic_wake', 'cbuf_c']
+service_names = ['mem_mgr','rtorrent', 'sched', 'timed_blk', 'periodic_wake', 'cbuf_c', 'llboot']
 
 # interface
 interface_path = '/src/components/interface/'
@@ -76,10 +76,16 @@ cbuf_rec_c = '__cbuf_rec'
 cbuf_nor_c = '__cbuf'
 cbuf_c = 'cbuf.c'
 
+#llboot (boot_deps.h)
+llboot_component_path = '/src/components/implementation/no_interface/llboot/'
+llboot_rec_h = '__boot_deps_rec'
+llboot_nor_h = '__boot_deps'
+llboot_h = 'boot_deps.h'
+
 ########################################
 # system setting (e.g. component/include...)
 #######################################
-sys_names = ['cos_types', 'cos_component', 'inv', 'spd', 'thread', 'mmap', 'hijack', 'fs', 'cbuf']
+sys_names = ['cos_types', 'cos_component', 'inv', 'spd', 'thread', 'mmap', 'hijack', 'fs', 'cbuf', 'ring_buff']
 
 cos_types_path = '/src/kernel/include/shared/'
 cos_types_rec_h = '__cos_types_rec'
@@ -111,6 +117,11 @@ spd_rec_h = '__spd_rec'
 spd_nor_h = '__spd'
 spd_h = 'spd.h'
 
+spdc_path = '/src/kernel/'
+spd_rec_c = '__spd_rec'
+spd_nor_c = '__spd'
+spd_c = 'spd.c'
+
 thread_path = '/src/kernel/include/'
 thread_rec_h = '__thread_rec'
 thread_nor_h = '__thread'
@@ -120,6 +131,16 @@ mmap_path = '/src/kernel/include/'
 mmap_rec_h = '__mmap_rec'
 mmap_nor_h = '__mmap'
 mmap_h = 'mmap.h'
+
+mmapc_path = '/src/kernel/'
+mmap_rec_c = '__mmap_rec'
+mmap_nor_c = '__mmap'
+mmap_c = 'mmap.c'
+
+ring_buff_path = '/src/kernel/'
+ring_buff_rec_c = '__ring_buff_rec'
+ring_buff_nor_c = '__ring_buff'
+ring_buff_c = 'ring_buff.c'
 
 hijack_path = '/src/platform/linux/module/'
 hijack_rec_c = '__hijack_rec'
@@ -202,17 +223,17 @@ def set_link(name, c_path, dest, nor, rec, par):
     
     if os.path.exists(dest):
         os.unlink(dest)
-    if (name == "rtorrent"):  # tmp
+    if (name == "rtorrent" or name == "llboot"):  # temp, remove later
         if os.path.exists("Makefile"):
             os.unlink("Makefile")
     if (ret == 'normal') or (ret == 'n'):
         os.system("ln -s " + nor + " " + dest)
-        if (name == "rtorrent"):
+        if (name == "rtorrent" or name == "llboot"):  # temp, remove later
             os.system("ln -s __Makefile  Makefile")  # temp, remove later
     elif (ret == 'recovery') or (ret == 'r'):
         RECOVERY = 1
         os.system("ln -s " + rec + " " + dest)
-        if (name == "rtorrent"):
+        if (name == "rtorrent" or name == "llboot"):  # temp, remove later
             os.system("ln -s __Makefile_rec  Makefile")  # temp, remove later
     else:
         os.system("ln -s " + nor + " " + dest)
@@ -268,6 +289,12 @@ def main():
             ret = set_link(service_names[i], interface_path+service_names[i], cbufc_header, cbufc_nor_h, cbufc_rec_h, 0)
             set_link(service_names[i], interface_path+service_names[i], tmem_conf, tmem_nor_h, tmem_rec_h, ret)
             print
+        # component llboot
+        if (service_names[i] == 'llboot'):
+            print service_names[i]
+            set_link(service_names[i], llboot_component_path, llboot_h, llboot_nor_h, llboot_rec_h, 1)
+            print
+
 
     if (RECOVERY == 1):
         print "System setting..."
@@ -281,10 +308,14 @@ def main():
                 set_link(sys_names[i], inv_path, inv_c, inv_nor_c, inv_rec_c, 1)
             if (sys_names[i] == 'spd'):            
                 set_link(sys_names[i], spd_path, spd_h, spd_nor_h, spd_rec_h, 1)
+                set_link(sys_names[i], spdc_path, spd_c, spd_nor_c, spd_rec_c, 1)
             if (sys_names[i] == 'thread'):
                 set_link(sys_names[i], thread_path, thread_h, thread_nor_h, thread_rec_h, 1)
             if (sys_names[i] == 'mmap'):
                 set_link(sys_names[i], mmap_path, mmap_h, mmap_nor_h, mmap_rec_h, 1)
+                set_link(sys_names[i], mmapc_path, mmap_c, mmap_nor_c, mmap_rec_c, 1)
+            if (sys_names[i] == 'ring_buff'):
+                set_link(sys_names[i], ring_buff_path, ring_buff_c, ring_buff_nor_c, ring_buff_rec_c, 1)
             if (sys_names[i] == 'fs'):
                 set_link(sys_names[i], fs_path, fs_h, fs_nor_h, fs_rec_h, 1)
             if (sys_names[i] == 'cbuf'):

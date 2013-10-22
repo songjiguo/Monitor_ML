@@ -219,7 +219,9 @@ __cbuf_alloc_slow(int size, int *len, int tmem)
 
 		CBUF_RELEASE();
 		if (tmem) {
+			printc("Before create\n");
 			cbid = cbuf_c_create(cos_spd_id(), size, cbid*-1);
+			printc("After create\n");
 			*len = 0; /* tmem */
 		} else {
 			cbid = __cbufp_alloc_slow(cbid, size, len, &error);

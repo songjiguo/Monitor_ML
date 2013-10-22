@@ -454,6 +454,7 @@ CSTUB_ASM_4(__tsplit, spdid, cb, sz, rec_rd)
 	}
 
 //memset(&d->data[0], 0, len);  no reason to zero??
+        /* printc("tsplit ready to cbuf free\n"); */
         cbuf_free(d);
 
         if (unlikely(rec_rd)) {

@@ -452,7 +452,6 @@ again:
 	flags            = CBUFM_IN_USE | CBUFM_TOUCHED; /* should be atomic */
 	if (tmem) flags |= CBUFM_TMEM;
 	cm->nfo.c.flags |= flags;
-
 	/* 
 	 * Now that IN_USE is set, we know the manager will not rip
 	 * this out from under us.  Check that nothing has changed,
@@ -545,7 +544,16 @@ __cbuf_done(int cbid, int tmem, struct cbuf_alloc_desc *d)
 	 */
 	assert(cm->nfo.c.flags & CBUFM_IN_USE);
 	owner = cm->nfo.c.flags & CBUFM_OWNER;
-	assert(!(tmem & !owner)); /* Shouldn't be calling free... */
+	
+	/* printc("tmem %d cbid %d owner is %d\n", tmem, cbid, owner); */
+	
+        // Jiguo: the ownership could have been changed, e.g. twrite
+	if (!owner) {
+		CBUF_RELEASE();
+		return;
+	}
+	assert(tmem); /* Shouldn't be calling free... */
+	//assert(!(tmem & !owner)); /* Shouldn't be calling free... */
 
 	if (tmem && d && owner) {
 		struct cbuf_alloc_desc *fl;

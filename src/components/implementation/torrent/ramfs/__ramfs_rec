@@ -365,7 +365,7 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	assert(all_tor_list);
 	int t_fid = fid_lookup(td);
 	assert(t_fid >= 0);
-	if (reserve_cbuf_fid(cb, td, offset, ret, t_fid)) BUG();
+	/* if (reserve_cbuf_fid(cb, td, offset, ret, t_fid)) BUG(); */
 done:	
 	UNLOCK();
 	return ret;

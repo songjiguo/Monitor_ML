@@ -47,7 +47,6 @@ void test0(void)
 		return;
 	}
 	trelease(cos_spd_id(), t1);
-
 	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
 	if (t1 < 1) {
 		printc("UNIT TEST FAILED: split2 failed %d\n", t1); return;
@@ -56,7 +55,6 @@ void test0(void)
 	if (t2 < 1) {
 		printc("UNIT TEST FAILED: split3 failed %d\n", t2); return;
 	}
-
 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1));
 	ret2 = twrite_pack(cos_spd_id(), t2, data2, strlen(data2));
 	/* printv("write %d & %d, ret %d & %d\n", strlen(data1), strlen(data2), ret1, ret2); */
@@ -70,10 +68,10 @@ void test0(void)
 		printc("UNIT TEST FAILED: later splits failed\n");
 		return;
 	}
-	
+
 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023);
 	if (ret1 > 0) buffer[ret1] = '\0';
-	printv("read %d (%d): %s (%s)\n", ret1, strlen(data1), buffer, data1);
+	/* printv("read %d (%d): %s (%s)\n", ret1, strlen(data1), buffer, data1); */
 	assert(!strcmp(buffer, data1));
 	assert(ret1 == strlen(data1));
 	buffer[0] = '\0';
@@ -432,7 +430,8 @@ void cos_init(void)
 		timed_event_block(cos_spd_id(), 1);
 		/* for fault injection, this is too slow, instead, we can just loop */
 		/* periodic_wake_create(cos_spd_id(), 1); */
-		while(1) {
+		i = 0;
+		while(i++ < 50) {
 			test0(); /* unit test */
 			/* periodic_wake_wait(cos_spd_id()); */
 		}

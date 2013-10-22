@@ -1406,7 +1406,7 @@ thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 	thd_frame = thd_invstk_top(thd);
 
 	fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
-	flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];
+	//flt_notif_cap_entry = &invocation_capabilities[fltnotif_cap];   jiguo
 	notif_spd = flt_notif_cap_entry->destination;
 	/* printk("notif spd is %d\n", spd_get_index(notif_spd)); */
 	if (fltnotif_cap - thd_frame->spd->cap_base > COS_FLT_MAX) {

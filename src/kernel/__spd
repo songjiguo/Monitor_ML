@@ -15,7 +15,6 @@
 #include "include/debug.h"
 #include "include/page_pool.h"
 #include "include/per_cpu.h"
-#include "include/recovery.h"
 
 /* 
  * This is the layout in virtual memory of the spds.  Spd's virtual
@@ -128,10 +127,6 @@ static inline int cap_reset_cap_inv_cnt(struct spd *spd, int cap_num, int *inv_c
 		ucap->invocation_count = cap->invocation_cnt = 0;
 		return -1;
 	}
-/* 	printk("cap from %d->%d: ucap inv %d, cap inv %d, entry %x, capno %d.\n", */
-/* 	       spd_get_index(cap->owner), spd_get_index(cap->destination), */
-/* 	       ucap->invocation_count, cap->invocation_cnt, */
-/* 	       (unsigned int)ucap->service_entry_inst, ucap->cap_no >> 20); */
 	ucap->invocation_count = cap->invocation_cnt = 0;
 
 	return 0;
@@ -212,8 +207,6 @@ static void spd_init_all(struct spd *spds)
 		spds[i].freelist_next = (i == (MAX_NUM_SPDS-1)) ? NULL : &spds[i+1];
 		spds[i].ncaps = 0;
 		spd_init_capabilities(spds[i].caps);
-		spds[i].scheduler_hrt_threads = NULL;
-		spds[i].scheduler_bes_threads = NULL;
 	}
 
 	spd_freelist_head = spds;
@@ -326,8 +319,6 @@ struct spd *spd_alloc(unsigned short int num_caps, struct usr_inv_cap *user_cap_
 	spd->composite_member_next = spd->composite_member_prev = spd;
 
 	for (i = 0 ; i < MAX_SPD_VAS_LOCATIONS ; i++) spd->location[i].size = 0;
-
-	init_spd_fault_cnt(spd);
 
 	return spd;
 }
@@ -498,8 +489,6 @@ int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd)
 	
 	if (!c) return -1;
 	c->destination = dspd;
-	ipc_fault_update(c, dspd);
-
 	return 0;
 }
 int spd_cap_set_fault_handler(struct spd *spd, int cap, int handler_num)
@@ -603,8 +592,6 @@ unsigned int spd_add_static_cap_extended(struct spd *owner_spd, struct spd *trus
 	new_cap->destination = trusted_spd;
 	new_cap->invocation_cnt = 0;
 	new_cap->il = isolation_level;
-
-	init_cap_fault_cnt(new_cap);
 
 	new_cap->dest_entry_instruction = stubs->ST_serv_entry = ST_serv_entry;
 	stubs->AT_cli_stub = AT_cli_stub;

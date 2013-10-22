@@ -263,7 +263,7 @@ interrupt_fault_update(struct thread *next) /* for now, this is the timer thread
 	return 0;
 }
 
-extern struct invocation_cap invocation_capabilities[MAX_STATIC_CAP];
+// extern struct invocation_cap invocation_capabilities[MAX_STATIC_CAP];  jiguo
 
 /* cos_syscall_fault_cntl(int spdid, int option, spdid_t d_spdid, unsigned int cap_no) */
 
@@ -293,7 +293,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 		return -1;
 	}
 
-	cap_entry = &invocation_capabilities[cap_no];
+//	cap_entry = &invocation_capabilities[cap_no];   jiguo
 
 	if (unlikely(!cap_entry->owner)) {
 		printk("cos: No owner for cap %d.\n", cap_no);
@@ -325,7 +325,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 		while(1) {
 			/* printk("++ direction\n"); */
 			cap_no_origin++;
-			cap_entry = &invocation_capabilities[cap_no_origin];
+			//cap_entry = &invocation_capabilities[cap_no_origin];  jiguo
 			if (cap_entry->owner != d_spd) break;
 			
 			/* printk("ker ++ set cnt+(cap_no_origin %d): owner %d dest is %d\n", cap_no_origin, */
@@ -342,7 +342,7 @@ fault_cnt_syscall_helper(int spdid, int option, spdid_t d_spdid, unsigned int ca
 		while(1) {
 			/* printk("-- direction\n"); */
 			cap_no_origin--;
-			cap_entry = &invocation_capabilities[cap_no_origin];
+			//cap_entry = &invocation_capabilities[cap_no_origin];  jiguo
 			if (cap_entry->owner != d_spd) break;
 
 			/* printk("ker -- set cnt+(cap_no_origin %d): owner %d dest is %d\n", cap_no_origin, */

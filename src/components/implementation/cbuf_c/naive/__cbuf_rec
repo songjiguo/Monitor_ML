@@ -64,6 +64,7 @@ struct cos_cbuf_item *free_mem_in_local_cache(struct spd_tmem_info *sti)
 	assert(sti);
 	s_spdid = sti->spdid;
 
+	printc("free_mem_in_local_cache\n");
 	DOUT("\n Check if in local cache!!!");
 	list = &spd_tmem_info_list[s_spdid].tmem_list;
 	/* Go through the allocated cbufs, and see if any are not in use... */
@@ -339,6 +340,7 @@ cbuf_c_create(spdid_t spdid, int size, long cbid)
 	assert(SPD_IS_MANAGED(sti));
 	assert(cbid >= 0);
 
+	printc("slow path...creating a cbuf\n");
 	/* 
 	 * This is ugly:
 	 * 
@@ -834,12 +836,10 @@ cbuf_c_introspect_all(spdid_t spdid, int iter)
 	assert(sti);
 	s_spdid = sti->spdid;
 	list = &spd_tmem_info_list[s_spdid].tmem_list;
-	printc("try to find cbuf for this spd 1\n");
 	if (iter == -1){
 		for (cci = FIRST_LIST(list, next, prev) ;
 		     cci != list;
 		     cci = FIRST_LIST(cci, next, prev)) {
-			printc("try to find cbuf for this spd 2\n");
 			struct cbuf_meta cm;
 			cm.nfo.v = cci->desc.owner.meta->nfo.v;
 			if (CBUF_OWNER(cm.nfo.c.flags) && 
@@ -945,6 +945,7 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 
 	assert(cbid >= 0);
 
+	printc("1\n");
 	TAKE();
 	cbi = cos_map_lookup(&cb_ids, cbid);
 	if (!cbi) { 
@@ -952,10 +953,11 @@ cbuf_c_claim(spdid_t r_spdid, int cbid)
 		goto done;
 	}
 	d = &cbi->desc;
-	
+	printc("2\n");
 	o_spdid = d->owner.spd;
 	if (o_spdid == r_spdid) goto done;
-
+	printc("3\n");
+	printc("cbuf_claim cbid %d\n", cbid);
 	ret = mgr_update_owner(r_spdid, cbid); // -1 fail, 0 success
 
 	/* FIXME: when does this need to be changed to RW again? */

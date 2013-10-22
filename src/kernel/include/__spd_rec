@@ -247,9 +247,6 @@ struct spd *spd_get_by_index(int idx);
 void spd_free_all(void);
 void spd_init(void);
 
-int spd_reserve_cap_range(struct spd *spd, int amnt);
-int spd_release_cap_range(struct spd *spd);
-
 int spd_cap_activate(struct spd *spd, int cap);
 int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd);
 int spd_cap_set_cstub(struct spd *spd, int cap, vaddr_t fn);
