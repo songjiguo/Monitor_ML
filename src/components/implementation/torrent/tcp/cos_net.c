@@ -582,6 +582,7 @@ static err_t cos_net_lwip_tcp_recv(void *arg, struct tcp_pcb *tp, struct pbuf *p
 	/* This should deallocate the entire chain */
 	pbuf_free(first);
 
+	/* printc("trigger event now?? ic->data %d (thd %d)\n", ic->data, cos_get_thd_id()); */
 	if (-1 != ic->data && evt_trigger(cos_spd_id(), ic->data)) BUG();
 /* 	/\* If the thread blocked waiting for a packet, wake it up *\/ */
 /* 	if (RECVING == ic->thd_status) { */
@@ -697,6 +698,7 @@ static err_t cos_net_lwip_tcp_accept(void *arg, struct tcp_pcb *new_tp, err_t er
 		ic->accepted_last = ica;
 	}
 	assert(-1 != ic->data);
+	/* printc("cos_net_lwip_tcp_accept trigger event (thd %d)\n", cos_get_thd_id()); */
 	if (evt_trigger(cos_spd_id(), ic->data)) BUG();
 
 	return ERR_OK;
@@ -838,6 +840,7 @@ int net_accept_data(spdid_t spdid, net_connection_t nc, long data)
 	ic->data = data;
 	/* If data has already arrived, but couldn't trigger the event
 	 * because ->data was not set, trigger the event now. */
+	/* printc("trigger event??? (thd %d) \n", cos_get_thd_id()); */
 	if (0 < ic->incoming_size && 
 	    evt_trigger(cos_spd_id(), data)) goto err;
 
@@ -1273,6 +1276,7 @@ static int cos_net_evt_loop(void)
 
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
+		/* printc("tnet_tip_tread (thd %d)\n", cos_get_thd_id()); */
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
 		assert(sz > 0);
 		cos_net_interrupt(data, sz);
@@ -1538,7 +1542,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 
 	assert(t->data);
 	nc = (net_connection_t)t->data;
-	
+
 	ret = net_recv(spdid, nc, buf, sz);
 done:
 	NET_LOCK_RELEASE();
@@ -1593,7 +1597,7 @@ static int init(void)
 #endif
 
 	lock_static_init(&net_lock);
-	printc("netlock id %d\n", net_lock.lock_id);
+	/* printc("netlock id %d\n", net_lock.lock_id); */
 	NET_LOCK_TAKE();
 
 	torlib_init();
@@ -1631,15 +1635,25 @@ static int init(void)
 
 void cos_init(void *arg)
 {
-	static volatile int first = 1;
+	static volatile int first = 0;
+	union sched_param sp;
+	int tcp_thd;
 
 	if (cos_get_thd_id() == event_thd) cos_net_evt_loop();
 
-	if (first) {
-		first = 0;
+	if (first == 0) {
+		first = 1;
+
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 28;
+		tcp_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+		printc("tcp creates a thread %d\n", tcp_thd);
+
+		return;
+	} else {
+		printc("tcp: thread %d\n", cos_get_thd_id());
 		init();
 		BUG();
-	} else {
 		prints("net: not expecting more than one bootstrap.");
 	}
 }

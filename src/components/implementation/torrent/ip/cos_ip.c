@@ -139,10 +139,13 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 
 	nbuf = cbuf_alloc(sz, &ncbid);
 	assert(nbuf);
+	/* printc("tip_tif_tread (thd %d)\n", cos_get_thd_id()); */
 	ret = parent_tread(cos_spd_id(), ntd, ncbid, sz);
 	if (ret < 0) goto free;
+	/* printc("ip tread from if 2\n"); */
 	memcpy(buf, nbuf, ret);
 free:
+	/* cbufp_deref(ncbid); */  // should keep this cbufp alive in netif for FT purpose?  Jiguo
 	cbuf_free(nbuf);
 done:
 	return ret;

@@ -227,14 +227,14 @@ done:
 static int bbb = 0;
 
 int 
-tread(spdid_t spdid, td_t td, int cb, int sz)
+tread(spdid_t spdid, td_t td, cbufp_t cb, int sz)
 {
 	int ret = -1, left;
 	struct torrent *t;
 	struct fsobj *fso;
 	char *buf;
 
-	/* printc("ramfs: tread (td %d)\n", td); */
+	printc("ramfs: tread (td %d)\n", td);
 	if (tor_isnull(td)) return -EINVAL;
 
 	/* if (cos_get_thd_id() == 13) { */
@@ -267,7 +267,7 @@ tread(spdid_t spdid, td_t td, int cb, int sz)
 	assert(t->offset <= fso->size);
 	if (!fso->size) ERR_THROW(0, done);
 
-	buf = cbuf2buf(cb, sz);
+	buf = cbufp2buf(cb, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
 
 	/* printc("before read: fso->size %d t->offset %d\n", fso->size, t->offset); */
@@ -288,7 +288,7 @@ done:
 static int ccc = 0;
 
 int 
-twrite(spdid_t spdid, td_t td, int cb, int sz)
+twrite(spdid_t spdid, td_t td, cbufp_t cb, int sz)
 {
 	int ret = -1, left;
 	struct torrent *t;
@@ -329,7 +329,7 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 
 	/* printc("unique path should already exist...%s\n", fso->unique_path); */
 	/* printc("before write: fso->size %d, t->offset %d\n", fso->size, t->offset); */
-	buf = cbuf2buf(cb, sz);
+	buf = cbufp2buf(cb, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
 
 	/* printc("write after cbuf2buf -- %s (cbuf id %d)\n", buf, id); */
@@ -365,7 +365,7 @@ twrite(spdid_t spdid, td_t td, int cb, int sz)
 	assert(all_tor_list);
 	int t_fid = fid_lookup(td);
 	assert(t_fid >= 0);
-	/* if (reserve_cbuf_fid(cb, td, offset, ret, t_fid)) BUG(); */
+	if (reserve_cbuf_fid(cb, td, offset, ret, t_fid)) BUG();
 done:	
 	UNLOCK();
 	return ret;

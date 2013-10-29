@@ -47,9 +47,6 @@
 #include <cos_map.h>
 #include <cos_synchronization.h>
 
-#include <torrent.h>
-#include <cbuf.h>
-
 #include <string.h>
 #include <errno.h>
 
@@ -516,8 +513,9 @@ int netif_event_wait(spdid_t spdid, char *mem, int sz)
 
 	if (sz < MTU) return -EINVAL;
 
-//	printc("%d: I\n", cos_get_thd_id());
+	/* printc("before %d: I\n", cos_get_thd_id()); */
 	interrupt_wait();
+	/* printc("after %d: I\n", cos_get_thd_id()); */
 	NET_LOCK_TAKE();
 	if (interrupt_process(mem, sz, &ret_sz)) BUG();
 	NET_LOCK_RELEASE();

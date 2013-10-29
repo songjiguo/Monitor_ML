@@ -326,12 +326,12 @@ reserve_cbuf_fid(cbuf_t cb, td_t td, u32_t offset, int len, int fid)
 	cbuf_t cb_p;
 	char *d, *path;
 
-	/* update the cbuf owner to ramfs */
-	/* only the owner can free/revoke the cbuf */
-	if (cbuf_claim(cb)) {
-		printc("failed to claim the ownership\n");
-		BUG();
-	}
+	/* /\* update the cbuf owner to ramfs *\/ */
+	/* /\* only the owner can free/revoke the cbuf *\/ */
+	/* if (cbuf_claim(cb)) { */
+	/* 	printc("failed to claim the ownership\n"); */
+	/* 	BUG(); */
+	/* } */
 
 	/* pass the FT relevant info to cbuf manager  */
 	if (cbuf_add_record(cb, len, offset, fid)) {

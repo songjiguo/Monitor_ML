@@ -54,6 +54,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	nt = tor_alloc(fsc, tflags);
 	if (!nt) ERR_THROW(-ENOMEM, free);
 	ret = nt->td;
+	evt_trigger(cos_spd_id(), evtid); // why this one is gone in my code?
 done:
 	UNLOCK();
 	return ret;
@@ -107,6 +108,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	struct fsobj *fso;
 	char *buf;
 
+	/* printc("to read files\n"); */
 	if (tor_isnull(td)) return -EINVAL;
 
 	LOCK();
@@ -128,6 +130,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 
 	assert(fso->data);
 	memcpy(buf, fso->data + t->offset, ret);
+	/* printc("read buf -- %s\n", buf); */
 	t->offset += ret;
 done:	
 	UNLOCK();

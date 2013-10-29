@@ -214,6 +214,7 @@ int cosnet_create_brand(struct cos_brand_info *bi)
 {
 	int i;
 
+	printk("create_brand\n");
 	if(!(local_ts && bi)) {
 		printk("cos: cannot create brand as no tun support created yet.\n");
 		return -1;
@@ -486,6 +487,7 @@ static int cosnet_cos_deregister(void)
 static int cosnet_execute_brand(struct cos_brand_info *brand, struct sk_buff *skb)
 {
 	assert(brand && skb);
+	/* printk("calling cos_net_try_brand\n"); */
 	return cos_net_try_brand(brand->brand, (void*)skb->data, skb->len);
 }
 
@@ -531,12 +533,14 @@ static int tun_net_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct tun_struct *tun = netdev_priv(dev);
 	struct cosnet_struct *cosnet;
 
+	/* printk("tun_net_xmit 1\n"); */
 	DBG(KERN_INFO "%s: tun_net_xmit %d\n", tun->dev->name, skb->len);
 
 	/* Drop packet if interface is not attached */
 	//if (!tun->attached)
 	//goto drop;
 
+	/* printk("tun_net_xmit 1.1\n"); */
 	cos_net_prebrand();
 	cosnet = cosnet_resolve_brand(tun, skb);
 	if (!cosnet) {
@@ -569,7 +573,7 @@ static int tun_net_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* Ring buffer is going to take the part of the skb queue
 	   skb_queue_tail(cosnet->packet_queue, skb);
 	*/
-
+	/* printk("tun_net_xmit 2\n"); */
 	if (cosnet_execute_brand(cosnet->brand_info, skb)) {
 		goto drop;
 	}

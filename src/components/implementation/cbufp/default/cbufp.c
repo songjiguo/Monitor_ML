@@ -89,7 +89,7 @@ struct cbufp_comp_info {
 	struct cbufp_meta_range *cbuf_metas;
 };
 
-#define printl(s) //printc(s)
+#define printl(s) printc(s)
 cos_lock_t cbufp_lock;
 #define CBUFP_LOCK_INIT() lock_static_init(&cbufp_lock);
 #define CBUFP_TAKE()      do { if (lock_take(&cbufp_lock))    BUG(); } while(0)

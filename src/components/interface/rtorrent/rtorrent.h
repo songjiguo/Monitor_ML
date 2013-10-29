@@ -53,8 +53,8 @@ td_t __tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags,
 
 void trelease(spdid_t spdid, td_t tid);
 int tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len);
-int tread(spdid_t spdid, td_t td, int cbid, int sz);
-int twrite(spdid_t spdid, td_t td, int cbid, int sz);
+int tread(spdid_t spdid, td_t td, cbuf_t cb, int sz);
+int twrite(spdid_t spdid, td_t td, cbuf_t cb, int sz);
 
 /* FIXME: this should be more general */
 int twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag);
@@ -62,21 +62,17 @@ int twmeta(spdid_t spdid, td_t td, int cbid, int sz, int offset, int flag);
 static inline int
 tread_pack(spdid_t spdid, td_t td, char *data, int len)
 {
-	cbuf_t cb;
+	cbufp_t cb;
 	char *d;
 	int ret;
 
-	d = cbuf_alloc(len, &cb);
+	d = cbufp_alloc(len, &cb);
 	if (!d) return -1;
-
-	/* int sz; */
-	/* u32_t id; */
-	/* cbuf_unpack(cb, &id, (u32_t*)&sz); */
-	/* /\* printc("\n read: cbid is %d\n", id); *\/ */
+	cbufp_send(cb);
 
 	ret = tread(spdid, td, cb, len);
 	memcpy(data, d, len);
-	cbuf_free(d);
+	cbufp_deref(cb);
 	
 	return ret;
 }
@@ -84,20 +80,16 @@ tread_pack(spdid_t spdid, td_t td, char *data, int len)
 static inline int
 twrite_pack(spdid_t spdid, td_t td, char *data, int len)
 {
-	cbuf_t cb;
+	cbufp_t cb;
 	char *d;
 	int ret;
 
-	d = cbuf_alloc(len, &cb);
+	d = cbufp_alloc(len, &cb);
 	if (!d) return -1;
-	/* int sz; */
-	/* u32_t id; */
-	/* cbuf_unpack(cb, &id, (u32_t*)&sz); */
-	/* printc("\n write: cbid is %d\n", id); */
+	cbufp_send_deref(cb);
 
 	memcpy(d, data, len);
 	ret = twrite(spdid, td, cb, len);
-	cbuf_free(d);
 	return ret;
 }
 

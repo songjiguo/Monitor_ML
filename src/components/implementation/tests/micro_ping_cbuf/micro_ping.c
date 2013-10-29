@@ -228,7 +228,7 @@ cos_init(void)
 {
 	printc("\nMICRO BENCHMARK TEST (PINGPONG WITH CBUF & CBUFP)\n");
 
-	cbuf_tests();
+	/* cbuf_tests(); */
 	cbufp_tests();
 
 	printc("\nMICRO BENCHMARK TEST (PINGPONG WITH CBUF & CBUFP) DONE!\n\n");

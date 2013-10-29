@@ -14,8 +14,8 @@
 #define DEVCNET "/dev/net/cnet"
 #define ETHCNET "cnet0"
 /* ip address of host */
-//#define IPADDR  "192.168.2.22"    // home
-#define IPADDR  "128.164.157.249"   // lab
+#define IPADDR  "192.168.1.22"    // home
+//#define IPADDR  "10.0.2.9"   // lab (must be an unused one)
 #define P2PPEER "10.0.2.8"
 
 int main(void) {
@@ -24,6 +24,7 @@ int main(void) {
 	char buf[] = "ifconfig "ETHCNET" inet "IPADDR" netmask 255.255.255.0 pointopoint "P2PPEER;
 
 	fd = open(DEVCNET, O_RDWR);
+	if (fd == -1) printf("failed to open netdevice\n");
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TUN; //|IFF_NO_PI; /*IFF_TAP*/
 	if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {

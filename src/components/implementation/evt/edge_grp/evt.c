@@ -131,6 +131,7 @@ __evt_trigger(spdid_t spdid, long eid)
 {
 	struct evt *e, *g, *t = NULL;
 
+	/* printc("thread %d in __evt_trigger with eid %d\n",cos_get_thd_id(), eid); */
 	e = cmap_lookup(&evt_map, eid);
 	/* can't trigger groups */
 	if (!e || e->type != EVT_NORMAL) return -EINVAL;
@@ -152,7 +153,7 @@ __evt_trigger(spdid_t spdid, long eid)
 	if (t->status & EVT_BLOCKED) {
 		u16_t tid = t->bthd;
 		assert(tid);
-
+		/* printc("__evt_trigger: eid %d with thd %d\n", t->eid, t->bthd); */
 		t->status &= ~EVT_BLOCKED;
 		t->bthd    = 0;
 		return tid;
@@ -174,6 +175,7 @@ __evt_wait(spdid_t spdid, long eid)
 {
 	struct evt *e, *g, *c, *t;
 
+	/* printc("thd %d is in __evt_wait\n", cos_get_thd_id()); */
 	e = cmap_lookup(&evt_map, eid);
 	if (!e)                  return -EINVAL;
 	if (e->bthd)             return -EAGAIN; /* another thread already blocked? */
@@ -216,6 +218,7 @@ __evt_wait(spdid_t spdid, long eid)
 		
 		if (!more) break;
 	}
+	/* printc("__evt_wait: eid %d with thd %d\n", t->eid, t->bthd); */
 	return t->eid;
 } 
 
@@ -249,8 +252,10 @@ long evt_wait(spdid_t spdid, long evt_id)
 	long ret;
 	
 	do {
+		/* printc("in evt wait 1 thd %d\n", cos_get_thd_id()); */
 		lock_take(&evt_lock);
 		ret = __evt_wait(spdid, evt_id);
+		/* printc("leaving evt wait 2 ret %d\n", ret); */
 		lock_release(&evt_lock);
 		if (!ret && 0 > sched_block(cos_spd_id(), 0)) BUG();
 	} while (!ret);
@@ -265,6 +270,7 @@ evt_trigger(spdid_t spdid, long evt_id)
 	lock_take(&evt_lock);
 	ret = __evt_trigger(spdid, evt_id);
 	lock_release(&evt_lock);
+	/* printc("evtgp: ret %d trigger and wakeup by thd %d\n", ret, cos_get_thd_id()); */
 	if (ret && sched_wakeup(cos_spd_id(), ret)) BUG();
 	return 0;
 }

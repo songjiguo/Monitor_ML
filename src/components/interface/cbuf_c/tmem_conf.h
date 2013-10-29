@@ -1,1 +1,1 @@
-__tmem_conf_rec
+__tmem_conf

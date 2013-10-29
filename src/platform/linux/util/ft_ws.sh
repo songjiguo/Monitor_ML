@@ -9,7 +9,7 @@
 ./cos_loader \
 "c0.o, ;llboot.o, ;*fprr.o, ;mm.o, ;print.o, ;boot.o, ;\
 \
-!sm.o,a1;!mpool.o, ;!buf.o, ;!va.o,a2;!mpd.o,a5;!tif.o,a5;!tip.o, ;\
+!sm.o,a1;!mpool.o, ;!buf.o,a5;!bufp.o, ;!va.o,a2;!mpd.o,a5;!tif.o,a5;!tip.o, ;\
 !port.o, ;!l.o,a4;!te.o,a3;!tnet.o, ;!eg.o,a5;\
 !stconnmt.o, '1:10:200:/bind:0:%d/listen:255';\
 !pfr.o, ;!httpt.o,a8;!rfs.o, ;!initfs.o,a3;!unique_map.o, ;!popcgi.o, ;!fi.o, :\
@@ -24,22 +24,23 @@ te.o-sm.o|print.o|fprr.o|mm.o|va.o;\
 sm.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o|mpool.o;\
 pfr.o-sm.o|fprr.o|mm.o|print.o|va.o|l.o|boot.o;\
 buf.o-boot.o|sm.o|fprr.o|print.o|l.o|mm.o|va.o|mpool.o;\
+bufp.o-sm.o|fprr.o|print.o|l.o|mm.o|va.o|mpool.o|buf.o;\
 mpool.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o;\
 va.o-fprr.o|print.o|mm.o|l.o|boot.o;\
 \
-stconnmt.o-sm.o|print.o|fprr.o|mm.o|va.o|l.o|httpt.o|[from_]tnet.o|buf.o|eg.o|pfr.o;\
+stconnmt.o-sm.o|print.o|fprr.o|mm.o|va.o|l.o|httpt.o|[from_]tnet.o|buf.o|bufp.o|eg.o|pfr.o;\
 \
-httpt.o-sm.o|l.o|print.o|fprr.o|mm.o|buf.o|[server_]rfs.o|te.o|va.o|pfr.o;\
-initfs.o-fprr.o|print.o|mm.o|va.o|l.o|pfr.o;\
+httpt.o-sm.o|l.o|print.o|fprr.o|mm.o|buf.o|bufp.o|[server_]rfs.o|te.o|va.o|pfr.o;\
+initfs.o-fprr.o|print.o|mm.o|va.o|l.o|pfr.o|buf.o|bufp.o;\
 \
-tnet.o-sm.o|fprr.o|mm.o|print.o|l.o|te.o|eg.o|[parent_]tip.o|port.o|va.o|buf.o|pfr.o;\
-tip.o-sm.o|[parent_]tif.o|va.o|fprr.o|print.o|l.o|eg.o|buf.o|mm.o|pfr.o;\
-tif.o-sm.o|print.o|fprr.o|mm.o|l.o|va.o|eg.o|buf.o|pfr.o;\
+tnet.o-sm.o|fprr.o|mm.o|print.o|l.o|te.o|eg.o|[parent_]tip.o|port.o|va.o|buf.o|bufp.o|pfr.o;\
+tip.o-sm.o|[parent_]tif.o|va.o|fprr.o|print.o|l.o|eg.o|buf.o|bufp.o|mm.o|pfr.o;\
+tif.o-sm.o|print.o|fprr.o|mm.o|l.o|va.o|eg.o|buf.o|bufp.o|pfr.o;\
 port.o-sm.o|l.o|print.o|pfr.o;\
 \
-rfs.o-sm.o|fprr.o|print.o|mm.o|buf.o|l.o|va.o|unique_map.o|eg.o|pfr.o;\
-unique_map.o-sm.o|fprr.o|print.o|mm.o|l.o|va.o|buf.o;\
-popcgi.o-sm.o|fprr.o|print.o|mm.o|buf.o|va.o|l.o|rfs.o|eg.o|te.o;\
+rfs.o-sm.o|fprr.o|print.o|mm.o|buf.o|bufp.o|l.o|va.o|unique_map.o|eg.o|pfr.o;\
+unique_map.o-sm.o|fprr.o|print.o|mm.o|l.o|va.o|buf.o|bufp.o;\
+popcgi.o-sm.o|fprr.o|print.o|mm.o|buf.o|bufp.o|va.o|l.o|rfs.o|eg.o|te.o;\
 \
 fi.o-sm.o|fprr.o|print.o|mm.o|va.o|te.o;\
 \

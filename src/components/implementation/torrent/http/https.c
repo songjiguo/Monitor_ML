@@ -246,6 +246,7 @@ static int http_get_request(struct http_request *r)
 	if (0 > r->content_id) {
 		r->content_id = server_tsplit(cos_spd_id(), td_root, r->path, 
 					      r->path_len, TOR_READ, r->c->evt_id);
+		/* printc("https request path %s\n", r->path); */
 		if (r->content_id < 0) return r->content_id;
 		ret = 0;
 	}
@@ -513,7 +514,6 @@ static int connection_parse_requests(struct connection *c, char *req, int req_sz
 	/* Parse all the requests in the buffer */
 	while (req_sz > 0) {
 		int start_amnt;
-
 		r = connection_handle_request(c, req, req_sz, &start_amnt);
 		/* TODO: here we should check if an error occurred and
 		 * the response can be sent.  If so set
@@ -616,6 +616,8 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 			local_resp = cbuf_alloc(sz, &cb);
 			if (!local_resp) BUG();
 
+			
+			/* printc("https reads files\n"); */
 			ret = server_tread(cos_spd_id(), r->content_id, cb, sz);
 			if (ret < 0) {
 				cbuf_free(local_resp);
@@ -642,7 +644,8 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 				assert(save);
 				assert(local_resp);
 				memcpy(save, local_resp, local_resp_sz);
-				cbuf_free(local_resp);
+
+				cbuf_free(local_resp);			
 				local_resp = NULL;
 
 				r->resp.resp = save;
@@ -650,7 +653,7 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 			}
 			if (0 == used) {
 				printc("https: could not allocate either header or response of sz %d:%s\n", local_resp_sz, local_resp);
-				if (local_resp) cbuf_free(local_resp);
+				if (local_resp) cbuf_free(local_resp);;
 				return -ENOMEM;
 			}
 			break;
@@ -732,6 +735,7 @@ trelease(spdid_t spdid, td_t td)
 	struct torrent *t;
 	struct connection *c;
 
+	/* printc("https close\n"); */
 	if (!tor_is_usrdef(td)) return;
 
 	LOCK();
@@ -771,10 +775,12 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret = -1;
 
+	/* printc("twrite in https from connmgr\n"); */
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
 
+	/* printc("in buf %s\n", buf); */
 	LOCK();
 	t = tor_lookup(td);
 	if (!t) ERR_THROW(-EINVAL, unlock);
@@ -804,7 +810,8 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	struct torrent *t;
 	char *buf;
 	int ret;
-	
+
+	/* printc("connmgr reads https\n");	 */
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);

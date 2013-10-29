@@ -1264,7 +1264,6 @@ void *chal_va2pa(void *va)
 void *chal_pa2va(void *pa) 
 {
 	return (void*)__va(pa);
-
 }
 
 /***** begin timer/net handling *****/
@@ -1482,11 +1481,13 @@ int chal_attempt_brand(struct thread *brand)
 			 * be an issue later on.
 			 */
 			next = brand_next_thread(brand, cos_current, 0);
+			/* printk("next ....\n"); */
+			/* return 0; */
 			if (next != cos_current) {
 				/* update the fault counter (recovery) */
-				thd_frame = thd_invstk_top(cos_current);
+//				thd_frame = thd_invstk_top(cos_current);
 #if (RECOVERY_ENABLE == 1)
-				thd_frame->curr_fault.cnt = thd_frame->spd->fault.cnt;
+//				thd_frame->curr_fault.cnt = thd_frame->spd->fault.cnt;
 #endif
 				assert(core_get_curr_thd() == next);
 				/* the following call isn't
@@ -1507,7 +1508,6 @@ int chal_attempt_brand(struct thread *brand)
 
 			goto done;
  		}
-
 		regs = get_user_regs_thread(cos_thd_per_core[get_cpuid()].cos_thd);
 
 		/* 
@@ -1555,17 +1555,17 @@ int chal_attempt_brand(struct thread *brand)
 				unsigned long long start, end;
 				rdtscll(start);
 #endif
-				/* printk("brand %d next thd %d\n", brand->thread_id, next->thread_id); */
-				if (unlikely(interrupt_fault_detect(next))) {
-					/* Peter: detect fault on interrupt path */
-					thd_interrupt_fault_notif(next, regs);
+//				printk("brand %d next thd %d\n", brand->thread_id, next->thread_id);
+//				if (unlikely(interrupt_fault_detect(next))) {
+//					/* Peter: detect fault on interrupt path */
+//					thd_interrupt_fault_notif(next, regs);
 #ifdef MEAS_INT_FAULT_DETECT
 					rdtscll(end);
 					printk("interrupt notification cost 1: %llu\n", (end-start));
 #endif
-				} else {
-					interrupt_fault_update(cos_current);
-
+//				} else {
+//					interrupt_fault_update(cos_current);
+//
 				thd_check_atomic_preempt(cos_current);
 				
 				/* Those registers are saved in the
@@ -1582,8 +1582,8 @@ int chal_attempt_brand(struct thread *brand)
 				regs->ax = next->regs.ax;
 				regs->orig_ax = next->regs.ax;
 				regs->sp = next->regs.sp;
-					//cos_meas_event(COS_MEAS_BRAND_UC);
-				}
+				//cos_meas_event(COS_MEAS_BRAND_UC);
+				//}
 			}
 			cos_meas_event(COS_MEAS_INT_PREEMPT);
 

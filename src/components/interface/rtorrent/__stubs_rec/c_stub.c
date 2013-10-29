@@ -640,7 +640,7 @@ CSTUB_ASM_2(trelease, spdid, rd->s_tid)
 
 CSTUB_POST
 
-CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
+CSTUB_FN_ARGS_4(int, tread, spdid_t, spdid, td_t, tid, cbufp_t, cb, int, sz)
 
         /* printc("<<< In: call tread (thread %d, spd %ld) >>>\n", cos_get_thd_id(), cos_spd_id()); */
         struct rec_data_tor *rd;
@@ -686,7 +686,7 @@ CSTUB_ASM_4(tread, spdid, rd->s_tid, cb, sz)
 CSTUB_POST
 
 
-CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbuf_t, cb, int, sz)
+CSTUB_FN_ARGS_4(int, twrite, spdid_t, spdid, td_t, tid, cbufp_t, cb, int, sz)
 
         /* printc("<<< In: call twrite  (thread %d) >>>\n", cos_get_thd_id()); */
         struct rec_data_tor *rd;

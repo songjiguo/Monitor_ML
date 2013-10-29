@@ -195,7 +195,9 @@ from_data_new(struct tor_conn *tc)
 
 		buf = cbuf_alloc(BUFF_SZ, &cb);
 		assert(buf);
+		/* printc("connmgr reads net (thd %d)\n", cos_get_thd_id()); */
 		amnt = from_tread(cos_spd_id(), from, cb, BUFF_SZ-1);
+		/* printc("connmgr reads net amnt %d\n", amnt); */
 		if (0 == amnt) break;
 		else if (-EPIPE == amnt) {
 			goto close;
@@ -237,6 +239,7 @@ to_data_new(struct tor_conn *tc)
 		cbuf_t cb;
 
 		if (!(buf = cbuf_alloc(BUFF_SZ, &cb))) BUG();
+		/* printc("connmgr reads https\n"); */
 		amnt = tread(cos_spd_id(), to, cb, BUFF_SZ-1);
 		if (0 == amnt) break;
 		else if (-EPIPE == amnt) {
@@ -246,6 +249,7 @@ to_data_new(struct tor_conn *tc)
 			BUG();
 		}
 		assert(amnt <= BUFF_SZ);
+		/* printc("connmgr writes to net\n"); */
 		if (amnt != (ret = from_twrite(cos_spd_id(), from, cb, amnt))) {
 			printc("conn_mgr: write failed w/ %d of %d on fd %d\n", 
 			       ret, amnt, to);
@@ -279,7 +283,7 @@ static void init(char *init_str)
 	lock_static_init(&sc_lock);
 		
 	sscanf(init_str, "%d:%d:%d", &nthds, &__prio, &__port);
-	printc("nthds:%d, prio:%d, port %d\n", nthds, __prio, __port);
+	/* printc("nthds:%d, prio:%d, port %d\n", nthds, __prio, __port); */
 	create_str = strstr(init_str, "/");
 	assert(create_str);
 
@@ -327,8 +331,8 @@ cos_init(void *arg)
 		init(init_str);
 		return;
 	}
-	
-	printc("Thread %d, port %d\n", cos_get_thd_id(), __port+off);
+
+	printc("Thread %d, port %d\n", cos_get_thd_id(), __port+off);	
 	port = off++;
 	port += __port;
 	eid = evt_get();
@@ -348,25 +352,31 @@ cos_init(void *arg)
 		memset(&tc, 0, sizeof(struct tor_conn));
 		rdtscll(end);
 		meas_record(end-start);
+		/* printc("calling evt_wait all\n"); */
 		evt = evt_wait_all();
+		/* printc("conn: thd %d event comes\n", cos_get_thd_id()); */
 		rdtscll(start);
 		t   = evt_torrent(evt);
-
+		/* printc("conn_mgr: 2\n"); */
 		if (t > 0) {
 			tc.feid = evt;
 			tc.from = t;
 			if (t == accept_fd) {
 				tc.to = 0;
 				accept_new(accept_fd);
+				/* printc("conn_mgr: 3 (thd %d)\n", cos_get_thd_id()); */
 			} else {
 				tc.to = tor_get_to(t, &tc.teid);
 				assert(tc.to > 0);
+				/* printc("conn_mgr: 4 (thd %d) before from_data_new\n", cos_get_thd_id()); */
 				from_data_new(&tc);
+				/* printc("conn_mgr: 4 (thd %d)\n", cos_get_thd_id()); */
 			}
 		} else {
 			t *= -1;
 			tc.teid = evt;
 			tc.to   = t;
+			/* printc("conn_mgr: 5\n"); */
 			tc.from = tor_get_from(t, &tc.feid);
 			assert(tc.from > 0);
 			to_data_new(&tc);

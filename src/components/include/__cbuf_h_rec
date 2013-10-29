@@ -324,7 +324,7 @@ cbufp2buf(cbufp_t cb, int len) { return __cbuf2buf((cbuf_t)cb, len, 0); }
  * or the component can call cbufp_free.
  */
 static inline void
-__cbufp_send(cbuf_t cb, int free)
+__cbufp_send(cbufp_t cb, int free)
 {
 	u32_t id;
 	struct cbuf_meta *cm;
@@ -404,6 +404,7 @@ __cbufp_freelist_get(int size)
 	assert(pow2(size) && size >= PAGE_SIZE);
 	assert(order >= 0 && order < WORD_SIZE-PAGE_ORDER);
 	d = &cbufp_alloc_freelists[order];
+	printc("order %d size %d length %d\n", order, size, d->length);
 	assert(d->length == size);
 
 	return d;
@@ -423,6 +424,7 @@ __cbuf_alloc(unsigned int sz, cbuf_t *cb, int tmem)
 	} else {
 		/* need a size >= PAGE_ORDER, that is a power of 2 */
 		sz = nlepow2(round_up_to_page(sz));
+		printc("xxxxx\n");
 		fl = __cbufp_freelist_get(sz);
 	}
 	CBUF_TAKE();
@@ -547,13 +549,7 @@ __cbuf_done(int cbid, int tmem, struct cbuf_alloc_desc *d)
 	
 	/* printc("tmem %d cbid %d owner is %d\n", tmem, cbid, owner); */
 	
-        // Jiguo: the ownership could have been changed, e.g. twrite
-	if (!owner) {
-		CBUF_RELEASE();
-		return;
-	}
-	assert(tmem); /* Shouldn't be calling free... */
-	//assert(!(tmem & !owner)); /* Shouldn't be calling free... */
+	assert(!(tmem & !owner)); /* Shouldn't be calling free... */
 
 	if (tmem && d && owner) {
 		struct cbuf_alloc_desc *fl;
@@ -679,7 +675,7 @@ cbuf_add_record(cbuf_t cb, int len, unsigned int offset, int id)
 	CBUF_TAKE();
 
 	cbuf_unpack(cb, &cbid);
-	ret = cbuf_c_record(cbid, len, offset, id);
+	/* ret = cbuf_c_record(cbid, len, offset, id); */
 	
 	CBUF_RELEASE();
 	
@@ -692,7 +688,7 @@ cbuf_rem_record(int fid)  	/* torrent related */
 	int ret = 0;
 
 	CBUF_TAKE();
-	ret = cbuf_c_remrecord(fid);
+	/* ret = cbuf_c_remrecord(fid); */
 	CBUF_RELEASE();
 	
 	return ret;

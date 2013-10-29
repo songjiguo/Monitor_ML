@@ -12,7 +12,7 @@
 #define SCHED_PRINTOUT_PERIOD  3
 #define COMPONENT_ASSERTIONS   1 // activate assertions in components?
 
-#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
+//#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
 
 /* 
  * Should Composite run as highest priority?  Should NOT be set if
