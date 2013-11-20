@@ -6,19 +6,18 @@
 
 #define CPU_TIMER_FREQ 100 // set in your linux .config
 
-#define RUNTIME                5 // seconds
+#define RUNTIME                20 // seconds
 
 // After how many seconds should schedulers print out their information?
-#define SCHED_PRINTOUT_PERIOD  3
+#define SCHED_PRINTOUT_PERIOD  1
 #define COMPONENT_ASSERTIONS   1 // activate assertions in components?
 
 //#define LINUX_ON_IDLE          1 // should Linux be activated on Composite idle (set this if you want to stop Composite)
 
 /* 
- * Should Composite run as highest priority?  Should NOT be set if
- * using networking (cnet).  Set if you want Composite run at the highest prio
+ * Should Composite run as highest priority?  Set if you want Composite run at the highest prio
  */
-//#define LINUX_HIGHEST_PRIORITY 1 
+#define LINUX_HIGHEST_PRIORITY 1 
 //#define FPU_ENABLED
 
 #define INIT_CORE              0 // the CPU that does initialization for Composite
@@ -63,7 +62,7 @@
  * versions of interfaces, such as mmgr, schduler, cbuf, torrent. To
  * use it, run python set_symbolic_link.py under composite/tools */
 
-#define RECOVERY_ENABLE 1               // 1 enable the fault notification in Composite kernel, 0 disable
+//#define RECOVERY_ENABLE 1               // 1 enable the fault notification in Composite kernel, 0 disable
 
 /* For now, set INITONCE in cos_laoder and comment out boot_spd_caps in booter/fail function */
 /* to avoid the overhead of re-capability. Need fix later */
@@ -71,5 +70,7 @@
 #define SWIFI_ENABLE    0		// 1 enable the fault injection (swifi component), 0 disable
 
 #define LOG_MONITOR   1// Macro for low level log monitor 
+
+#define DEBUG_PERIOD  // for network debug only
 
 #endif /* COS_CONFIG_H */

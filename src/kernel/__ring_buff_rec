@@ -65,6 +65,9 @@ int rb_retrieve_buff(struct thread *brand, int desired_len,
 	/* printk("kaddr to copy to is %x from ptr %x\n", kaddr, addr); */
 	*found_buf = (void*)kaddr;
 	*found_len = len;
+
+	// debug interrupt latency only
+	/* rdtscll(rb->packets[position].start); */
 	
 	rb->packets[position].status = RB_USED;
 	brand->rb_next = (position+1) & (RB_SIZE-1);

@@ -1,0 +1,403 @@
+#include <cos_component.h>
+#include <cos_alloc.h>
+#include <cos_debug.h>
+#include <cos_list.h>
+#include <cvect.h>
+#include <print.h>
+#include <errno.h>
+#include <cos_synchronization.h>
+#include <sys/socket.h>
+#include <stdio.h>
+#include <torrent.h>
+
+#include <sched.h>
+#include <cbuf.h>
+
+#include <lwip/init.h>
+#include <lwip/netif.h>
+#include <lwip/udp.h>
+#include <lwip/tcp.h>
+#include <lwip/stats.h>
+
+#include <string.h>
+#include <errno.h>
+
+#define BUFF_SZ 2048//1401 //(COS_MAX_ARG_SZ/2)
+
+int   __port, __prio, hpthd;
+char *create_str;
+
+#define UDP_RCV_MAX (1<<15)
+#define MTU 1500
+#define MAX_SEND MTU
+
+#define UDP 1
+
+static inline void *cos_net_header_start(struct pbuf *p)
+{
+	char *data = (char *)p->alloc_track;
+
+	assert(data);
+	return data;
+}
+
+static void cos_net_lwip_udp_recv(void *arg, struct udp_pcb *upcb, struct pbuf *p,
+				  struct ip_addr *ip, u16_t port)
+{
+	struct intern_connection *ic;
+	struct packet_queue *pq, *last;
+	void *headers;
+
+	/* We should not receive a list of packets unless it is from
+	 * this host to this host (then the headers will be another
+	 * packet), but we aren't currently supporting this case. */
+	assert(1 == p->ref);
+	assert(NULL == p->next && p->tot_len == p->len);
+	assert(p->len > 0);
+	ic = (struct intern_connection*)arg;
+
+	headers = cos_net_header_start(p);
+	assert (NULL != headers);
+	/* Over our allocation??? */
+	if (ic->incoming_size >= UDP_RCV_MAX) {
+		assert(ic->thd_status != RECVING);
+		assert(p->type == PBUF_ROM);
+		//free(net_packet_pq(headers));
+		assert(p->ref > 0);
+		pbuf_free(p);
+
+		return;
+	}
+	pq = net_packet_pq(headers);
+	pq->data = p->payload;
+	pq->len = p->len;
+	pq->next = NULL;
+	
+	assert((NULL == ic->incoming) == (NULL == ic->incoming_last));
+	/* Is the queue empty? */
+	if (NULL == ic->incoming) {
+		assert(NULL == ic->incoming_last);
+		ic->incoming = ic->incoming_last = pq;
+	} else {
+		last = ic->incoming_last;
+		last->next = pq;
+		ic->incoming_last = pq;
+	}
+	ic->incoming_size += p->len;
+	assert(1 == p->ref);
+	p->payload = p->alloc_track = NULL;
+	pbuf_free(p);
+
+	/* If the thread blocked waiting for a packet, wake it up */
+	if (RECVING == ic->thd_status) {
+		ic->thd_status = ACTIVE;
+		assert(ic->thd_status == ACTIVE); /* Detect races */
+		sched_wakeup(cos_spd_id(), ic->tid);
+	}
+
+	return;
+}
+
+
+/* Return the opaque connection value exported to other components for
+ * a given internal_connection */
+static inline net_connection_t net_conn_get_opaque(struct intern_connection *ic)
+{
+	return ic->connection_id;
+}
+
+/* Get the internal representation of a connection */
+static inline struct intern_connection *net_conn_get_internal(net_connection_t nc)
+{
+	struct intern_connection *ic;
+
+	ic = cos_map_lookup(&connections, nc);
+	return ic;
+}
+
+static inline struct intern_connection *net_conn_alloc(conn_t conn_type, u16_t tid, long data)
+{
+	struct intern_connection *ic;
+	net_connection_t nc;
+
+	ic = malloc(sizeof(struct intern_connection));
+	if (NULL == ic) return NULL;
+	nc = cos_map_add(&connections, ic);
+	if (-1 == nc) {
+		free(ic);
+		return NULL;
+	}
+	memset(ic, 0, sizeof(struct intern_connection));
+
+	ic->connection_id = nc;
+	ic->tid = tid;
+	ic->thd_status = ACTIVE;
+	ic->conn_type = conn_type;
+	ic->data = data;
+
+	return ic;
+}
+
+
+int net_create_udp_connection(spdid_t spdid, long evt_id)
+{
+	struct udp_pcb *up;
+	struct intern_connection *ic;
+	net_connection_t ret;
+
+	up = udp_new();	
+	if (NULL == up) {
+		prints("Could not allocate udp connection");
+		ret = -ENOMEM;
+		goto err;
+	}
+	ic = net_conn_alloc(UDP, cos_get_thd_id(), evt_id);
+	if (NULL == ic) {
+		prints("Could not allocate internal connection");
+		ret = -ENOMEM;
+		goto udp_err;
+	}
+	ic->spdid = spdid;
+	ic->conn.up = up;
+	udp_recv(up, cos_net_lwip_udp_recv, (void*)ic);
+	return net_conn_get_opaque(ic);
+udp_err:
+	udp_remove(up);
+err:
+	return ret;
+}
+
+static int __net_bind(spdid_t spdid, net_connection_t nc, struct ip_addr *ip, u16_t port)
+{
+	struct intern_connection *ic;
+	u16_t tid = cos_get_thd_id();
+	int ret = 0;
+
+	ic = net_conn_get_internal(nc);
+	if (NULL == ic) {
+		ret = -EINVAL;
+		goto done;
+	}
+	if (tid != ic->tid) {
+		ret = -EPERM;
+		goto done;
+	}
+	assert(ACTIVE == ic->thd_status);
+
+	if (portmgr_bind(cos_spd_id(), port)) {
+		ret = -EADDRINUSE;
+		goto done;
+	}
+
+	struct udp_pcb *up;
+	
+	up = ic->conn.up;
+	assert(up);
+	if (ERR_OK != udp_bind(up, ip, port)) {
+		assert(0);
+	}
+	return 0;
+}
+
+int net_bind(spdid_t spdid, net_connection_t nc, u32_t ip, u16_t port)
+{
+	struct ip_addr ipa = *(struct ip_addr*)&ip;
+	return __net_bind(spdid, nc, &ipa, port);
+}
+
+static void 
+udp_create(spdid_t spdid, td_t tid, char *param, int len, 
+		tor_flags_t tflags, long evtid)
+{
+	td_t ret = -EINVAL;
+	struct torrent *t;
+	net_connection_t nc = 0;
+	int accept = 0;
+	
+	if (tor_isnull(tid)) return -EINVAL;
+
+	/* creating a new connection */
+	if (tid == td_root || len == 0) {
+		if (tid == td_root) { 	/* new connection */
+			nc = net_create_udp_connection(spdid, evtid);
+			if (nc <= 0) ERR_THROW(-ENOMEM, done);
+		}
+		t = tor_alloc((void*)nc, tflags);
+		if (!t) ERR_THROW(-ENOMEM, free);
+		ret = t->td;
+	} 
+	
+
+	return ret;
+}
+
+static void 
+udp_bind(spdid_t spdid, td_t tid, char *param, int len, 
+		tor_flags_t tflags, long evtid)
+{
+	int ret = -EINVAL;
+	struct intern_connection *ic;
+	char *prop;
+
+	prop = strstr(param, "bind");
+	if (prop) {
+		u32_t ip;
+		u32_t port;
+		int r;
+		
+		ic = net_conn_get_internal(nc);
+		assert(ic);
+		
+		r = sscanf(prop, "bind:%x:%d", &ip, &port);
+		assert(r==2);
+		
+		port &= 0xFFFF;
+		ret = net_bind(spdid, nc, ip, port);
+	}
+
+	return ret;
+}
+
+static void 
+udp_test()
+{
+	int amnt;
+	char *buf;
+	td_t td_create, td_bind;
+	int eid, eid2;
+	static volatile int off = 0;
+	char __create_str[128];
+	int port;
+
+	printc("Thread %d, port %d\n", cos_get_thd_id(), __port+off);	
+	port = off++;
+	port += __port;
+
+	if (snprintf(__create_str, 128, create_str, port) < 0) BUG();
+
+	// create socket
+	eid = evt_create(cos_spd_id());
+	td_create = udp_create(cos_spd_id(), td_root, __create_str, strlen(__create_str), TOR_ALL, eid);
+	assert(td_create > td_root);
+
+	// bind socket
+	eid2 = evt_create(cos_spd_id());
+	td_bind = udp_bind(cos_spd_id(), td_create, "", 0, TOR_RW, eid2);
+	assert(td_create > td_create);
+
+	// receive the data over udp
+	while (1) {
+		int ret;
+		cbuf_t cb;
+
+		buf = cbuf_alloc(BUFF_SZ, &cb);
+		assert(buf);
+		amnt = tread(cos_spd_id(), td, cb, BUFF_SZ-1);
+		if (0 == amnt) goto close;
+		else if (-EPIPE == amnt) {
+			goto close;
+		} else if (amnt < 0) assert(0);
+
+		assert(amnt <= BUFF_SZ);
+		cbuf_free(buf);
+	}
+done:
+	cbuf_free(buf);
+	return;
+close:
+	trelease(cos_spd_id(), td);
+	goto done;
+}
+
+#define MTU 1500
+static void 
+udp_test_1()
+{
+	int alloc_sz = MTU;
+	char *data;
+	cbuf_t cb;
+
+	td_t td;
+	td = tsplit(cos_spd_id(), td_root, "", 0, TOR_ALL, -1);
+	assert(td > 0);
+	alloc_sz = sizeof(struct cos_array) + MTU;
+	while (1) {
+		int sz;
+		data = cbuf_alloc(alloc_sz, &cb);
+		assert(data);
+		sz = tread(cos_spd_id(), td, cb, alloc_sz);
+		if (sz == 0) goto close;
+		if (sz < 0) assert(0);
+		assert(sz > 0);
+		cbuf_free(data);
+	}
+done:
+	cbuf_free(data);
+	return;
+close:
+	trelease(cos_spd_id(), td);
+	goto done;
+
+}
+
+
+static void init(char *init_str)
+{
+	int nthds;
+
+	sscanf(init_str, "%d:%d:%d", &nthds, &__prio, &__port);
+	/* printc("nthds:%d, prio:%d, port %d\n", nthds, __prio, __port); */
+	create_str = strstr(init_str, "/");
+	assert(create_str);
+
+	for (; nthds > 0 ; nthds--) {
+		union sched_param sp;
+		int thdid;
+		
+		sp.c.type  = SCHEDP_PRIO;
+		sp.c.value = __prio++;
+		thdid = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+		if (!hpthd) hpthd = thdid;
+	}
+}
+
+u64_t meas, avg, total = 0, vartot;
+int meascnt = 0, varcnt;
+
+void
+meas_record(u64_t meas)
+{
+	if (cos_get_thd_id() != hpthd) return;
+	total += meas;
+	meascnt++;
+	assert(meascnt > 0);
+	avg = total/meascnt;
+	if (meas > avg) {
+		vartot += meas-avg;
+		varcnt++;
+	}
+}
+
+void
+cos_init(void *arg)
+{
+	int ret;
+	long eid;
+	char *init_str = cos_init_args();
+
+	static volatile int first = 1;
+	u64_t start, end;
+
+	if (first) {
+		first = 0;
+		init(init_str);
+		return;
+	}
+
+
+	rdtscll(start);
+	while (1) {
+		udp_test();
+		/* udp_test_1(); */
+	}
+}

@@ -148,6 +148,7 @@ __cbufp_alloc_slow(int cbid, int size, int *len, int *error)
 	cbuf_t cb;
 	int *cbs;
 
+
 	assert(cbid <= 0);
 	if (cbid == 0) {
 		struct cbuf_meta *cm;
@@ -213,6 +214,7 @@ __cbuf_alloc_slow(int size, int *len, int tmem)
 	int cbid;
 	int cnt;
 
+	/* printc("on the cbuf slow alloc path (thd %d)\n", cos_get_thd_id()); */
 	cnt = cbid = 0;
 	do {
 		int error = 0;

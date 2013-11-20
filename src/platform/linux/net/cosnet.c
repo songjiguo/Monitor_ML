@@ -344,9 +344,15 @@ extern void host_start_syscall(void);
 extern void host_end_syscall(void);
 extern asmlinkage void do_softirq(void);
 
+static unsigned long long start, end, total_n = 0;
+static unsigned int nuc = 0;
+
 static int cosnet_xmit_packet(void *headers, int hlen, struct gather_item *gi, 
 			      int gi_len, int tot_gi_len)
 {
+	
+	rdtscll(start);
+	/* printk("cosnet xmit 1\n"); */
 	struct sk_buff *skb;
 	int totlen = hlen + tot_gi_len, i;
 #ifdef NIL
@@ -450,6 +456,13 @@ static int cosnet_xmit_packet(void *headers, int hlen, struct gather_item *gi,
 		return -1;
 	}
 
+	/* rdtscll(end); */
+	/* total_n += end-start; */
+	/* nuc++; */
+	/* if (!(nuc % 1024)) { */
+	/* 	printk("do soft irq cost %llu\n", total_n/1024); */
+	/* 	total_n = 0; */
+	/* } */
 	return 0;
 }
 
@@ -487,7 +500,6 @@ static int cosnet_cos_deregister(void)
 static int cosnet_execute_brand(struct cos_brand_info *brand, struct sk_buff *skb)
 {
 	assert(brand && skb);
-	/* printk("calling cos_net_try_brand\n"); */
 	return cos_net_try_brand(brand->brand, (void*)skb->data, skb->len);
 }
 
@@ -564,7 +576,7 @@ static int tun_net_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 	if (skb_queue_len(cosnet->packet_queue) >= COSNET_QUEUE_LEN) {
 		//printk("cos: NET->overflowing packet queue.\n");
-		//cos_net_notify_drop(cosnet->brand_info->brand);
+		cos_net_notify_drop(cosnet->brand_info->brand);
 		printk("cos: WTF, kernel packet queue full...inexplicable\n");
 		goto drop;
 	}

@@ -22,6 +22,7 @@ struct fsobj root;
 #define LOCK() if (lock_take(&fs_lock)) BUG();
 #define UNLOCK() if (lock_release(&fs_lock)) BUG();
 
+
 #define MIN_DATA_SZ 256
 
 td_t 
@@ -54,6 +55,7 @@ tsplit(spdid_t spdid, td_t td, char *param,
 	nt = tor_alloc(fsc, tflags);
 	if (!nt) ERR_THROW(-ENOMEM, free);
 	ret = nt->td;
+	/* printc("thd %ld in ramfs tsplit call trigger evt_id %d\n", cos_get_thd_id(), evtid); */
 	evt_trigger(cos_spd_id(), evtid); // why this one is gone in my code?
 done:
 	UNLOCK();
@@ -132,6 +134,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	memcpy(buf, fso->data + t->offset, ret);
 	/* printc("read buf -- %s\n", buf); */
 	t->offset += ret;
+	
 done:	
 	UNLOCK();
 	return ret;

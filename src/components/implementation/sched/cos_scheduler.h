@@ -203,10 +203,12 @@ static inline int cos_sched_pending_event(void)
 {
 	/* struct cos_sched_events *evt; */
 
-	/* printc("pending? %d, addr %p, cpuid %ld, thd %d\n", 
-	   PERCPU_GET(cos_sched_notifications)->cos_evt_notif.pending_event, 
-	   &PERCPU_GET(cos_sched_notifications)->cos_evt_notif.pending_event, 
-	   cos_cpuid(), cos_get_thd_id()); */
+	/* if (PERCPU_GET(cos_sched_notifications)->cos_evt_notif.pending_event) { */
+	/* 	printc("pending? %d, addr %p, cpuid %ld, thd %d\n",  */
+	/* 	       PERCPU_GET(cos_sched_notifications)->cos_evt_notif.pending_event,  */
+	/* 	       &PERCPU_GET(cos_sched_notifications)->cos_evt_notif.pending_event,  */
+	/* 	       cos_cpuid(), cos_get_thd_id()); */
+	/* } */
 	return PERCPU_GET(cos_sched_notifications)->cos_evt_notif.pending_event;
 /*
 	evt = &PERCPU_GET(cos_sched_notifications)->cos_events[cos_curr_evt];
@@ -438,6 +440,14 @@ static inline int sched_release_crit_sect(spdid_t spdid, struct sched_thd *curr)
 
 #include <cos_sched_sync.h>
 
+
+//#define MEA_NET
+/* #define WHICH_THD 4 */
+/* #define WHICH_THD 10 */
+#define WHICH_THD 20
+
+volatile unsigned long long start, end, total;
+
 /*
  * This will call the switch_thread syscall after releasing the
  * scheduler lock.
@@ -456,6 +466,17 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 
 	/* kernel will read next thread information from cos_next */
 	/* printc("core %ld: __switch_thread, thd %u, flags %u\n", cos_cpuid(), thd_id, flags); */
+#ifdef MEA_NET
+	if (cos_get_thd_id() == WHICH_THD) {
+		rdtscll(end);
+		total = end - start;
+		printc("total %d time is %llu (switch to %d)\n", WHICH_THD, total, thd_id);
+	}
+	if (thd_id == WHICH_THD) {
+		rdtscll(start);
+	}
+
+#endif
 	return cos___switch_thread(thd_id, flags); 
 }
 

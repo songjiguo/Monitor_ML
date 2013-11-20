@@ -6,4 +6,3 @@ DEPENDENCIES=mem_mgr_large printc sched periodic_wake torrent cbufp cbuf_c evt l
 FN_PREPEND=server_
 
 include ../../Makefile.subsubdir
-

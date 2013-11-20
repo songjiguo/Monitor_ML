@@ -54,7 +54,14 @@
 #include <torlib.h>
 #include <cbuf.h>
 
-#define NUM_WILDCARD_BUFFS 256 //64 //32
+#include <periodic_wake.h>   // for debug only
+static volatile unsigned long interrupt_wait_cnt = 0;
+static volatile unsigned long interrupt_process_cnt = 0;
+static volatile unsigned long cos_immediate_process_cnt = 0;
+static volatile int debug_thd = 0;
+
+
+#define NUM_WILDCARD_BUFFS 256 //64 //32  // debug use 128, set back to 256 later
 #define UDP_RCV_MAX (1<<15)
 /* 
  * We need page-aligned data for the network ring buffers.  This
@@ -94,6 +101,12 @@ struct thd_map {
 	rb_meta_t *uc_rb;
 };
 
+volatile unsigned long long pnums, start, end, avg, result;
+volatile unsigned long long inc1, inc2, max;
+
+volatile unsigned long long int_start, int_end, int_latency; // interrupt latency measure
+
+
 COS_VECT_CREATE_STATIC(tmap);
 
 cos_lock_t netif_lock;
@@ -107,6 +120,8 @@ cos_lock_t netif_lock;
 	do {								\
 		if (lock_release(&netif_lock)) prints("error releasing net lock."); \
 	} while (0)
+
+
 
 struct cos_net_xmit_headers xmit_headers;
 
@@ -176,12 +191,15 @@ static int rb_add_buff(rb_meta_t *r, void *buf, int len)
 
 	assert(rb);
 	lock_take(&r->l);
+	/* printc("rb tail is %d\n", r->rb_tail); */
+	/* printc("rb head is %d\n", r->rb_head); */
 	head = r->rb_head;
 	assert(head < RB_SIZE);
 	rbb = &rb->packets[head];
 
 	/* Buffer's full! */
 	if (head == r->rb_tail) {
+		printc("buffer is full\n");
 		goto err;
 	}
 	assert(rbb->status == RB_EMPTY);
@@ -209,7 +227,7 @@ err:
 
 /* 
  * -1 : there is no available buffer
- * 1  : the kernel found an error with this buffer, still set address
+ * 1  : the kernel found an error with this buffer, still set addres5Bs
  *      and len.  Either the address was not mapped into this component, 
  *      or the memory region did not fit into a page.
  * 0  : successful, address contains data
@@ -246,6 +264,13 @@ static int rb_retrieve_buff(rb_meta_t *r, unsigned int **buf, int *max_len)
 
 	lock_release(&r->l);
 	if (status == RB_ERR) return 1;
+
+	/* // debug interrupt latency */
+	/* rdtscll(int_end); */
+	/* int_start = rbb->start; */
+	/* int_latency = int_end - int_start; */
+	/* /\* printc("ilc %llu\n", int_latency); *\/ */
+
 	return 0;
 err:
 	lock_release(&r->l);
@@ -401,6 +426,11 @@ static int __netif_xmit(char *d, unsigned int sz)
 /* 	xmit_headers.gather_len = i; */
 
 
+	rdtscll(end);
+	max++;
+	/* if (max < 15010 && max > 10010) { */
+	/* 	printc("%llu\n", end-start); */
+	/* } */
 	/* Send the collection of pbuf data on its way. */
 	if (cos_buff_mgmt(COS_BM_XMIT, NULL, 0, 0)) {
 		prints("net: could not xmit data.\n");
@@ -473,6 +503,12 @@ static int interrupt_wait(void)
 
 	assert(wildcard_brand_id > 0);
 	if (-1 == (ret = cos_brand_wait(wildcard_brand_id))) BUG();
+	rdtscll(start);
+	if (ret > 0) {
+		cos_immediate_process_cnt = ret;
+	}
+	/* printc("ret from brand_wait is %d\n", ret); */
+	interrupt_wait_cnt++;
 #ifdef UPCALL_TIMING
 	last_upcall_cyc = (u32_t)ret;
 #endif	
@@ -514,10 +550,18 @@ int netif_event_wait(spdid_t spdid, char *mem, int sz)
 	if (sz < MTU) return -EINVAL;
 
 	/* printc("before %d: I\n", cos_get_thd_id()); */
+	/* rdtscll(start); */
 	interrupt_wait();
+	/* rdtscll(end); */
+	/* pnums++; */
+	/* avg += end-start; */
+	/* if (pnums%100000 == 0) { */
+	/* 	printc("pnums %llu avg %llu\n", pnums, avg); */
+	/* } */
 	/* printc("after %d: I\n", cos_get_thd_id()); */
 	NET_LOCK_TAKE();
 	if (interrupt_process(mem, sz, &ret_sz)) BUG();
+	interrupt_process_cnt++;
 	NET_LOCK_RELEASE();
 
 	return ret_sz;
@@ -572,6 +616,11 @@ tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len)
 	return -ENOTSUP;
 }
 
+
+/* static int debug_first = 0; */
+/* char *debug_buf = NULL; */
+/* int debug_amnt = 0; */
+
 int 
 twrite(spdid_t spdid, td_t td, int cbid, int sz)
 {
@@ -587,6 +636,15 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
 	ret = netif_event_xmit(spdid, buf, sz);
+
+	/* // debug only */
+	/* cbuf_t debug_cb; */
+	/* if (debug_first == 0) { */
+	/* 	debug_first = 1; */
+	/* 	if (!(debug_buf = cbuf_alloc(sz, &debug_cb))) BUG(); */
+	/* 	memcpy(debug_buf, buf, sz); */
+	/* 	debug_amnt = sz; */
+	/* } */
 done:
 	return ret;
 }
@@ -606,6 +664,12 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
 	ret = netif_event_wait(spdid, buf, sz);
+	
+	/* // debug ?  */
+	/* if (debug_first == 1) { */
+	/* 	ret = netif_event_xmit(spdid, debug_buf, debug_amnt); */
+	/* } */
+
 done:
 	return ret;
 }
@@ -653,8 +717,40 @@ void cos_init(void *arg)
 {
 	static volatile int first = 1;
 	
+	union sched_param sp;
+	pnums = avg = 0;
+	inc1 = inc2 = 0;
+
+#ifdef DEBUG_PERIOD	
+	unsigned long cos_immediate_process_cnt_prev = 0;
+
+	if (cos_get_thd_id() == debug_thd) {
+		if (periodic_wake_create(cos_spd_id(), 100)) BUG();
+		while(1) {
+			periodic_wake_wait(cos_spd_id());
+			printc("num interrupt_wait %ld interrupt_process %ld\n", 
+			       interrupt_wait_cnt, interrupt_process_cnt);
+			interrupt_wait_cnt = 0;
+			interrupt_process_cnt = 0;
+			if (cos_immediate_process_cnt > 0) {
+				printc("num immediate interrupt_process %ld\n", 
+				       cos_immediate_process_cnt - cos_immediate_process_cnt_prev);
+				cos_immediate_process_cnt_prev = cos_immediate_process_cnt;
+			}
+
+		}
+	}
+#endif
+	
 	if (first) {
 		first = 0;
+
+#ifdef DEBUG_PERIOD		
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 10;
+		debug_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+#endif
+
 		init();
 	} else {
 		prints("net: not expecting more than one bootstrap.");

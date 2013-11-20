@@ -11,24 +11,19 @@ char buffer[1024];
 
 void pop_cgi(void)
 {
-	td_t t1, t2;
-	long evt1, evt2;
-	/* char *params1 = "hws"; */
-	/* char *params2 = "cgi/"; */
-	char *params2 = "test";
-	char *data1 = "helloworld", *data2 = "andykevin";
+	td_t t1;
+	long evt1;
+	char *params = "test";
+	char *data1 = "hello_world";
 	unsigned int ret1, ret2;
 
 	printc("pop the file on the server\n");
 	evt1 = evt_split(cos_spd_id(), 0, 0);
-	evt2 = evt_split(cos_spd_id(), 0, 0);
-	assert(evt1 > 0 && evt2 > 0);
+	assert(evt1 > 0);
 
-	t1 = tsplit(cos_spd_id(), td_root, params2, strlen(params2), TOR_ALL, evt1);
-	/* t2 = tsplit(cos_spd_id(), t1, params1, strlen(params1), TOR_ALL, evt2); */
-	/* if (t1 < 1 || t2 < 1) { */
+	t1 = tsplit(cos_spd_id(), td_root, params, strlen(params), TOR_ALL, evt1);
 	if (t1 < 1) {
-		printc("UNIT TEST FAILED: later splits failed\n");
+		printc("split failed\n");
 		return;
 	}
 

@@ -63,6 +63,10 @@
 #include <net_portns.h>
 #include <timed_blk.h>
 
+#include <periodic_wake.h>   // for debug only
+static volatile unsigned long tcp_accept_cnt = 0, tcp_recv_cnt = 0, net_accetp_cnt = 0;
+static volatile unsigned long tcp_tread_cnt = 0, tcp_twrite_cnt = 0;
+
 cos_lock_t net_lock;
 
 #define NET_LOCK_TAKE()    \
@@ -74,6 +78,7 @@ cos_lock_t net_lock;
 	do {								\
 		if (lock_release(&net_lock)) prints("error releasing net lock."); \
 	} while (0)
+
 
 
 /*********************** Component Interface ************************/
@@ -472,6 +477,7 @@ static void cos_net_lwip_tcp_err(void *arg, err_t err)
 	case ERR_RST:
 		assert(ic->conn_type == TCP);
 		assert(ic->conn_type != TCP_CLOSED);
+		/* printc("thd %ld in tcp_err call trigger evt_id %d\n", cos_get_thd_id(), ic->data); */
 		if (-1 != ic->data && evt_trigger(cos_spd_id(), ic->data)) BUG();
 		ic->conn_type = TCP_CLOSED;
 		ic->conn.tp = NULL;
@@ -503,8 +509,12 @@ static void __net_close(struct intern_connection *ic)
 //		prints("cosnet net_close: closing active TCP connection");
 		tp = ic->conn.tp;
 		assert(tp);
+		//GAP: testing changes to more aggressively close existing connections
 		tcp_abort(tp);
 		assert(NULL == ic->conn.tp && ic->conn_type == TCP_CLOSED);
+
+		/* tcp_close(tp);  // more aggressively */
+		
 		break;
 	}
 	case TCP_CLOSED:
@@ -540,6 +550,7 @@ static err_t cos_net_lwip_tcp_recv(void *arg, struct tcp_pcb *tp, struct pbuf *p
 		 */
 		tcp_abort(tp);
 		assert(ic->conn_type == TCP_CLOSED && NULL == ic->conn.tp);
+		/* tcp_close(tp);  // Jiguo: aggressive close */
 		return ERR_CLSD;
 	}
 	first = p;
@@ -582,8 +593,9 @@ static err_t cos_net_lwip_tcp_recv(void *arg, struct tcp_pcb *tp, struct pbuf *p
 	/* This should deallocate the entire chain */
 	pbuf_free(first);
 
-	/* printc("trigger event now?? ic->data %d (thd %d)\n", ic->data, cos_get_thd_id()); */
+	/* printc("thd in %ld tcp_recv call trigger evt id %d\n", cos_get_thd_id(), ic->data); */
 	if (-1 != ic->data && evt_trigger(cos_spd_id(), ic->data)) BUG();
+	tcp_recv_cnt++;
 /* 	/\* If the thread blocked waiting for a packet, wake it up *\/ */
 /* 	if (RECVING == ic->thd_status) { */
 /* 		ic->thd_status = ACTIVE; */
@@ -605,7 +617,7 @@ static err_t cos_net_lwip_tcp_sent(void *arg, struct tcp_pcb *tp, u16_t len)
 	 * a problem. */
 	if (-1 == ic->data) return ERR_OK;
 	/* FIXME: fix sending so that we can block and everything will work. */
-	//if (evt_trigger(cos_spd_id(), ic->data)) BUG();
+	/* if (evt_trigger(cos_spd_id(), ic->data)) BUG(); */
 
 	return ERR_OK;
 }
@@ -699,7 +711,9 @@ static err_t cos_net_lwip_tcp_accept(void *arg, struct tcp_pcb *new_tp, err_t er
 	}
 	assert(-1 != ic->data);
 	/* printc("cos_net_lwip_tcp_accept trigger event (thd %d)\n", cos_get_thd_id()); */
+	/* printc("thd %ld in tcp_accept call trigger evtid %d\n", cos_get_thd_id(), ic->data); */
 	if (evt_trigger(cos_spd_id(), ic->data)) BUG();
+	tcp_accept_cnt++;
 
 	return ERR_OK;
 }
@@ -841,8 +855,10 @@ int net_accept_data(spdid_t spdid, net_connection_t nc, long data)
 	/* If data has already arrived, but couldn't trigger the event
 	 * because ->data was not set, trigger the event now. */
 	/* printc("trigger event??? (thd %d) \n", cos_get_thd_id()); */
+	/* printc("thd %ld in net_accept_data call trigger evtid %d\n", cos_get_thd_id(), ic->data); */
 	if (0 < ic->incoming_size && 
 	    evt_trigger(cos_spd_id(), data)) goto err;
+	net_accetp_cnt++;
 
 	//NET_LOCK_RELEASE();
 	return 0;	
@@ -1257,6 +1273,8 @@ extern td_t parent_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_fla
 extern int parent_twrite(spdid_t spdid, td_t td, int cbid, int sz);
 extern int parent_tread(spdid_t spdid, td_t td, int cbid, int sz);
 
+static volatile int debug_thd = 0;
+
 static volatile int event_thd = 0;
 static td_t ip_td = 0;
 
@@ -1278,6 +1296,7 @@ static int cos_net_evt_loop(void)
 		assert(data);
 		/* printc("tnet_tip_tread (thd %d)\n", cos_get_thd_id()); */
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
+		tcp_tread_cnt++;
 		assert(sz > 0);
 		cos_net_interrupt(data, sz);
 		assert(lock_contested(&net_lock) != cos_get_thd_id());
@@ -1330,6 +1349,7 @@ static err_t cos_net_stack_send(struct netif *ni, struct pbuf *p, struct ip_addr
 	if (sz <= 0) {
 		printc("<<transmit returns %d -> %d>>\n", sz, tot_len);
 	}
+	tcp_twrite_cnt++;
 	assert(sz > 0);
 	cbuf_free(buff);
 	
@@ -1403,6 +1423,7 @@ modify_connection(spdid_t spdid, net_connection_t nc, char *ops, int len)
 
 		r = sscanf(prop, "listen:%d", &q);
 		if (r != 1) goto release;
+		printc("net_listen q %d\n", q);
 		ret = net_listen(spdid, nc, q);
 		NET_LOCK_RELEASE();
 	}
@@ -1434,7 +1455,10 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 			t = tor_lookup(tid);
 			if (!t) goto done;
 			nc = net_accept(spdid, (net_connection_t)t->data);
-			if (nc == -EAGAIN) ERR_THROW(-EAGAIN, done);
+			if (nc == -EAGAIN) {
+				/* printc("net accept return EAGAIN\n"); */
+				ERR_THROW(-EAGAIN, done);
+			}
 			if (nc < 0) ERR_THROW(-EINVAL, done);
 			if (0 < net_accept_data(spdid, nc, evtid)) BUG();
 			accept = 1;
@@ -1585,7 +1609,7 @@ static void cos_net_create_netif_thd(void)
 	union sched_param sp;
 	
 	sp.c.type  = SCHEDP_PRIO;
-	sp.c.value = 4;
+	sp.c.value = 2;
 	if (0 > (event_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0))) BUG();
 }
 
@@ -1625,6 +1649,7 @@ static int init(void)
 		tcp_tmr();
 		NET_LOCK_RELEASE();
 		timed_event_block(cos_spd_id(), 25); /* expressed in ticks currently */
+		/* printc("use timer to tcp debug thread here...\n"); */
 		cos_mpd_update();
 	}
 
@@ -1633,13 +1658,34 @@ static int init(void)
 	return 0;
 }
 
+
 void cos_init(void *arg)
 {
 	static volatile int first = 0;
 	union sched_param sp;
-	int tcp_thd;
+	int tcp_thd = 0;
 
 	if (cos_get_thd_id() == event_thd) cos_net_evt_loop();
+
+#ifdef DEBUG_PERIOD
+	if (cos_get_thd_id() == debug_thd) {
+		if (periodic_wake_create(cos_spd_id(), 100)) BUG();
+		while(1) {
+			periodic_wake_wait(cos_spd_id());
+			printc("tcp evt trigger: tcp_accept_cnt %ld tcp_recv_cnt %ld net_accetp_cnt %ld\n", 
+			       tcp_accept_cnt, tcp_recv_cnt, net_accetp_cnt);
+			printc("tcp_tread_cnt %ld tcp_twrite_cnt %ld\n", 
+			       tcp_tread_cnt, tcp_twrite_cnt);
+
+			tcp_accept_cnt = 0;
+			tcp_recv_cnt = 0;
+			net_accetp_cnt = 0;
+
+			tcp_tread_cnt = 0;
+			tcp_twrite_cnt = 0;
+		}
+	}
+#endif
 
 	if (first == 0) {
 		first = 1;
@@ -1649,6 +1695,12 @@ void cos_init(void *arg)
 		tcp_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 		printc("tcp creates a thread %d\n", tcp_thd);
 
+#ifdef DEBUG_PERIOD
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 10;
+		debug_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+#endif
+
 		return;
 	} else {
 		printc("tcp: thread %d\n", cos_get_thd_id());
@@ -1656,4 +1708,6 @@ void cos_init(void *arg)
 		BUG();
 		prints("net: not expecting more than one bootstrap.");
 	}
+
+		
 }

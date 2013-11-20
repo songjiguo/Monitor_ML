@@ -29,6 +29,8 @@
 #include <cos_map.h>
 #include <errno.h>
 
+#include <evt.h>
+
 #include <torrent.h>
 #include <torlib.h>
 #include <cbuf.h>
@@ -39,6 +41,7 @@ static cos_lock_t h_lock;
 #define LOCK() if (lock_take(&h_lock)) BUG();
 #define UNLOCK() if (lock_release(&h_lock)) BUG();
 
+
 extern td_t server_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
 extern void server_trelease(spdid_t spdid, td_t tid);
 extern int server_tread(spdid_t spdid, td_t td, int cbid, int sz);
@@ -47,6 +50,10 @@ extern int server_tread(spdid_t spdid, td_t td, int cbid, int sz);
 
 /* Keeping some stats (unsynchronized across threads currently) */
 static volatile unsigned long http_conn_cnt = 0, http_req_cnt = 0;
+static volatile unsigned long http_new_request_cnt = 0;
+
+static volatile unsigned long  tread_cnt = 0;  // debug
+static volatile unsigned long  tread_cnt2 = 0;  // debug
 
 inline static int is_whitespace(char s) { return ' ' == s; }
 
@@ -307,7 +314,11 @@ static struct connection *http_new_connection(long conn_id, long evt_id)
 {
 	struct connection *c = malloc(sizeof(struct connection));
 
-	if (NULL == c) return c;
+	if (NULL == c) {
+		assert(0);
+		return c;
+	}
+	assert(!c->pending_reqs);
 	c->conn_id = conn_id;
 	c->evt_id = evt_id;
 	c->pending_reqs = NULL;
@@ -372,6 +383,7 @@ static inline void http_init_request(struct http_request *r, int buff_len, struc
 	} else {
 		r->next = r->prev = r;
 		c->pending_reqs = r;
+		http_new_request_cnt++;
 	}
 }
 
@@ -379,7 +391,10 @@ static struct http_request *http_new_request_flags(struct connection *c, char *r
 {
 	struct http_request *r = malloc(sizeof(struct http_request));
 
-	if (NULL == r) return r;
+	if (NULL == r) {
+		assert(0);
+		return r;
+	}
 	http_init_request(r, buff_len, c, req);
 	r->flags = flags;
 
@@ -521,6 +536,8 @@ static int connection_parse_requests(struct connection *c, char *req, int req_sz
 		if (NULL == r) return 1;
 		req = r->req + r->req_len;
 		req_sz = start_amnt - r->req_len;
+		/* printc("req_sz %d\n", req_sz); */
+		/* printc("single request length %d\n", r->req_len); */
 	}
 	
 	/* Now submit those requests (process them) */
@@ -593,6 +610,7 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 	 */
 	r = c->pending_reqs;
 	if (NULL == r) return 0;
+	tread_cnt2++;
 	while (r) {
 		struct http_request *next;
 		char *local_resp;
@@ -803,6 +821,11 @@ release:
 	goto done;
 }
 
+static int debug_first = 0;
+char *debug_buf = NULL;
+static int debug_amnt = 0;
+static cbuf_t debug_cb; 
+
 int 
 tread(spdid_t spdid, td_t td, int cbid, int sz)
 {
@@ -811,7 +834,8 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret;
 
-	/* printc("connmgr reads https\n");	 */
+	tread_cnt++;
+	/* printc("connmgr reads https thd %d\n", cos_get_thd_id()); */
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
@@ -825,7 +849,26 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 
 	lock_connection(c);
 	UNLOCK();
-	ret = connection_get_reply(c, buf, sz);
+
+	/* // debug only */
+	/* if (debug_buf && debug_amnt > 0) { */
+	/* 	printc("use saved cbuf\n"); */
+	/* 	memcpy(buf, debug_buf, sz); */
+	/* 	ret = debug_amnt;		 */
+	/* 	unlock_connection(c); */
+	/* 	goto done; */
+	/* } */
+
+ 	ret = connection_get_reply(c, buf, sz);
+
+	/* // debug only */
+	/* if (!debug_buf && debug_amnt == 0) { */
+	/* 	if (!(debug_buf = cbuf_alloc(sz, &debug_cb))) BUG(); */
+	/* 	printc("save the response cbuf\n"); */
+	/* 	memcpy(debug_buf, buf, sz); */
+	/* 	debug_amnt = ret; */
+	/* } */
+
 	unlock_connection(c);
 done:	
 	return ret;
@@ -931,6 +974,12 @@ void cos_init(void *arg)
 		periodic_wake_wait(cos_spd_id());
 		printc("HTTP conns %ld, reqs %ld\n", http_conn_cnt, http_req_cnt);
 		http_conn_cnt = http_req_cnt = 0;
+
+		/* printc("tread from connmgr: %ld, thread2 %ld\n", tread_cnt, tread_cnt2); */
+		/* printc("http_new_request_cnt %ld\n", http_new_request_cnt); */
+		tread_cnt = 0;		
+		tread_cnt2 = 0;
+		http_new_request_cnt = 0;
 	}
 	
 	return;

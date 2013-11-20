@@ -186,6 +186,8 @@ typedef struct {
 	struct rb_buff_t {
 		void *ptr;
 		unsigned short int len, status;
+		// debug network server only, also check ring_buff.c (rb_retrieve) and if.c (NUM_WILD)
+		/* unsigned long long start; // debug interrupt latency only */
 	} __attribute__((packed)) packets[RB_SIZE];
 } __attribute__((aligned(4096))) ring_buff_t ;
 
@@ -550,6 +552,7 @@ static inline int mpd_split_error(struct mpd_split_ret ret)
 enum {
 	COS_MPD_SPLIT, 		/* split an spd out of an cspd */
 	COS_MPD_MERGE,		/* merge two cspds */
+	COS_DEBUG_WEB,          // debug only, remove later: Jiguo
 	COS_MPD_DEACTIVATE,	/* deactivate a cspd (set its page
 				 * table to 0), so that it won't be
 				 * used, causing mpd faults

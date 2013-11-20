@@ -20,6 +20,12 @@
 #include <cos_synchronization.h>
 #include <cbuf.h>
 
+#include <sched.h>
+#include <periodic_wake.h>   // for debug only
+static volatile unsigned long ip_tread_cnt = 0;
+static volatile unsigned long ip_twrite_cnt = 0;
+static volatile int debug_thd = 0;
+
 extern td_t parent_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
 extern void parent_trelease(spdid_t spdid, td_t tid);
 extern int parent_tread(spdid_t spdid, td_t td, int cbid, int sz);
@@ -58,7 +64,6 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 	if (tid != td_root) return -EINVAL;
 	ntd = parent_tsplit(cos_spd_id(), tid, param, len, tflags, evtid);
 	if (ntd <= 0) ERR_THROW(ntd, err);
-
 	t = tor_alloc((void*)ntd, tflags);
 	if (!t) ERR_THROW(-ENOMEM, err);
 	ret = t->td;
@@ -112,6 +117,7 @@ twrite(spdid_t spdid, td_t td, int cbid, int sz)
 	assert(nbuf);
 	memcpy(nbuf, buf, sz);
 	ret = parent_twrite(cos_spd_id(), ntd, ncbid, sz);
+	ip_twrite_cnt++;
 	cbuf_free(nbuf);
 done:
 	return ret;
@@ -142,6 +148,7 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	/* printc("tip_tif_tread (thd %d)\n", cos_get_thd_id()); */
 	ret = parent_tread(cos_spd_id(), ntd, ncbid, sz);
 	if (ret < 0) goto free;
+	ip_tread_cnt++;
 	/* printc("ip tread from if 2\n"); */
 	memcpy(buf, nbuf, ret);
 free:
@@ -153,5 +160,30 @@ done:
 
 void cos_init(void)
 {
-	torlib_init();
+	static volatile int first = 1;
+	
+	union sched_param sp;
+
+#ifdef DEBUG_PERIOD
+	if (cos_get_thd_id() == debug_thd) {
+		if (periodic_wake_create(cos_spd_id(), 100)) BUG();
+		while(1) {
+			periodic_wake_wait(cos_spd_id());
+			printc("ip_tread_cnt %ld ip_twrite_cnt %ld\n", ip_tread_cnt, ip_twrite_cnt);
+			ip_tread_cnt = 0;
+			ip_twrite_cnt = 0;
+		}
+	}
+#endif
+	if (first) {
+		first = 0;
+
+#ifdef DEBUG_PERIOD		
+		sp.c.type = SCHEDP_PRIO;
+		sp.c.value = 10;
+		debug_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+#endif
+
+		torlib_init();
+	}
 }

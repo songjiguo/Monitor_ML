@@ -72,6 +72,14 @@ __evt_alloc(evt_t t, long parent, spdid_t spdid)
 	e->grp  = p;
 	e->creator = spdid;
 	if (p) {
+		/* // debug : add connection event to the head */
+		/* if (p->iachildren) { */
+		/* 	if (cos_get_thd_id() == 20) { */
+		/* 		ADD_LIST(p->iachildren, e, next, prev); */
+		/* 	} else ADD_END_LIST(p->iachildren, e, next, prev); */
+			
+		/* } else               p->iachildren = e; */
+
 		if (p->iachildren) ADD_LIST(p->iachildren, e, next, prev);
 		else               p->iachildren = e;
 	}
@@ -88,13 +96,14 @@ done:
 static int
 __evt_free(spdid_t spdid, long eid)
 {
-	struct evt *e, *c, *f;
+	struct evt *e, *c, *f, *g;
 
 	e = cmap_lookup(&evt_map, eid);
 	if (!e)                  return -EINVAL;
 	if (e->creator != spdid) return -EACCES;
 	if (e->bthd)             return -EAGAIN;
 
+	/* Remove any children we may have (if we are a group) */
 	if (e->iachildren) {
 		f = c = FIRST_LIST(e->iachildren, next, prev);
 		do {
@@ -111,8 +120,20 @@ __evt_free(spdid_t spdid, long eid)
 		} while (f != (c = FIRST_LIST(e->tchildren, next, prev)));
 		e->tchildren = NULL;
 	}
-	
+
+	/* remove ourselves from any groups that we are in */
+	g = e->grp;
+	if (g->iachildren == e) {
+		if (EMPTY_LIST(e, next, prev)) g->iachildren = NULL;
+		else               g->iachildren = FIRST_LIST(e, next, prev);
+	}
+	if (g->tchildren == e) {
+		if (EMPTY_LIST(e, next, prev)) g->tchildren = NULL;
+		else               g->tchildren = FIRST_LIST(e, next, prev);
+	}
 	REM_LIST(e, next, prev);
+
+	/* and remove ourselves from the component's indexing data-structures and free */
 	cmap_del(&evt_map, eid);
 	cslab_free_evt(e);
 
@@ -175,7 +196,7 @@ __evt_wait(spdid_t spdid, long eid)
 {
 	struct evt *e, *g, *c, *t;
 
-	/* printc("thd %d is in __evt_wait\n", cos_get_thd_id()); */
+	/* if (cos_get_thd_id() != 20) printc("thd %d is in __evt_wait\n", cos_get_thd_id()); */
 	e = cmap_lookup(&evt_map, eid);
 	if (!e)                  return -EINVAL;
 	if (e->bthd)             return -EAGAIN; /* another thread already blocked? */
@@ -215,7 +236,7 @@ __evt_wait(spdid_t spdid, long eid)
 		}
 		if (g->iachildren) ADD_LIST(g->iachildren, r, next, prev);
 		else               g->iachildren = r;
-		
+
 		if (!more) break;
 	}
 	/* printc("__evt_wait: eid %d with thd %d\n", t->eid, t->bthd); */
@@ -252,7 +273,6 @@ long evt_wait(spdid_t spdid, long evt_id)
 	long ret;
 	
 	do {
-		/* printc("in evt wait 1 thd %d\n", cos_get_thd_id()); */
 		lock_take(&evt_lock);
 		ret = __evt_wait(spdid, evt_id);
 		/* printc("leaving evt wait 2 ret %d\n", ret); */

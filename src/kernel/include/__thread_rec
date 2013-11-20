@@ -110,6 +110,8 @@ struct thread {
 
 	/* flags & THD_STATE_BRAND */
 	unsigned long pending_upcall_requests;
+	// debug network performance
+	unsigned long debug_upcall_request_cnt;
 
 	/* HACK: recv ring buffer for network packets, both user-level
 	 * and kernel-level pointers

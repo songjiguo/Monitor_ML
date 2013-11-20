@@ -192,7 +192,6 @@ from_data_new(struct tor_conn *tc)
 
 		buf = cbuf_alloc(BUFF_SZ, &cb);
 		assert(buf);
-		printc("connmgr reads net\n");
 		amnt = from_tread(cos_spd_id(), from, cb, BUFF_SZ-1);
 		if (0 == amnt) break;
 		else if (-EPIPE == amnt) {
@@ -235,7 +234,6 @@ to_data_new(struct tor_conn *tc)
 		cbuf_t cb;
 
 		if (!(buf = cbuf_alloc(BUFF_SZ, &cb))) BUG();
-		printc("connmgr reads https\n");
 		amnt = tread(cos_spd_id(), to, cb, BUFF_SZ-1);
 		if (0 == amnt) break;
 		else if (-EPIPE == amnt) {
@@ -265,38 +263,23 @@ close:
 	goto done;
 }
 
-
-char *create_str;
-int   __port, __prio, hpthd;
-
 void
 cos_init(void *arg)
 {
 	int c, accept_fd, ret;
 	long eid;
-	char *init_str = cos_init_args();
-	int port, nthds, prio;
+	char *init_str = cos_init_args(), *create_str;
+	int lag, nthds, prio;
 	
 	cvect_init_static(&evts);
 	cvect_init_static(&tor_from);
 	cvect_init_static(&tor_to);
 	lock_static_init(&sc_lock);
 		
-
-
-	sscanf(init_str, "%d:%d:%d", &nthds, &__prio, &__port);
-	printc("nthds:%d, prio:%d, port %d\n", nthds, __prio, __port);
+	sscanf(init_str, "%d:%d:%d", &lag, &nthds, &prio);
+	printc("lag: %d, nthds:%d, prio:%d\n", lag, nthds, prio);
 	create_str = strstr(init_str, "/");
 	assert(create_str);
-
-	/* port  = 200; */
-	/* nthds = 1; */
-	/* prio = 10; */
-	/* sscanf(init_str, "%d:%d:%d", &nthds, &prio, &port); */
-	/* /\* sscanf(init_str, "%d:%d:%d", &lag, &nthds, &prio); *\/ */
-	/* printc("port: %d, nthds:%d, prio:%d\n", port, nthds, prio); */
-	/* create_str = strstr(init_str, "/"); */
-	/* assert(create_str); */
 
 	eid = evt_get();
 	ret = c = from_tsplit(cos_spd_id(), td_root, create_str, strlen(create_str), TOR_ALL, eid);
