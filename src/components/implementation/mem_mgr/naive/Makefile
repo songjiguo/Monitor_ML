@@ -2,7 +2,7 @@ C_OBJS=mem_man.o
 ASM_OBJS=cos_asm_scheduler.o
 COMPONENT=mm.o
 INTERFACES=mem_mgr sched_hier
-DEPENDENCIES=printc sched_hier recovery_upcall ll_log valloc_local
+DEPENDENCIES=printc sched_hier recovery_upcall ll_log monitor_upcall valloc_local
 FN_PREPEND=parent_
 
 IF_LIB=

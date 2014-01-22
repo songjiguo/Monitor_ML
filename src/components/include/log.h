@@ -1,7 +1,6 @@
 /*
    Jiguo:
-   The header file for only interface, used for the log monitor
-   latent fault (state machine)
+   The header file for the log monitor latent fault (state machine)
 */
 
 #ifndef LOGGER_H
@@ -9,11 +8,11 @@
 
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
 extern vaddr_t llog_cs_init(spdid_t spdid, vaddr_t addr);
-extern int llog_process(spdid_t spdid);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 
+extern int monitor_upcall(spdid_t spdid);
 
-#include "../implementation/sched/cos_sched_sync.h"
+//#include "../implementation/sched/cos_sched_sync.h"
 
 #include <cos_list.h>
 #include <ck_ring_cos.h>
@@ -123,7 +122,8 @@ monevt_enqueue(int param, int func_num, int dep)
 
 	if (unlikely(ring_is_full())) {
 		/* printc("evt_ring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id()); */
-		llog_process(cos_spd_id());
+		/* llog_process(cos_spd_id()); */
+		monitor_upcall(cos_spd_id());
 	}
 
 	monevt_conf(&monevt, param, func_num, dep);
@@ -207,7 +207,8 @@ moncs_enqueue(unsigned short int thd_id, int flags)
 
 	if (unlikely(csring_is_full())) {
 		/* printc("csring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id()); */
-		llog_process(cos_spd_id());
+		/* llog_process(cos_spd_id()); */
+		monitor_upcall(cos_spd_id());
 	}
 
 	moncs_conf(&moncs, flags, thd_id);

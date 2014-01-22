@@ -6,7 +6,6 @@
 #include <ll_log.h>
 
 
-#ifdef MEAS_WITH_LOG
 vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
 {
 	vaddr_t ret = 0;
@@ -20,14 +19,4 @@ vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
 
 	return ret;
 }
-#endif
 
-
-#ifdef MEAS_WITHOUT_LOG
-vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
-{
-	vaddr_t ret = 0;
-	ret = lmon_ser1_test();
-	return ret;
-}
-#endif

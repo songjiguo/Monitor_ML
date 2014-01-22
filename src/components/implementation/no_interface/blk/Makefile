@@ -2,7 +2,7 @@ C_OBJS=blk.o
 ASM_OBJS=
 COMPONENT=b.o
 INTERFACES=
-DEPENDENCIES=timed_blk sched printc lock mem_mgr_large valloc ll_log
+DEPENDENCIES=timed_blk sched printc lock mem_mgr_large valloc ll_log monitor_upcall
 IF_LIB=
 
 include ../../Makefile.subsubdir

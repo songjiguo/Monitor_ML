@@ -26,12 +26,6 @@ printc(char *fmt, ...)
 	return ret;
 }
 
-#ifndef assert
-/* On assert, immediately switch to the "exit" thread */
-#define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); cos_switch_thread(PERCPU_GET(llbooter)->alpha, 0);} } while(0)
-#endif
-
-
 //#define MEAS_RECOVERY
 //#define MEAS_REBOOT
 //#define MEAS_FRM_OP
@@ -61,28 +55,50 @@ struct llbooter_per_core {
 	 * recover_spd:  the spd that will require rebooting
 	 */
 	int     alpha, init_thd, recovery_thd;
+	int     monitor_thd;
 	int     sched_offset;      
 	volatile int prev_thd, recover_spd;
 	volatile vaddr_t recovery_arg;
 	volatile int operation;
+	volatile int prev_mthd, monitor_spd;
 } __attribute__((aligned(4096))); /* Avoid the copy-on-write issue for us. */
 
 PERCPU(struct llbooter_per_core, llbooter);
 
+#ifdef LOG_MONITOR
+enum { /* hard-coded initialization schedule */
+	LLBOOT_LOG   = 2,
+	LLBOOT_SCHED = 3,
+	LLBOOT_MM    = 4
+};
+#else 
 enum { /* hard-coded initialization schedule */
 	LLBOOT_SCHED = 2,
 	LLBOOT_MM    = 3,
 };
+#endif
 
 struct comp_boot_info {
 	int symbols_initialized, initialized, memory_granted;
 };
+#ifdef LOG_MONITOR
+#define NCOMPS 7 	/* comp0, us, a log monitor and the four other components */
+#else
 #define NCOMPS 6 	/* comp0, us, and the four other components */
+#endif
+
 static struct comp_boot_info comp_boot_nfo[NCOMPS];
 
+#ifdef LOG_MONITOR
+static spdid_t init_schedule[]   = {LLBOOT_LOG, LLBOOT_MM, LLBOOT_SCHED, 0};
+static int     init_mem_access[] = {1, 1, 0, 0};
+static int     init_mem_amnt[]   = {128, 0, 0, 0};  // 128 pages for LL_LOG, 0 for default (evenly for the rest)
+#else
 static spdid_t init_schedule[]   = {LLBOOT_MM, LLBOOT_SCHED, 0};
 static int     init_mem_access[] = {1, 0, 0};
-static int     init_mem_amnt[]   = {0, 0, 0};  // 128 pages for LL_LOG, 0 for default (evenly)
+static int     init_mem_amnt[]   = {0, 0, 0};  // 0 for default (evenly)
+#endif
+
 static int     nmmgrs = 0;
 static int     frame_frontier    = 0; /* which physical frames have we used? */
 
@@ -97,6 +113,14 @@ typedef void (*crt_thd_fn_t)(void);
 
 #include "../../sched/cos_sched_sync.h"
 #include "../../sched/cos_sched_ds.h"
+
+
+// this need to be defined here since cos_switch_thread is defined in cos_sched_sync.h
+#ifndef assert
+/* On assert, immediately switch to the "exit" thread */
+#define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); cos_switch_thread(PERCPU_GET(llbooter)->alpha, 0);} } while(0)
+#endif
+
 /* synchronization... */
 #define LOCK()   if (cos_sched_lock_take())    BUG();
 #define UNLOCK() if (cos_sched_lock_release()) BUG();
@@ -126,6 +150,7 @@ llboot_thd_done(void)
 	int tid = cos_get_thd_id();
 	struct llbooter_per_core *llboot = PERCPU_GET(llbooter);
 	assert(llboot->alpha);
+
 	/* 
 	 * When the initial thread is done, then all we have to do is
 	 * switch back to alpha who should reboot the system.
@@ -175,36 +200,73 @@ llboot_thd_done(void)
 		BUG();
 	}
 
-
-	while (1) {
-		int     pthd = llboot->prev_thd;
-		spdid_t rspd = llboot->recover_spd;
-		int     op    = llboot->operation;
-		vaddr_t arg  =  llboot->recovery_arg;
-		
-		volatile unsigned long long start, end;
-
-		assert(tid == llboot->recovery_thd);
-		if (rspd) {             /* need to recover a component */
-#ifdef MEAS_RECOVERY
-			rdtscll(start);	
-#endif
-			assert(pthd);
-			llboot->recover_spd = 0;
-
-			cos_upcall_args(op, rspd, arg); /* This will escape from the loop */
-			assert(0);
-		} else {		/* ...done reinitializing...resume */
-#ifdef MEAS_RECOVERY
-			rdtscll(end);
-			printc("recovery cost: %llu\n", (end-start));
-#endif
-			assert(pthd && pthd != tid);
-			llboot->prev_thd = 0;   /* FIXME: atomic action required... */
-			/* printc("\nswitch bactk to thread %d\n\n", pthd); */
-			cos_switch_thread(pthd, 0);
+	if (tid == llboot->monitor_thd) {
+		while(1) {
+			printc("core %ld: monitor thread %d\n", cos_cpuid(), llboot->monitor_thd);
+			int     pmthd = llboot->prev_mthd;
+			spdid_t mspd = llboot->monitor_spd;
+			
+			assert(tid == llboot->monitor_thd);
+			
+			printc("mspd is %d\n", mspd);
+			if (mspd) {
+				assert(pmthd);
+				llboot->monitor_spd = 0;
+				
+				cos_upcall(mspd);
+				assert(0);
+			} else {
+				assert(pmthd && pmthd != tid);
+				llboot->prev_mthd = 0;
+				cos_switch_thread(pmthd, 0);
+			}
 		}
 	}
+
+	if (tid == llboot->recovery_thd) {
+		while (1) {
+			int     pthd = llboot->prev_thd;
+			spdid_t rspd = llboot->recover_spd;
+			int     op    = llboot->operation;
+			vaddr_t arg  =  llboot->recovery_arg;
+			
+			volatile unsigned long long start, end;
+			
+			assert(tid == llboot->recovery_thd);
+			if (rspd) {             /* need to recover a component */
+#ifdef MEAS_RECOVERY
+				rdtscll(start);	
+#endif
+				assert(pthd);
+				llboot->recover_spd = 0;
+				
+				cos_upcall_args(op, rspd, arg); /* This will escape from the loop */
+				assert(0);
+			} else {		/* ...done reinitializing...resume */
+#ifdef MEAS_RECOVERY
+				rdtscll(end);
+				printc("recovery cost: %llu\n", (end-start));
+#endif
+				assert(pthd && pthd != tid);
+				llboot->prev_thd = 0;   /* FIXME: atomic action required... */
+				/* printc("\nswitch bactk to thread %d\n\n", pthd); */
+				cos_switch_thread(pthd, 0);
+			}
+		}
+	}
+}
+
+int
+monitor_upcall(spdid_t spdid)
+{
+	struct llbooter_per_core *llboot = PERCPU_GET(llbooter);
+	llboot->prev_mthd     = cos_get_thd_id();
+	llboot->monitor_spd   = 2;
+
+	printc("monitor upcall in llbooter....\n");	
+	while (llboot->prev_mthd == cos_get_thd_id()) cos_switch_thread(llboot->monitor_thd, 0);
+
+	return 0;
 }
 
 /* can only be called from mmgr/scheduler */
@@ -225,7 +287,6 @@ recovery_upcall(spdid_t spdid, int op, spdid_t dest, vaddr_t arg)
 
 	return 0;
 }
-
 
 void 
 failure_notif_fail(spdid_t caller, spdid_t failed);
@@ -335,7 +396,7 @@ fault_page_fault_handler(spdid_t spdid, void *fault_addr, int flags, void *ip)
 	 * it to restart the component!  This might even be the
 	 * initial thread.
 	 */
-	if (reboot && cos_get_thd_id() == 4) cos_upcall_args(COS_UPCALL_REBOOT, spdid, 0);
+	if (reboot && cos_get_thd_id() == cos_idle_thd) cos_upcall_args(COS_UPCALL_REBOOT, spdid, 0);
 	else cos_upcall(spdid); 	/* FIXME: give back stack... */
 	printc("should not be here\n");
 	BUG();
@@ -433,7 +494,8 @@ comp_info_record(struct cobj_header *h, spdid_t spdid, struct cos_component_info
 	}
 }
 
-static inline void boot_create_init_thds(void)
+static inline void 
+boot_create_init_thds(void)
 {
 	struct llbooter_per_core *llboot = PERCPU_GET(llbooter);
 	if (cos_sched_cntl(COS_SCHED_EVT_REGION, 0, (long)PERCPU_GET(cos_sched_notifications))) BUG();
@@ -441,11 +503,13 @@ static inline void boot_create_init_thds(void)
 	llboot->alpha        = cos_get_thd_id();
 	llboot->recovery_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(llboot->recovery_thd >= 0);
+	llboot->monitor_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
+	assert(llboot->monitor_thd >= 0);
 	llboot->init_thd     = cos_create_thread((int)llboot_ret_thd, 0, 0);
 	printc("Core %ld, Low-level booter created threads:\n\t"
-	       "%d: alpha\n\t%d: recov\n\t%d: init\n",
+	       "%d: alpha\n\t%d: recov\n\t%d: monitor\n\t%d: init\n",
 	       cos_cpuid(), llboot->alpha, 
-	       llboot->recovery_thd, llboot->init_thd);
+	       llboot->recovery_thd, llboot->monitor_thd, llboot->init_thd);
 	assert(llboot->init_thd >= 0);
 }
 
@@ -504,7 +568,7 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 #include <sched_hier.h>
 
 void cos_init(void);
-int  sched_init(void)   
+int  sched_init(int reboot)   
 { 
 	if (cos_cpuid() == INIT_CORE) {
 		/* The init core will call this function twice: first do

@@ -249,6 +249,9 @@ void spd_init(void);
 
 int spd_cap_activate(struct spd *spd, int cap);
 int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd);
+#ifdef LOG_MONITOR
+int spd_cap_get_dest(struct spd *spd, int cap);
+#endif
 int spd_cap_set_cstub(struct spd *spd, int cap, vaddr_t fn);
 int spd_cap_set_sstub(struct spd *spd, int cap, vaddr_t fn);
 int spd_cap_set_sfn(struct spd *spd, int cap, vaddr_t fn);

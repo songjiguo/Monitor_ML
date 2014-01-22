@@ -16,7 +16,8 @@
 #include <cos_component.h>
 #include <res_spec.h>
 
-/* static int     log_thd; */
+#define MONITOR_THD 3
+
 enum { /* hard-coded spd number */
 	LLBOOT_LOG   = 2,
 	LLBOOT_SCHED = 3,
@@ -67,7 +68,7 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 
 #include <sched_hier.h>
 
-int  sched_init()   { return 0; }
+int  sched_init(int reboot)   { return 0; }
 extern void parent_sched_exit(void);
 void 
 sched_exit(void)   

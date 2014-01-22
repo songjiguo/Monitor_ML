@@ -2,7 +2,7 @@ C_OBJS=micro_stack.o
 ASM_OBJS=
 COMPONENT=micro_stk.o
 INTERFACES=
-DEPENDENCIES=sched micro_cbuf2 printc lock mem_mgr_large valloc ll_log
+DEPENDENCIES=sched micro_cbuf2 printc lock mem_mgr_large valloc ll_log monitor_upcall
 IF_LIB=
 
 include ../../Makefile.subsubdir

@@ -4,6 +4,7 @@
 #define   	LOG_REPORT_H
 
 #include <ll_log.h>
+#include <log_process.h>
 
 extern struct logmon_info logmon_info[MAX_NUM_SPDS];
 extern struct logmon_cs lmcs;

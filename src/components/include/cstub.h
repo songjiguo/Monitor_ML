@@ -1,30 +1,38 @@
 #ifndef CSTUB_H
 #define CSTUB_H
 
-#define CSTUB_ASM_PRE(name) \
-	__asm__ __volatile__( \
-		"pushl %%ebp\n\t" \
-		"movl %%esp, %%ebp\n\t" \
-		"movl $1f, %%ecx\n\t" \
-		"sysenter\n\t" \
-		".align 8\n\t" \
-		"jmp 2f\n\t" \
-		".align 8\n\t" \
-		"1:\n\t" \
-		"popl %%ebp\n\t" \
-		"movl $0, %%ecx\n\t" \
-		"jmp 3f\n\t" \
-		"2:\n\t" \
-		"popl %%ebp\n\t" \
-		"movl $1, %%ecx\n\t" \
-		"3:" \
-		: "=a" (ret), "=c" (fault)
+#define __CSTUB_ASM_PRE			\
+	__asm__ __volatile__(		\
+	"pushl %%ebp\n\t"		\
+	"movl %%esp, %%ebp\n\t"		\
+	"movl $1f, %%ecx\n\t"		\
+	"sysenter\n\t"			\
+	".align 8\n\t"			\
+	"jmp 2f\n\t"			\
+	".align 8\n\t"			\
+	"1:\n\t"			\
+	"popl %%ebp\n\t"		\
+	"movl $0, %%ecx\n\t"		\
+	"jmp 3f\n\t"			\
+	"2:\n\t"			\
+	"popl %%ebp\n\t"		\
+	"movl $1, %%ecx\n\t"		\
+	"3:"					\
+	: "=a" (ret), "=c" (fault)
 
-#define CSTUB_PRE(type, name)			\
-{					\
-        long fault = 0; \
-	type ret;	\
-                        \
+#ifdef LOG_MONITOR
+#define CSTUB_ASM_PRE(name)						\
+	monevt_enqueue((uc->cap_no|(cos_spd_id() & 0xFF)), fn_seq, 0);	\
+	__CSTUB_ASM_PRE
+#else
+#define CSTUB_ASM_PRE(name)			\
+	__CSTUB_ASM_PRE
+#endif
+
+#define CSTUB_PRE(type, name)		\
+	{				\
+        long fault = 0;			\
+	type ret;			\
 	/* \
 	 * cap#    -> eax \
 	 * sp      -> ebp \
@@ -34,10 +42,18 @@
 	 * 4th arg -> edx \
 	 */
 
-#define CSTUB_POST \
- \
-	return ret; \
+// Jiguo: for log monitor, assume the spd is less than 255 (0xFF)
+#ifdef LOG_MONITOR
+#define CSTUB_POST					\
+	monevt_enqueue(cos_spd_id(), fn_seq, 0);	\
+	return ret;					\
 }
+#else 
+#define CSTUB_POST				\
+	return ret;				\
+}
+
+#endif
 
 #define CSTUB_ASM_0(name) \
         	CSTUB_ASM_PRE(name)	   \
@@ -67,6 +83,7 @@
 		: "a" (uc->cap_no), "b" (first), "S" (second), "D" (third), "d" (fourth) \
 		: "memory", "cc"); \
 		__asm__ __volatile__("" ::: "ebx", "edx", "esi", "edi");
+
 
 #define CSTUB_ASM_RET_PRE(ret1, ret2)		\
 	__asm__ __volatile__( \
@@ -133,6 +150,7 @@
         CSTUB_PRE(type, name)
 #define CSTUB_FN_7(type, name, type1, type2, type3, type4, type5, type6, type7)	\
 	CSTUB_FN_ARGS_7(type, name, type1, first, type2, second, type3, third, type4, fourth, type5, fifth, type6, sixth, type7, seventh)
+
 
 #define CSTUB_0(type, name)						\
 	CSTUB_FN_0(type, name)						\

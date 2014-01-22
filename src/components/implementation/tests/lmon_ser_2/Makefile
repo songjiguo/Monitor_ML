@@ -2,7 +2,7 @@ C_OBJS=logmon_ser2.o
 ASM_OBJS=
 COMPONENT=lmonser2.o
 INTERFACES=lmon_ser2
-DEPENDENCIES=sched printc lock mem_mgr logmonitor ll_log valloc_local
+DEPENDENCIES=sched printc lock mem_mgr logmonitor ll_log monitor_upcall valloc_local
 IF_LIB=
 
 include ../../Makefile.subsubdir

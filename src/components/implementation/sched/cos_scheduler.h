@@ -440,7 +440,6 @@ static inline int sched_release_crit_sect(spdid_t spdid, struct sched_thd *curr)
 
 #include <cos_sched_sync.h>
 
-
 //#define MEA_NET
 /* #define WHICH_THD 4 */
 /* #define WHICH_THD 10 */
@@ -462,6 +461,10 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_next->next_thd_id = thd_id;
 	cos_next->next_thd_flags = flags;
 
+#ifdef LOG_MONITOR
+	moncs_enqueue(thd_id, flags);
+#endif
+
 	cos_sched_lock_release();
 
 	/* kernel will read next thread information from cos_next */
@@ -475,7 +478,6 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	if (thd_id == WHICH_THD) {
 		rdtscll(start);
 	}
-
 #endif
 	return cos___switch_thread(thd_id, flags); 
 }

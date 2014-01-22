@@ -2,6 +2,10 @@
 #include <cstub.h>
 #include <print.h>
 
+#ifdef LOG_MONITOR
+#include <log.h>
+#endif
+
 struct __sg_tsplit_data {
 	td_t tid;
 	tor_flags_t tflags;
@@ -27,6 +31,7 @@ CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len
         d->len[1] = len;
 	memcpy(&d->data[0], param, len);
 
+int fn_seq = 1;
 CSTUB_ASM_3(tsplit, spdid, cb, sz)
 
 	cbuf_free(d);
@@ -56,14 +61,15 @@ CSTUB_FN_ARGS_5(int, tmerge, spdid_t, spdid, td_t, td, td_t, td_into, char *, pa
         d->len[1] = len;
 	memcpy(&d->data[0], param, len);
 
+int fn_seq = 2;
 CSTUB_ASM_3(tmerge, spdid, cb, sz)
 
 	cbuf_free(d);
 CSTUB_POST
 
 
-CSTUB_4(int, tread, spdid_t, td_t, int, int);
-CSTUB_4(int, twrite, spdid_t, td_t, int, int);
+/* CSTUB_4(int, tread, spdid_t, td_t, int, int); */
+/* CSTUB_4(int, twrite, spdid_t, td_t, int, int); */
 
 
 extern void eager_recovery_all();

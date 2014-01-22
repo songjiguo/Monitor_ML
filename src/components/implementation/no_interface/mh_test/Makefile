@@ -2,7 +2,7 @@ C_OBJS=mhtest.o
 ASM_OBJS=
 COMPONENT=mht.o
 INTERFACES=
-DEPENDENCIES=printc sched mem_mgr ll_log valloc_local
+DEPENDENCIES=printc sched mem_mgr ll_log monitor_upcall valloc_local
 IF_LIB=
 ADDITIONAL_LIBS=
 

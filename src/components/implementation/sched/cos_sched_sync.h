@@ -7,6 +7,10 @@
 #include <cos_component.h>
 #include <cos_debug.h>
 
+#ifdef LOG_MONITOR
+#include <log.h>
+#endif
+
 PERCPU_EXTERN(cos_sched_notifications);
 
 /* Following two functions are also needed by the low-level booter to
@@ -25,7 +29,8 @@ PERCPU_EXTERN(cos_sched_notifications);
  * preempting threads to update the next_thread even if a thread is
  * preempted between logic and calling switch_thread.
  */
-static inline int cos_switch_thread(unsigned short int thd_id, unsigned short int flags)
+static inline int 
+cos_switch_thread(unsigned short int thd_id, unsigned short int flags)
 {
 	struct cos_sched_next_thd *cos_next = &PERCPU_GET(cos_sched_notifications)->cos_next;
 
@@ -84,6 +89,12 @@ static inline int cos_sched_lock_take(void)
 		if (unlikely(owner)) {
 			/* If another thread holds the lock, notify
 			 * kernel to switch */
+#ifdef LOG_MONITOR
+#if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)
+			printc("cos_sched_lock_take...cs_enqueue (thd %d)\n", cos_get_thd_id());
+			moncs_enqueue(owner, COS_SCHED_SYNC_BLOCK);
+#endif
+#endif
 			if (cos___switch_thread(owner, COS_SCHED_SYNC_BLOCK) == -1) return -1;
 		}
 		/* If we are now the owner, we're done.  If not, try
@@ -105,7 +116,15 @@ static inline int cos_sched_lock_release(void)
 		queued_thd    = p.c.queued_thd;
 	} while (unlikely(!cos_cas((unsigned long *)&l->v, p.v, 0)));
 	/* If a thread is contending the lock. */
-	if (queued_thd) return cos___switch_thread(queued_thd, COS_SCHED_SYNC_UNBLOCK);
+	if (queued_thd) {
+#ifdef LOG_MONITOR
+#if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)
+		printc("cos_sched_lock_release...cs_enqueue (thd %d)\n", cos_get_thd_id());
+		moncs_enqueue(queued_thd, COS_SCHED_SYNC_UNBLOCK);
+#endif
+#endif
+		return cos___switch_thread(queued_thd, COS_SCHED_SYNC_UNBLOCK);
+	}
 	
 	return 0;
 

@@ -36,6 +36,10 @@
 #include <cos_alloc.h>
 #include <print.h>
 
+#ifdef LOG_MONITOR
+#define MM_LL_LOG
+#endif
+
 #include <cos_list.h>
 #include "../../sched/cos_sched_ds.h"
 #include "../../sched/cos_sched_sync.h"
@@ -477,8 +481,8 @@ void mman_release_all(void)
 
 #include <sched_hier.h>
 
-extern void parent_sched_init(void);
-int  sched_init(void)   { parent_sched_init(); return 0;}
+extern void parent_sched_init(int reboot);
+int  sched_init(int reboot)   { parent_sched_init(reboot); return 0;}
 
 extern void parent_sched_exit(void);
 
@@ -511,6 +515,7 @@ int
 sched_child_cntl_thd(spdid_t spdid) 
 { 
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
+	if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0;
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 

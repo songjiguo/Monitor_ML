@@ -2,7 +2,7 @@ C_OBJS=conn_mgr.o
 ASM_OBJS=
 COMPONENT=conn.o
 INTERFACES=
-DEPENDENCIES=fd printc mem_mgr_large sched valloc ll_log
+DEPENDENCIES=fd printc mem_mgr_large sched valloc ll_log monitor_upcall
 IF_LIB=
 
 include ../../Makefile.subsubdir

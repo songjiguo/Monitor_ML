@@ -502,6 +502,24 @@ int spd_cap_set_dest(struct spd *spd, int cap, struct spd* dspd)
 
 	return 0;
 }
+
+#ifdef LOG_MONITOR
+int spd_cap_get_dest(struct spd *spd, int cap)
+{
+	struct invocation_cap *c;
+	assert(spd);
+
+	if (cap > spd->ncaps) {
+		printd("cos: Capability out of range (valid [0,%d), cap # %d).\n",
+		       spd->ncaps, cap);
+		return NULL;
+	}
+	c = &spd->caps[cap];
+	if (!c) return -1;
+	return spd_get_index(c->destination);
+}
+#endif
+
 int spd_cap_set_fault_handler(struct spd *spd, int cap, int handler_num)
 {
 	if (handler_num >= COS_FLT_MAX || handler_num < 0) return -1;

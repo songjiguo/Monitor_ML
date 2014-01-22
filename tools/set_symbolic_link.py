@@ -1,8 +1,8 @@
 #!/usr/bin/python
-## script helps to maintain two different version of code base
-## 1. normal base
-## 2. recovery base
-##    able to choose the combination of above two
+# script helps to maintain symbol links for :
+# 1. normal base
+# 2. recovery base
+# 3. log_mgr 
 
 import os
 import sys

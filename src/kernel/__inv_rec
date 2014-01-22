@@ -2578,8 +2578,8 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	 * into the destination.)
 	 */
 	if (verify_trust(dest, curr_spd) && curr_spd->sched_depth != 0) {
-		printk("cos: upcall attempted from %d to %d without trust relation.\n",
-		       spd_get_index(curr_spd), spd_get_index(dest));
+		printk("cos: upcall attempted from %d to %d without trust relation. (sched_depth %d)\n",
+		       spd_get_index(curr_spd), spd_get_index(dest), curr_spd->sched_depth);
 		return -1;
 	}
 
@@ -4167,12 +4167,14 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 	struct spd *cspd, *sspd = NULL;
 	spdid_t cspdid, sspdid;
 
-	struct invocation_cap *cap_entry;  // Jiguo: for monitor
-
 	/* TODO: access control */
 
 	if (option == COS_CAP_GET_SER_SPD) {   //Jiguo: for monitor
 		capid = arg2 >> 20;
+		sspdid = 0xFF & arg2;
+		printk("cos: capid %d caller spd %d\n", capid, sspdid);
+		sspd = spd_get_by_index(sspdid);
+		if (!sspd) return -1;
 	} else {
 		cspdid = arg1 >> 16;
 		cspd = spd_get_by_index(cspdid);
@@ -4194,10 +4196,8 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 		ret = spd_read_reset_invocation_cnt(cspd, sspd);
 		break;
 	case COS_CAP_GET_SER_SPD:   // Jiguo: use this to decide what the dest spd is for
-		//cap_entry = &invocation_capabilities[capid];
-		if (!cap_entry) ret = -1;
-		else ret = spd_get_index(cap_entry->destination);
-		/* printk("cos: dest spd %d\n", ret); */
+		ret = spd_cap_get_dest(sspd, capid);
+		printk("cos: dest spd %d\n", ret);
 		break;
 	case COS_CAP_SET_FAULT:
 		if (spd_cap_set_fault_handler(cspd, capid, arg2)) ret = -1;
