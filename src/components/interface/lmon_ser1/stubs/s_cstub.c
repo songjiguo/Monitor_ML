@@ -5,16 +5,17 @@
 
 #include <ll_log.h>
 
-
-vaddr_t __sg_lmon_ser1_test(spdid_t spdid, int event_id)
+vaddr_t __sg_lmon_ser1_test(spdid_t spdid)
 {
+	/* printc("lmo_ser interface: spdid %d\n", spdid); */
 	vaddr_t ret = 0;
 #ifdef LOG_MONITOR
-	monevt_enqueue(cos_spd_id(), 11, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SINV);
 #endif
 	ret = lmon_ser1_test();
 #ifdef LOG_MONITOR
-	monevt_enqueue(0, 11, 0);  // the return spd should be popped from stack
+        // second par is 0 --> does know where to return
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SRET);
 #endif
 
 	return ret;

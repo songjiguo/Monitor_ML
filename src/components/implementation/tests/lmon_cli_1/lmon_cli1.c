@@ -14,10 +14,10 @@ int warm;
 
 #define ITER 5
 
-//#define NORM
+#define NORM
 //#define MEAS_OVERHEAD
 //#define EXAMINE_PI
-#define EXAMINE_DEADLINE
+//#define EXAMINE_DEADLINE
 
 
 #ifdef MEAS_OVERHEAD

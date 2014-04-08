@@ -5,6 +5,7 @@ INTERFACES=sched_hier ll_log
 DEPENDENCIES=printc sched_hier
 FN_PREPEND=parent_
 IF_LIB=
+ADDITIONAL_LIBS=-lheap
 
 include ../../Makefile.subsubdir
 ifeq (${ENABLE_STACK_MANAGER},1)

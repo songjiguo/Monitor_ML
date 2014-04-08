@@ -22,7 +22,7 @@
 
 #ifdef LOG_MONITOR
 #define CSTUB_ASM_PRE(name)						\
-	monevt_enqueue((uc->cap_no|(cos_spd_id() & 0xFF)), fn_seq, 0);	\
+	evt_enqueue(cos_get_thd_id(), uc->cap_no, 0, 0, EVT_CINV); \
 	__CSTUB_ASM_PRE
 #else
 #define CSTUB_ASM_PRE(name)			\
@@ -42,10 +42,9 @@
 	 * 4th arg -> edx \
 	 */
 
-// Jiguo: for log monitor, assume the spd is less than 255 (0xFF)
 #ifdef LOG_MONITOR
 #define CSTUB_POST					\
-	monevt_enqueue(cos_spd_id(), fn_seq, 0);	\
+	evt_enqueue(cos_get_thd_id(), uc->cap_no, 0, 0, EVT_CRET);	\
 	return ret;					\
 }
 #else 

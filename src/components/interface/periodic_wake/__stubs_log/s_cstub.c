@@ -4,31 +4,30 @@
 
 #include <log.h>
 
-int __sg_periodic_wake_create(spdid_t spdinv, unsigned int period)
+int __sg_periodic_wake_create(spdid_t spdid, unsigned int period)
 {
 	int ret;
 #ifdef LOG_MONITOR
-	monevt_enqueue(cos_spd_id(), 211, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SINV);
 #endif
-	ret = periodic_wake_create(spdinv, period);
+	ret = periodic_wake_create(spdid, period);
 #ifdef LOG_MONITOR
-	monevt_enqueue(0, 211, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SRET);
 #endif
-
 	return ret;
 }
 
 
-int __sg_periodic_wake_wait(spdid_t spdinv)
+int __sg_periodic_wake_wait(spdid_t spdid)
 {
 	int ret;
 #ifdef LOG_MONITOR
-	monevt_enqueue(cos_spd_id(), 212, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SINV);
 #endif
-	printc("ser: thd %d is calling periodic_wake\n", cos_get_thd_id());
-	ret = periodic_wake_wait(spdinv);
+	/* printc("ser: thd %d is calling periodic_wake\n", cos_get_thd_id()); */
+	ret = periodic_wake_wait(spdid);
 #ifdef LOG_MONITOR
-	monevt_enqueue(0, 212, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SRET);
 #endif
 
 	return ret;

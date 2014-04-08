@@ -9,12 +9,12 @@ vaddr_t __sg_lmon_ser2_test(spdid_t spdid, int event_id)
 {
 	vaddr_t ret = 0;
 #ifdef LOG_MONITOR
-	monevt_enqueue(cos_spd_id(), 1, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SINV);
 #endif
 	ret = lmon_ser2_test();
 
 #ifdef LOG_MONITOR
-	monevt_enqueue(0, 1, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SRET);
 #endif
 
 	return ret;

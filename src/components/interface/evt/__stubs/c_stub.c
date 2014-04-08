@@ -9,7 +9,6 @@
 
 CSTUB_FN_ARGS_1(long, evt_create, spdid_t, spdid)
 
-int fn_seq = 1;
 CSTUB_ASM_1(evt_create, spdid)
 
 CSTUB_POST

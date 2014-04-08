@@ -31,7 +31,6 @@ CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len
         d->len[1] = len;
 	memcpy(&d->data[0], param, len);
 
-int fn_seq = 1;
 CSTUB_ASM_3(tsplit, spdid, cb, sz)
 
 	cbuf_free(d);
@@ -61,7 +60,6 @@ CSTUB_FN_ARGS_5(int, tmerge, spdid_t, spdid, td_t, td, td_t, td_into, char *, pa
         d->len[1] = len;
 	memcpy(&d->data[0], param, len);
 
-int fn_seq = 2;
 CSTUB_ASM_3(tmerge, spdid, cb, sz)
 
 	cbuf_free(d);

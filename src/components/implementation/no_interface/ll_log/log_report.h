@@ -7,19 +7,18 @@
 #include <log_process.h>
 
 extern struct logmon_info logmon_info[MAX_NUM_SPDS];
-extern struct logmon_cs lmcs;
 extern struct thd_trace thd_trace[MAX_NUM_THREADS];
 
 // print info for an event
 static void 
-print_evtinfo(struct event_info *entry)
+print_evtinfo(struct evt_entry *entry)
 {
 	assert(entry);
 
-	printc("thd id %d ", entry->thd_id);
-	printc("from spd %d ", entry->from_spd);
+	printc("thd id %d ", entry->from_thd);
+	printc("from spd %lu ", entry->from_spd);
 
-	int dest = entry->dest_info;
+	int dest = entry->to_spd;
 	if (dest > MAX_NUM_SPDS) {
 		if ((dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest)) <= 0) assert(0);
 	}
@@ -36,17 +35,17 @@ print_evtinfo(struct event_info *entry)
 	return;
 }
 
-// print context switch info
-static void 
-print_csinfo(struct cs_info *csentry)
-{
-	assert(csentry);
-	printc("curr thd id %d\n", csentry->curr_thd);
-	printc("next thd id %d\n", csentry->next_thd);
-	printc("time_stamp %llu\n", csentry->time_stamp);
+/* // print context switch info */
+/* static void  */
+/* print_csinfo(struct cs_info *csentry) */
+/* { */
+/* 	assert(csentry); */
+/* 	printc("curr thd id %d\n", csentry->curr_thd); */
+/* 	printc("next thd id %d\n", csentry->next_thd); */
+/* 	printc("time_stamp %llu\n", csentry->time_stamp); */
 	
-	return;
-}
+/* 	return; */
+/* } */
 
 static void
 print_first_entry()
@@ -89,29 +88,29 @@ print_first_entry()
 /* 	return; */
 /* } */
 
-static void 
-print_csrb(CK_RING_INSTANCE(logcs_ring) *csring)
-{
-	struct cs_info cs_entry;
-	assert(csring);
+/* static void  */
+/* print_csrb(CK_RING_INSTANCE(logcs_ring) *csring) */
+/* { */
+/* 	struct cs_info cs_entry; */
+/* 	assert(csring); */
 
-	memset(&cs_entry, 0, sizeof(struct cs_info));
-	while(CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry) == 1) {
-		print_csinfo(&cs_entry);
-	}
+/* 	memset(&cs_entry, 0, sizeof(struct cs_info)); */
+/* 	while(CK_RING_DEQUEUE_SPSC(logcs_ring, csring, &cs_entry) == 1) { */
+/* 		print_csinfo(&cs_entry); */
+/* 	} */
 	
-	return;
-}
+/* 	return; */
+/* } */
 
 static void
-print_evtrb(CK_RING_INSTANCE(logevts_ring) *evtring)
+print_evtrb(CK_RING_INSTANCE(logevt_ring) *evtring)
 {
-	struct event_info evt_entry;
+	struct evt_entry evt;
 	assert(evtring);
 
-	memset(&evt_entry, 0, sizeof(struct event_info));
-	while(CK_RING_DEQUEUE_SPSC(logevts_ring, evtring, &evt_entry) == 1) {
-		print_evtinfo(&evt_entry);
+	memset(&evt, 0, sizeof(struct evt_entry));
+	while(CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, &evt) == 1) {
+		print_evtinfo(&evt);
 	}
 	
 	return;
@@ -240,11 +239,12 @@ report_spd_exec(int thd_id, int spd_id)
 
 	evt_list = &thd_trace[thd_id];
 	assert(evt_list);
-	if (!evt_list->avg_exec[spd_id] || !evt_list->wcet[spd_id]) return 0;
+	/* if (!evt_list->avg_exec[spd_id] || !evt_list->wcet[spd_id]) return 0; */
 
-	printc("thd %d (in spd %d) avg exec --> %llu\n", thd_id, spd_id, evt_list->avg_exec[spd_id]);
+	/* printc("thd %d (in spd %d) avg exec --> %llu\n", thd_id, spd_id, evt_list->avg_exec[spd_id]); */
 
-	return evt_list->avg_exec[spd_id];
+	/* return evt_list->avg_exec[spd_id]; */
+	return 0;
 }
 
 static void 

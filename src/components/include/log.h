@@ -1,43 +1,46 @@
 /*
-   Jiguo:
-   The header file for the log monitor latent fault (state machine)
+   Jiguo 2014 -- The header file for the log monitor latent fault
 */
 
 #ifndef LOGGER_H
 #define LOGGER_H
 
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
-extern vaddr_t llog_cs_init(spdid_t spdid, vaddr_t addr);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 
 extern int monitor_upcall(spdid_t spdid);
 
-//#include "../implementation/sched/cos_sched_sync.h"
-
 #include <cos_list.h>
 #include <ck_ring_cos.h>
+
+#include <cos_types.h>
+PERCPU_EXTERN(cos_sched_notifications);
 
 #define MEAS_WITH_LOG
 //#define MEAS_WITHOUT_LOG
 
+// event type
+enum{
+	EVT_CINV = 0,
+	EVT_SINV,
+	EVT_SRET,
+	EVT_CRET,
+	EVT_CS,
+	EVT_TINT,   // timer interrupt
+	EVT_NINT    // network interrupt
+};
+
 /* event entry in the ring buffer (per event) */
-struct event_info {
-	int thd_id;
-	spdid_t from_spd;
-	int dest_info;  // can be cap_no for dest spd or return spd from the stack
+struct evt_entry {
+	int from_thd, to_thd;
+	unsigned long from_spd, to_spd; // can be cap_no
 	unsigned long long time_stamp;
+	int evt_type;
 
 	int func_num;   // hard code which function call FIXME:naming space
 	int dep_thd;   // hard code dependency, for scheduler_blk only
-};
 
-// context tracking
-struct cs_info {
-	int curr_thd;
-	int next_thd;
-	unsigned long long time_stamp;
-
-	int flags;
+	int index;  // used for heap
 };
 
 #ifndef CK_RING_CONTINUOUS
@@ -46,179 +49,222 @@ struct cs_info {
 
 #ifndef __RING_DEFINED
 #define __RING_DEFINED
-CK_RING(event_info, logevts_ring);
-CK_RING_INSTANCE(logevts_ring) *cli_ring;
-CK_RING(cs_info, logcs_ring);
-CK_RING_INSTANCE(logcs_ring) *cs_ring;
+CK_RING(evt_entry, logevt_ring);
+CK_RING_INSTANCE(logevt_ring) *evt_ring;
 #endif
+
+/* static inline int cos_log_lock_take(void) */
+/* { */
+/* 	union cos_synchronization_atom *l = &PERCPU_GET(cos_sched_notifications)->cos_locks; */
+/* 	u16_t curr_thd = cos_get_thd_id(), owner; */
+	
+/* 	/\* No recursively taking the lock *\/ */
+/* 	if(l->c.owner_thd == curr_thd) return 0; */
+/* 	do { */
+/* 		union cos_synchronization_atom p, n; /\* previous and new *\/ */
+
+/* 		do { */
+/* 			p.v            = l->v; */
+/* 			owner          = p.c.owner_thd; */
+/* 			n.c.queued_thd = 0; /\* will be set in the kernel... *\/ */
+/* 			if (unlikely(owner)) n.c.owner_thd = owner; */
+/* 			else                 n.c.owner_thd = curr_thd; */
+/* 		} while (unlikely(!cos_cas((unsigned long *)&l->v, p.v, n.v))); */
+
+/* 		if (unlikely(owner)) { */
+/* 			/\* If another thread holds the lock, notify */
+/* 			 * kernel to switch *\/ */
+/* /\* #ifdef LOG_MONITOR *\/ */
+/* /\* 			evt_enqueue(owner, cos_spd_id(), 0, 0, 1); *\/ */
+/* /\* #endif *\/ */
+
+/* 			if (cos___switch_thread(owner, COS_SCHED_SYNC_BLOCK) == -1) return -1; */
+/* 		} */
+/* 		/\* If we are now the owner, we're done.  If not, try */
+/* 		 * to take the lock again! *\/ */
+/* 	} while (unlikely(owner)); */
+
+/* 	return 0; */
+/* } */
+
+/* static inline int cos_log_lock_release(void) */
+/* { */
+/* 	union cos_synchronization_atom *l = &PERCPU_GET(cos_sched_notifications)->cos_locks; */
+/* 	union cos_synchronization_atom p; */
+/* 	u16_t queued_thd; */
+	
+/* 	assert(l->c.owner_thd == cos_get_thd_id()); */
+/* 	do { */
+/* 		p.v           = l->v; */
+/* 		queued_thd    = p.c.queued_thd; */
+/* 	} while (unlikely(!cos_cas((unsigned long *)&l->v, p.v, 0))); */
+/* 	/\* If a thread is contending the lock. *\/ */
+/* 	if (queued_thd) { */
+/* /\* #ifdef LOG_MONITOR *\/ */
+/* /\* 		evt_enqueue(queued_thd, cos_spd_id(), 0, 0, 1); *\/ */
+/* /\* #endif *\/ */
+/* 		return cos___switch_thread(queued_thd, COS_SCHED_SYNC_UNBLOCK); */
+/* 	} */
+	
+/* 	return 0; */
+/* } */
+
+// print info for an event.
+static void 
+print_evt_info(struct evt_entry *entry)
+{
+	assert(entry);
+
+	int dest;
+	if (entry->evt_type == EVT_CINV && entry->to_spd > MAX_NUM_SPDS) {
+		printc("par2 entry->to_spd %lu\n", entry->to_spd);
+		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->to_spd);
+		if (dest <= 0) assert(0);
+		entry->to_spd = dest;
+	}
+	else if (entry->evt_type == EVT_CRET && entry->from_spd > MAX_NUM_SPDS) {
+		printc("par2 entry->from_spd %lu\n", entry->from_spd);
+		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->from_spd);
+		if (dest <= 0) assert(0);
+		entry->from_spd = dest;
+	}
+
+	printc("thd (%d --> ", entry->from_thd);
+	printc("%d) ", entry->to_thd);
+
+	printc("spd (%lu --> ", entry->from_spd);
+	printc("%lu) ", entry->to_spd);
+
+	printc("func_num %d ", entry->func_num);
+	printc("dep_thd %d ", entry->dep_thd);
+
+	printc("type %d ", entry->evt_type);
+
+	printc("time_stamp %llu\n", entry->time_stamp);
+	
+	return;
+}
 
 // Events monitoring
 static inline int 
-ring_is_full()
+evt_ring_is_full()
 {
 	int capacity, size;
 
-	assert(cli_ring);
-	capacity = CK_RING_CAPACITY(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)cli_ring));
-	size = CK_RING_SIZE(logevts_ring, (CK_RING_INSTANCE(logevts_ring) *)((void *)cli_ring));
+	assert(evt_ring);
+	capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
+	size = CK_RING_SIZE(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 	if (capacity == size + 1) return 1;
 	else return 0;
 }
 
+// 0 for CINV, 1 for SINV, 2 for SRET, 3 for CRET
+// 4 for CS, 5 for timer INT and 6 for network INT
 static inline void 
-monevt_conf(struct event_info *monevt, int param, int func_num, int dep)
+evt_conf(struct evt_entry *evt, int par1, unsigned long par2, int par3, int par4, int type)
 {
 	unsigned long long ts;
+
 	rdtscll(ts);
-	monevt->time_stamp = ts;
+	evt->time_stamp = ts;
+	evt->from_thd = cos_get_thd_id();
+	evt->to_thd   = par1;
 
-	monevt->thd_id = cos_get_thd_id();
-	monevt->from_spd = cos_spd_id();
-	monevt->dest_info = param;
+	if (type == EVT_CINV || type == EVT_SRET) {
+		evt->from_spd = cos_spd_id();
+		evt->to_spd   = par2;
+	} else if (type == EVT_SINV || type == EVT_CRET) {
+		evt->from_spd = par2;
+		evt->to_spd   = cos_spd_id();
+	} else if (type == EVT_TINT || type == EVT_NINT || type == EVT_CS) {
+		evt->from_spd = evt->to_spd = cos_spd_id();
+	} else assert(0);
 
-	monevt->func_num = func_num;
-	monevt->dep_thd = dep;
+	evt->func_num = par3;
+	evt->dep_thd  = par4;
 
+	evt->evt_type = type;
+
+	evt->index = 0;  //used for heap only
 	return;
 }
 
-// print info for an event
-static void 
-print_evt(struct event_info *entry)
-{
-	assert(entry);
+/*
+  This function is responsible for tracking the event occurrence,
+  including CINV, CRET, SINV, SRET, CS, INT. We need track the type of
+  event properly. Here are parameters for different events:
 
-	printc("thd id %d ", entry->thd_id);
-	printc("from spd %d ", entry->from_spd);
-
-	int dest = entry->dest_info;
-	if (dest > MAX_NUM_SPDS) {
-		if ((dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, dest)) <= 0) assert(0);
-	}
-	printc("dest spd %d ", dest);
-
-	printc("func num %d ", entry->func_num);
-	printc("dep thd %d ", entry->dep_thd);
-
-	// FIXME: to_spd info can be pushed into stack an pop when return
-	/* printc("next spd %d\n", entry->dest_info); */
-
-	printc("time_stamp %llu\n", entry->time_stamp);
-	
-	return;
-}
+  par1 -- thread id
+          (CINV, CRET, SINV and SRET: this is the current thread)
+          (CS: this is the next thread that is about to be dispatched)
+          (INT: this is the interrupt thread)
+  par2 -- component id 
+          (this is to_spd (for CINV and SRET))
+          (this is from_spd (for SINV and CRET))
+	  (INT : this is net_if)
+	  (CS : this is scheduler)	  
+  par3 -- function number 
+          (0 for none, 1 for sched_block, 2 for periodic_wait..... on server side). 
+	  This probably needs be hard coded now due to the lack of name space.
+	  See top section in ll_log.c
+  par4 -- extra parameter
+          e.g. dep_thd in sched_block, for PI detection. This can be other parameter as well
+  evt_type -- the type of event can affect how to check it
+          (0 for CINV, 1 for SINV, 2 for SRET, 3 for CRET)
+	  (4 for CS, 5 for Timer INT and 6 for Network INT)
+	  (contention can also be in sched/mm and switch occurs. can tell by spd_id**)
+*/
 
 static inline void 
-monevt_enqueue(int param, int func_num, int dep)
+evt_enqueue(int par1, unsigned long par2, int par3, int par4, int evt_type)
 {
-	struct event_info monevt;
+	struct evt_entry evt;
 
-	if (unlikely(!cli_ring)) {
+	if (unlikely(!evt_ring)) {
 		printc("evt enqueue (spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id());
+		/* a page now */
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
 		assert(cli_addr);
-		if (!(cli_ring = (CK_RING_INSTANCE(logevts_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
+		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
 	}
 
-	if (unlikely(ring_is_full())) {
-		/* printc("evt_ring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id()); */
+	if (unlikely(evt_ring_is_full())) {
+		printc("evt_ring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id());
 		/* llog_process(cos_spd_id()); */
 		monitor_upcall(cos_spd_id());
 	}
 
-	monevt_conf(&monevt, param, func_num, dep);
-
-	if (func_num == 22 || func_num == 212) {
-		printc("ADD EVT: ");
-		print_evt(&monevt);
-	}
-
-	/* if (dep) { */
-	/* 	printc("ADD EVT: "); */
-	/* 	print_evt(&monevt); */
-	/* } */
-
-        while (unlikely(!CK_RING_ENQUEUE_SPSC(logevts_ring, cli_ring, &monevt)));
-
-	return;
-}
-
-// Context switch monitoring
-
-// print info a cs
-static void 
-print_cs(struct cs_info *entry)
-{
-	assert(entry);
-
-	printc("CS: curr_thd id %d ", entry->curr_thd);
-	printc("next_thd id %d ", entry->next_thd);
-	printc("time_stamp %llu\n", entry->time_stamp);
 	
-	return;
-}
+	/* Two problems to be concerned: 
 
+	 * 1) Race condition. Multiple producers are trying to record
+	 * their events into a single consumer buffer. A lock is used
+	 * around ck_ring_enqueue to solve this. Should this lock be
+	 * the lock used in that component?  For example, lock/booter
+	 * spd uses sched_component_take/release, sched/mm uses
+	 * cos_sched_lock_take/release. Other component uses
+	 * lock_take. Critical section is short and need avoid
+	 * recursive locking.
 
-static inline int 
-csring_is_full()
-{
-	int capacity, size;
+	 * 2) Record consistency. For example, a thread can be
+	 * preempted right after evt_conf and before writes into the
+	 * shared RB. When the event is actually written, its time
+	 * stamp could be wrong. TODO:add a flag before and after and
+	 * check the log and record twice.
+	 * 
+	 * 3) When the log thread is activated due to the full buffer,
+	 * should not log any more since it is full at that point
+	 */
 
-	assert(cs_ring);
-	capacity = CK_RING_CAPACITY(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
-	size = CK_RING_SIZE(logcs_ring, (CK_RING_INSTANCE(logcs_ring) *)((void *)cs_ring));
-	
-	if (capacity == size + 1) return 1;
-	else return 0;
-}
-
-static inline void 
-moncs_conf(struct cs_info *moncs, int flags, int thd_id)
-{
-	unsigned long long ts;
-
-	moncs->curr_thd = cos_get_thd_id();
-	rdtscll(ts);
-	moncs->time_stamp = ts;
-	moncs->flags = flags;
-	moncs->next_thd = thd_id;
-
-	return;
-}
-
-static int ready_log  = 0;
-
-/* only called by scheduler  */
-static inline void 
-moncs_enqueue(unsigned short int thd_id, int flags)
-{
-	struct cs_info moncs;
-
-	/* assert(thd_id); */
-
-	if (cos_get_thd_id() == thd_id) return;
-
-	if (unlikely(!cs_ring)) {
-		printc("cs enqueue (spd %ld, thd %d) ", cos_spd_id(), cos_get_thd_id());
-		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
-		assert(cli_addr);
-		if (!(cs_ring = (CK_RING_INSTANCE(logcs_ring) *)(llog_cs_init(cos_spd_id(), cli_addr)))) BUG();
-	}
-
-	if (unlikely(csring_is_full())) {
-		/* printc("csring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id()); */
-		/* llog_process(cos_spd_id()); */
-		monitor_upcall(cos_spd_id());
-	}
-
-	moncs_conf(&moncs, flags, thd_id);
-
-	/* printc("ADD CS: "); */
-	/* print_cs(&moncs); */
-
-	while (unlikely(!CK_RING_ENQUEUE_SPSC(logcs_ring, cs_ring, &moncs)));
+	evt_conf(&evt, par1, par2, par3, par4, evt_type);
+	/* cos_log_lock_take(); */
+	print_evt_info(&evt);
+        while (unlikely(!CK_RING_ENQUEUE_SPSC(logevt_ring, evt_ring, &evt)));
+	/* cos_log_lock_release(); */
 
 	return;
+
 }
+
 
 #endif /* LOGGER_H */

@@ -31,7 +31,6 @@ CSTUB_FN_ARGS_6(td_t, tsplit, spdid_t, spdid, td_t, tid, char *, param, int, len
         d->len[1] = len;
 	memcpy(&d->data[0], param, len + 1);
 
-int fn_seq = 1;
 CSTUB_ASM_3(tsplit, spdid, cb, sz)
 
 	cbuf_free(d);
@@ -61,14 +60,12 @@ CSTUB_FN_ARGS_5(int, tmerge, spdid_t, spdid, td_t, td, td_t, td_into, char *, pa
         d->len[1] = len;
 	memcpy(&d->data[0], param, len);
 
-int fn_seq = 2;
 CSTUB_ASM_3(tmerge, spdid, cb, sz)
 
 	cbuf_free(d);
 CSTUB_POST
 
 	CSTUB_FN_ARGS_4(int, treadp, spdid_t, spdid, td_t, td, int *, off, int *, len)
-int fn_seq = 3;
 //	CSTUB_ASM_RET_PRE(*off, *len)
 	__asm__ __volatile__( \
 		"pushl %%ebp\n\t" \
@@ -119,7 +116,6 @@ CSTUB_FN_ARGS_6(int, trmeta, spdid_t, spdid, td_t, td, const char *, key, unsign
         d->retval_len = retval_len;
         memcpy(&d->data[0], key, klen + 1);
 
-int fn_seq = 4;
 CSTUB_ASM_3(trmeta, spdid, cb, sz)
 
         if (ret >= 0) {
@@ -155,7 +151,6 @@ CSTUB_FN_ARGS_6(int, twmeta, spdid_t, spdid, td_t, td, const char *, key, unsign
         memcpy(&d->data[0], key, klen + 1);
         memcpy(&d->data[klen + 1], val, vlen + 1);
 
-int fn_seq = 5;
 CSTUB_ASM_3(twmeta, spdid, cb, sz)
 
         cbuf_free(d);

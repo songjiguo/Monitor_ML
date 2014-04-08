@@ -36,7 +36,7 @@ if (first == 0) {
 	
 	first = 1;
 }
-int fn_seq = 1;
+
 CSTUB_ASM_1(lmon_test2, spdid)
 
 CSTUB_POST

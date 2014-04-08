@@ -2,6 +2,9 @@
 #include <print.h>
 #include <cbuf.h>
 
+#ifdef LOG_MONITOR
+cos_lock_t log_lock;
+#endif
 
 #define AVG_INVC_CYCS 1000   /* for each invocation cost, for this machnes is 934 */
 volatile unsigned long kkk = 0;

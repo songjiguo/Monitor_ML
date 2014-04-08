@@ -54,6 +54,10 @@
 #include <torlib.h>
 #include <cbuf.h>
 
+#ifdef LOG_MONITOR
+#include <log.h>
+#endif
+
 #include <periodic_wake.h>   // for debug only
 static volatile unsigned long interrupt_wait_cnt = 0;
 static volatile unsigned long interrupt_process_cnt = 0;
@@ -503,6 +507,11 @@ static int interrupt_wait(void)
 
 	assert(wildcard_brand_id > 0);
 	if (-1 == (ret = cos_brand_wait(wildcard_brand_id))) BUG();
+
+/* Network interrupt logging here*/
+#ifdef LOG_MONITOR
+	evt_enqueue(cos_get_thd_id(), cos_spd_id(), 0, 0, EVT_NINT);
+#endif
 	rdtscll(start);
 	if (ret > 0) {
 		cos_immediate_process_cnt = ret;

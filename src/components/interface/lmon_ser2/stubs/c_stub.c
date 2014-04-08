@@ -10,7 +10,6 @@
 
 CSTUB_FN_0(int, lmon_ser2_test)
 
-int fn_seq = 1;
 CSTUB_ASM_0(lmon_ser2_test)
 
 CSTUB_POST

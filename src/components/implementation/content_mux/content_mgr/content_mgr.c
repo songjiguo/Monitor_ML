@@ -36,7 +36,6 @@ extern int alt_static_request(spdid_t spdid, content_req_t cr, struct cos_array 
 extern int alt_static_retrieve(spdid_t spdid, content_req_t cr, struct cos_array *data, int *more);
 extern int alt_static_close(spdid_t spdid, content_req_t cr);
 
-
 struct provider_fns {
 	content_open_fn_t     open;
 	content_request_fn_t  request;

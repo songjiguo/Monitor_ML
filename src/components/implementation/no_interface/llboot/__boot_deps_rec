@@ -208,7 +208,7 @@ llboot_thd_done(void)
 			
 			assert(tid == llboot->monitor_thd);
 			
-			printc("mspd is %d\n", mspd);
+			/* printc("mspd is %d\n", mspd); */
 			if (mspd) {
 				assert(pmthd);
 				llboot->monitor_spd = 0;
@@ -261,9 +261,9 @@ monitor_upcall(spdid_t spdid)
 {
 	struct llbooter_per_core *llboot = PERCPU_GET(llbooter);
 	llboot->prev_mthd     = cos_get_thd_id();
-	llboot->monitor_spd   = 2;
+	llboot->monitor_spd   = LLBOOT_LOG;
 
-	printc("monitor upcall in llbooter....\n");	
+	printc("monitor upcall in llbooter....and monitor spd %d\n", LLBOOT_LOG);	
 	while (llboot->prev_mthd == cos_get_thd_id()) cos_switch_thread(llboot->monitor_thd, 0);
 
 	return 0;

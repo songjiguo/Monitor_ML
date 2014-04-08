@@ -36,6 +36,7 @@
 #include <errno.h>
 
 #ifdef LOG_MONITOR
+#include <ll_log.h>
 #define SCHED_LL_LOG
 #endif
 
@@ -510,11 +511,10 @@ static void sched_timer_tick(void)
 	/* unsigned long long old, new; */
 	/* old = 0; */
 	while (1) {
-
+/* Timer interrupt logging here*/
 #ifdef LOG_MONITOR
-		moncs_enqueue(0, 0);
+	evt_enqueue(cos_get_thd_id(), cos_spd_id(), 0, 0, EVT_TINT);
 #endif
-
 		cos_sched_lock_take();
 		report_event(TIMER_TICK);
 		if (unlikely((PERCPU_GET(sched_base_state)->ticks % (REPORT_FREQ*TIMER_FREQ)) == ((REPORT_FREQ*TIMER_FREQ)-1))) {
@@ -570,6 +570,7 @@ typedef void (*crt_thd_fn_t)(void *data);
 static void fp_timer(void *d)
 {
 	printc("Core %ld: Starting timer thread (thread id %d)\n", cos_cpuid(), cos_get_thd_id());
+
 	struct sched_base_per_core *sched_state = PERCPU_GET(sched_base_state);
 	sched_state->ticks = 0;
 	sched_state->wakeup_time = 0;
@@ -1185,6 +1186,10 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 	if (parm) thread_param_set(new,  (struct sched_param_s *)metric_str);
 	else      thread_params_set(new, (char *)metric_str);
 	
+#ifdef LOG_MONITOR
+	llog_init_prio(cos_spd_id(), new->id, sched_get_metric(new)->priority);
+#endif
+
 	return new;
 }
 

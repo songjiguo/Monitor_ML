@@ -4,29 +4,29 @@
 
 #include <log.h>
 
-vaddr_t __sg_timed_event_block(spdid_t spdinv, unsigned int amnt)
+vaddr_t __sg_timed_event_block(spdid_t spdid, unsigned int amnt)
 {
 	vaddr_t ret;
 #ifdef LOG_MONITOR
-	monevt_enqueue(cos_spd_id(), 11, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SINV);
 #endif
-	ret = timed_event_block(spdinv, amnt);
+	ret = timed_event_block(spdid, amnt);
 #ifdef LOG_MONITOR
-	monevt_enqueue(0, 11, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SRET);
 #endif
 
 	return ret;
 }
 
-vaddr_t __sg_timed_event_wakeup(spdid_t spdinv, unsigned short int thd_id)
+vaddr_t __sg_timed_event_wakeup(spdid_t spdid, unsigned short int thd_id)
 {
 	vaddr_t ret;
 #ifdef LOG_MONITOR
-	monevt_enqueue(cos_spd_id(), 12, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SINV);
 #endif
-	ret = timed_event_wakeup(spdinv, thd_id);
+	ret = timed_event_wakeup(spdid, thd_id);
 #ifdef LOG_MONITOR
-	monevt_enqueue(0, 12, 0);
+	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SRET);
 #endif
 
 	return ret;

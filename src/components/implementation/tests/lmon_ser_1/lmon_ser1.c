@@ -11,14 +11,20 @@ static int low = 14;
 static int mid = 13;
 static int hig = 12;
 
-#define TEST_PI
-//#define NORMAL
+//#define TEST_PI
+#define NORMAL
+
+#include <cos_synchronization.h>
+cos_lock_t t_lock;
+#define LOCK_TAKE()    lock_take(&t_lock)
+#define LOCK_RELEASE() lock_release(&t_lock)
+#define LOCK_INIT()    lock_static_init(&t_lock);
 
 #ifdef NORMAL
 // this is the original test function that supports serv1 and serv2
 vaddr_t lmon_ser1_test(void)
 {
-	printc("thd %d\n", cos_get_thd_id());
+	/* printc("thd %d\n", cos_get_thd_id()); */
 	lmon_ser2_test();
 	return 0;
 }
@@ -27,13 +33,6 @@ vaddr_t lmon_ser1_test(void)
 #ifdef TEST_PI
 
 // Use the following to test PI
-// hard code the info in scheduler (sched_switch_thread_target function)
-
-#include <cos_synchronization.h>
-cos_lock_t t_lock;
-#define LOCK_TAKE()    lock_take(&t_lock)
-#define LOCK_RELEASE() lock_release(&t_lock)
-#define LOCK_INIT()    lock_static_init(&t_lock);
 
 volatile int spin = 1;
 unsigned long long start, end, sum;

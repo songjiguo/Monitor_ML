@@ -4170,10 +4170,10 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 	/* TODO: access control */
 
 	if (option == COS_CAP_GET_SER_SPD) {   //Jiguo: for monitor
+		/* printk("cos: capid %d, called from spd %d\n", arg2 >> 20, arg1 >> 16); */
 		capid = arg2 >> 20;
-		sspdid = 0xFF & arg2;
-		printk("cos: capid %d caller spd %d\n", capid, sspdid);
-		sspd = spd_get_by_index(sspdid);
+		/* printk("cos: caller spdid %d and capid %d\n", spdid, capid); */
+		sspd = spd_get_by_index(spdid);
 		if (!sspd) return -1;
 	} else {
 		cspdid = arg1 >> 16;
@@ -4195,9 +4195,9 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 		
 		ret = spd_read_reset_invocation_cnt(cspd, sspd);
 		break;
-	case COS_CAP_GET_SER_SPD:   // Jiguo: use this to decide what the dest spd is for
+	case COS_CAP_GET_SER_SPD:   // Jiguo: use cap to find dest spd
 		ret = spd_cap_get_dest(sspd, capid);
-		printk("cos: dest spd %d\n", ret);
+		/* printk("cos: dest spd %d\n", ret); */
 		break;
 	case COS_CAP_SET_FAULT:
 		if (spd_cap_set_fault_handler(cspd, capid, arg2)) ret = -1;

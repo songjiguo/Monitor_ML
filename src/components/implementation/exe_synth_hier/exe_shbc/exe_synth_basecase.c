@@ -3,7 +3,6 @@
 #include <print.h>
 //#include <cbuf.h>
 
-
 #define AVG_INVC_CYCS 1000   /* for each invocation cost, for this machnes is 934 */
 volatile unsigned long kkk = 0;
 
