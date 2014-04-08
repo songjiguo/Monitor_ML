@@ -21,7 +21,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 
 // event type
 enum{
-	EVT_CINV = 0,
+	EVT_CINV = 1,
 	EVT_SINV,
 	EVT_SRET,
 	EVT_CRET,
@@ -117,13 +117,13 @@ print_evt_info(struct evt_entry *entry)
 
 	int dest;
 	if (entry->evt_type == EVT_CINV && entry->to_spd > MAX_NUM_SPDS) {
-		printc("par2 entry->to_spd %lu\n", entry->to_spd);
+		/* printc("par2 entry->to_spd %lu\n", entry->to_spd); */
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->to_spd);
 		if (dest <= 0) assert(0);
 		entry->to_spd = dest;
 	}
 	else if (entry->evt_type == EVT_CRET && entry->from_spd > MAX_NUM_SPDS) {
-		printc("par2 entry->from_spd %lu\n", entry->from_spd);
+		/* printc("par2 entry->from_spd %lu\n", entry->from_spd); */
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->from_spd);
 		if (dest <= 0) assert(0);
 		entry->from_spd = dest;
