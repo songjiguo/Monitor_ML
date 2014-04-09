@@ -11,8 +11,8 @@ static int low = 14;
 static int mid = 13;
 static int hig = 12;
 
-//#define TEST_PI
-#define NORMAL
+#define TEST_PI
+//#define NORMAL
 
 #include <cos_synchronization.h>
 cos_lock_t t_lock;

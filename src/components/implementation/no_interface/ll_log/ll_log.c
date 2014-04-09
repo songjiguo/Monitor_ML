@@ -11,12 +11,6 @@
 static unsigned int lm_sync_period;
 static struct evt_entry last_evt_entry;  // to continue from last time on evt_ring in some spd
 
-/* struct evt_heap { */
-/* 	struct heap h; */
-/* 	void *ptr[MAX_NUM_SPDS]; */
-/* 	char a; */
-/* }; */
-
 /* struct evt_heap evt_h; */
 /* struct heap *hp; */
 

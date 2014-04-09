@@ -19,6 +19,12 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define MEAS_WITH_LOG
 //#define MEAS_WITHOUT_LOG
 
+// hard code interface function number
+enum{
+	FN_SCHED_BLOCK = 1,
+	FN_SCHED_WAKEUP
+};
+
 // event type
 enum{
 	EVT_CINV = 1,
@@ -38,7 +44,7 @@ struct evt_entry {
 	int evt_type;
 
 	int func_num;   // hard code which function call FIXME:naming space
-	int dep_thd;   // hard code dependency, for scheduler_blk only
+	int para;   // record passed parameter (e.g. dep_thd)
 
 	int index;  // used for heap
 };
@@ -136,7 +142,7 @@ print_evt_info(struct evt_entry *entry)
 	printc("%lu) ", entry->to_spd);
 
 	printc("func_num %d ", entry->func_num);
-	printc("dep_thd %d ", entry->dep_thd);
+	printc("para %d ", entry->para);
 
 	printc("type %d ", entry->evt_type);
 
@@ -181,7 +187,7 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, int par3, int par4
 	} else assert(0);
 
 	evt->func_num = par3;
-	evt->dep_thd  = par4;
+	evt->para     = par4;
 
 	evt->evt_type = type;
 
@@ -210,9 +216,9 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, int par3, int par4
   par4 -- extra parameter
           e.g. dep_thd in sched_block, for PI detection. This can be other parameter as well
   evt_type -- the type of event can affect how to check it
-          (0 for CINV, 1 for SINV, 2 for SRET, 3 for CRET)
-	  (4 for CS, 5 for Timer INT and 6 for Network INT)
-	  (contention can also be in sched/mm and switch occurs. can tell by spd_id**)
+          (1 for CINV, 2 for SINV, 3 for SRET, 4 for CRET)
+	  (5 for CS, 6 for Timer INT and 7 for Network INT)
+	  (contention can also be in sched/mm and switch occurs??)
 */
 
 static inline void 

@@ -11,12 +11,22 @@
 
 CSTUB_FN_ARGS_2(int, sched_block, spdid_t, spdid, unsigned short int, thd_id)
 
+#ifdef LOG_MONITOR
+func_num = FN_SCHED_BLOCK;
+para     = thd_id;
+#endif
+
 /* printc("cli: sched_block (thd %d)\n", cos_get_thd_id()); */
 CSTUB_ASM_2(sched_block, spdid, thd_id)
 
 CSTUB_POST
 
 CSTUB_FN_ARGS_2(int, sched_wakeup, spdid_t, spdid, unsigned short int, dep_thd)
+
+#ifdef LOG_MONITOR
+func_num = FN_SCHED_WAKEUP;
+para     = dep_thd;
+#endif
 
 CSTUB_ASM_2(sched_wakeup, spdid, dep_thd)
 

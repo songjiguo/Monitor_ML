@@ -9,11 +9,11 @@ int __sg_sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	/* printc("ser: sched_block (thd %d)\n", cos_get_thd_id()); */
 	int ret;
 #ifdef LOG_MONITOR
-	evt_enqueue(cos_get_thd_id(), spdid, 0, dependency_thd, EVT_SINV);
+	evt_enqueue(cos_get_thd_id(), spdid, FN_SCHED_BLOCK, dependency_thd, EVT_SINV);
 #endif
 	ret = sched_block(spdid, dependency_thd);
 #ifdef LOG_MONITOR
-	evt_enqueue(cos_get_thd_id(), spdid, 0, dependency_thd, EVT_SRET);
+	evt_enqueue(cos_get_thd_id(), spdid, FN_SCHED_BLOCK, dependency_thd, EVT_SRET);
 #endif
 	return ret;
 }
@@ -23,11 +23,11 @@ int __sg_sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 	/* printc("ser: sched_wakeup (thd %d)\n", cos_get_thd_id()); */
 	int ret;
 #ifdef LOG_MONITOR
-	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SINV);
+	evt_enqueue(cos_get_thd_id(), spdid, FN_SCHED_WAKEUP, thd_id, EVT_SINV);
 #endif
 	ret = sched_wakeup(spdid, thd_id);
 #ifdef LOG_MONITOR
-	evt_enqueue(cos_get_thd_id(), spdid, 0, 0, EVT_SRET);
+	evt_enqueue(cos_get_thd_id(), spdid, FN_SCHED_WAKEUP, thd_id, EVT_SRET);
 #endif
 
 	return ret;
