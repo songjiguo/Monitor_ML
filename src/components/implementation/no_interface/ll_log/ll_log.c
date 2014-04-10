@@ -8,11 +8,6 @@
 #include <log_process.h>   // check all constraints
 
 #define LM_SYNC_PERIOD 50
-static unsigned int lm_sync_period;
-static struct evt_entry last_evt_entry;  // to continue from last time on evt_ring in some spd
-
-/* struct evt_heap evt_h; */
-/* struct heap *hp; */
 
 // set up shared ring buffer between spd and log manager, a page for now
 static int 
@@ -41,125 +36,70 @@ shared_ring_setup(spdid_t spdid, vaddr_t cli_addr) {
 	spdmon->cli_ring = cli_ring;
 	CK_RING_INIT(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)addr), NULL,
 		     get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_logevt_ring))/sizeof(struct evt_entry)));
-
+	
         return 0;
 err:
         return -1;
 }
 
-static struct logmon_info *
-find_earliest_entry_spd()
-{
-	int i;
-        struct logmon_info *ret = NULL, *spdmon;
-	unsigned long long ts = LLONG_MAX;
-	CK_RING_INSTANCE(logevt_ring) *evtring;
-	
-	struct evt_entry *entry;
-	for (i = 1; i < MAX_NUM_SPDS; i++) {
-		spdmon = &logmon_info[i];
-		assert(spdmon);
-		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
-		if (!evtring) continue;
-
-		entry = &spdmon->first_entry;
-		if (!entry->from_spd &&
-		    (!CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, entry))) {
-			continue;
-		}
-
-		/* heap_add(hp, entry); */
-		/* heap_adjust(hp, entry->index); */
-		if (entry->time_stamp < ts) {
-			ts = entry->time_stamp;
-			ret = spdmon;
-		}
-	}
-	
-	/* ret = heap_highest(hp); */
-	return ret;
-}
-
-static struct evt_entry *
-find_next_entry(struct evt_entry *evt)
-{
-	struct evt_entry *ret = NULL;
-        struct logmon_info *spdmon;
-	CK_RING_INSTANCE(logevt_ring) *evtring;
-
-	assert(evt->from_spd);
-	memset(evt, 0, sizeof(struct evt_entry));
-
-	spdmon = find_earliest_entry_spd();
-	if (!spdmon) return NULL;
-
-	ret = &spdmon->first_entry;
-	assert(ret && ret->from_spd);
-	printc("<<< find next ..... >>>\n");
-	print_evt_info(ret);
-	
-	return ret;
-}
-
 static int
-constraint_check(struct evt_entry *entry)
-{
-	assert(entry);
-
-	check_timing(entry);
-
-	return 1;
-}
-
-static void
-walk_through_events()
-{
-        struct logmon_info *spdmon = NULL;
-
-	struct evt_entry *entry_curr = NULL, *entry_next = NULL;
-	struct evt_entry *last_entry = NULL;
-	struct thd_trace *thd_trace_list;
-
-	spdmon = find_earliest_entry_spd();
-	if (!spdmon) return;  // no event happens since last process
-
-	struct evt_entry *evt = &spdmon->first_entry;
-	assert(evt && evt->from_spd);
-	
-	/* printc("<< The earliest event >>\n"); */
-	/* print_evt_info(evt); */
-	
-	do {
-		constraint_check(evt);
-	} while ((evt = find_next_entry(evt)));
-
-	return;
-}
-
-static int
-llog_process(spdid_t spdid)
+llog_process()
 {
         struct logmon_info *spdmon;
         vaddr_t mon_ring, cli_ring;
-	int i;
+	struct evt_entry *evt;
 
-	printc("llog_process is called by thd %d (passed spd %d)\n", cos_get_thd_id(), spdid);
+	printc("llog_process is called by thd %d\n", cos_get_thd_id());
 
-	/* LOCK(); */
-
-	walk_through_events();
-	/* llog_report(); */
-
-	/* UNLOCK(); */
+	evt = find_next_evt(NULL);
+	if (!evt) return 0;
+	do {
+		/* constraint_check(evt); */
+	} while ((evt = find_next_evt(evt)));
 
 	return 0;
 }
 
-/* 
-   External function for initialization of thread priority. This
-   should only be called when a thread is created and the priority is
-   used to detect the priority inversion, scheduling decision,
-   deadlock, etc.   
+static inline void
+log_mgr_init(void)
+{
+	int i;
+	if (cos_get_thd_id() == MONITOR_THD) {
+		llog_process();
+		return;
+	}
+
+	/* do this once */
+	printc("ll_log (spd %ld) init as thread %d\n", cos_spd_id(), cos_get_thd_id());
+	// Initialize log manager here...
+	memset(logmon_info, 0, sizeof(struct logmon_info) * MAX_NUM_SPDS);
+	for (i = 0; i < MAX_NUM_SPDS; i++) {
+		logmon_info[i].spdid = i;
+		logmon_info[i].mon_ring = 0;
+		logmon_info[i].cli_ring = 0;
+		/* logmon_info[i].first_entry = (struct evt_entry *)malloc(sizeof(struct evt_entry)); */
+		memset(&logmon_info[i].first_entry, 0, sizeof(struct evt_entry));
+		// initialize the heap entry
+		es[i].ts = 0; 
+		es[i].spdid = i;
+	}
+		
+	init_thread_trace();
+
+        // get a page for heap (assume a page for now)
+	h = log_heap_alloc(MAX_NUM_SPDS, evtcmp, evtupdate);
+	assert(h);
+
+	return;
+}
+
+/***********************/
+/*  External functions  */
+/***********************/
+
+/* Initialize thread priority. This should only be called when a
+   thread is created and the priority is used to detect the priority
+   inversion, scheduling decision, deadlock, etc.
  */
 int llog_init_prio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
 {
@@ -184,14 +124,15 @@ int llog_init_prio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
 	return 0;
 }
 
-/* external function for initialization of shared RB */
+/* Initialize shared RB. Called from each spd when the first event
+ * happens in that spd */
 vaddr_t
 llog_init(spdid_t spdid, vaddr_t addr)
 {
 	vaddr_t ret = 0;
         struct logmon_info *spdmon;
 
-	printc("llog_init thd %d (passed spd %d)\n", cos_get_thd_id(), spdid);
+	printc("llog_init thd %d (passed spd %d for RB)\n", cos_get_thd_id(), spdid);
 	/* LOCK(); */
 
 	assert(spdid);
@@ -216,48 +157,13 @@ done:
 	return ret;
 }
 
+/* Return the periodicity for asynchronously monitor processing  */
 unsigned int
 llog_get_syncp(spdid_t spdid)
 {
 	assert(spdid);
 	return LM_SYNC_PERIOD;
 }
-
-static inline void
-log_mgr_init(void)
-{
-	int i;
-	if (cos_get_thd_id() == MONITOR_THD) {
-		llog_process(0);
-		return;
-	}
-
-        /* do this once */
-	printc("ll_log (spd %ld) init as thread %d\n", cos_spd_id(), cos_get_thd_id());
-	// Initialize log manager here...
-	memset(logmon_info, 0, sizeof(struct logmon_info) * MAX_NUM_SPDS);
-	for (i = 0; i < MAX_NUM_SPDS; i++) {
-		logmon_info[i].spdid = i;
-		logmon_info[i].mon_ring = 0;
-		logmon_info[i].cli_ring = 0;
-		/* logmon_info[i].first_entry = (struct evt_entry *)malloc(sizeof(struct evt_entry)); */
-		memset(&logmon_info[i].first_entry, 0, sizeof(struct evt_entry));
-	}
-		
-	memset(&last_evt_entry, 0, sizeof(struct evt_entry));
-		
-	init_thread_trace();
-
-	/* hp = (struct heap *)&evt_h; */
-	/* hp->max_sz = MAX_NUM_SPDS+1; */
-	/* hp->e = 1; */
-	/* hp->c = evt_cmp; */
-	/* hp->u = evt_update; */
-	/* hp->data = (void *)&hp[1]; */
-		
-	return;
-}
-
 
 void 
 cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)

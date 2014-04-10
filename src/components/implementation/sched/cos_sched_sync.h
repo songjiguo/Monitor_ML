@@ -91,9 +91,7 @@ static inline int cos_sched_lock_take(void)
 			 * kernel to switch */
 #ifdef LOG_MONITOR
 #if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)
-			/* printc("cos_sched_lock_take...evt_enqueue (thd %d)\n", cos_get_thd_id()); */
 			evt_enqueue(owner, cos_spd_id(), 0, 0, EVT_CS);
-
 #endif
 #endif
 			if (cos___switch_thread(owner, COS_SCHED_SYNC_BLOCK) == -1) return -1;
@@ -118,9 +116,9 @@ static inline int cos_sched_lock_release(void)
 	} while (unlikely(!cos_cas((unsigned long *)&l->v, p.v, 0)));
 	/* If a thread is contending the lock. */
 	if (queued_thd) {
+
 #ifdef LOG_MONITOR
 #if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)
-		/* printc("cos_sched_lock_release...evt_enqueue (thd %d)\n", cos_get_thd_id()); */
 		evt_enqueue(queued_thd, cos_spd_id(), 0, 0, EVT_CS);
 #endif
 #endif

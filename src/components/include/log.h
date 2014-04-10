@@ -12,6 +12,8 @@ extern int monitor_upcall(spdid_t spdid);
 
 #include <cos_list.h>
 #include <ck_ring_cos.h>
+#include <cos_synchronization.h>
+/* #include "../implementation/sched/cos_sched_sync.h" */
 
 #include <cos_types.h>
 PERCPU_EXTERN(cos_sched_notifications);
@@ -58,78 +60,22 @@ struct evt_entry {
 CK_RING(evt_entry, logevt_ring);
 CK_RING_INSTANCE(logevt_ring) *evt_ring;
 #endif
-
-/* static inline int cos_log_lock_take(void) */
-/* { */
-/* 	union cos_synchronization_atom *l = &PERCPU_GET(cos_sched_notifications)->cos_locks; */
-/* 	u16_t curr_thd = cos_get_thd_id(), owner; */
-	
-/* 	/\* No recursively taking the lock *\/ */
-/* 	if(l->c.owner_thd == curr_thd) return 0; */
-/* 	do { */
-/* 		union cos_synchronization_atom p, n; /\* previous and new *\/ */
-
-/* 		do { */
-/* 			p.v            = l->v; */
-/* 			owner          = p.c.owner_thd; */
-/* 			n.c.queued_thd = 0; /\* will be set in the kernel... *\/ */
-/* 			if (unlikely(owner)) n.c.owner_thd = owner; */
-/* 			else                 n.c.owner_thd = curr_thd; */
-/* 		} while (unlikely(!cos_cas((unsigned long *)&l->v, p.v, n.v))); */
-
-/* 		if (unlikely(owner)) { */
-/* 			/\* If another thread holds the lock, notify */
-/* 			 * kernel to switch *\/ */
-/* /\* #ifdef LOG_MONITOR *\/ */
-/* /\* 			evt_enqueue(owner, cos_spd_id(), 0, 0, 1); *\/ */
-/* /\* #endif *\/ */
-
-/* 			if (cos___switch_thread(owner, COS_SCHED_SYNC_BLOCK) == -1) return -1; */
-/* 		} */
-/* 		/\* If we are now the owner, we're done.  If not, try */
-/* 		 * to take the lock again! *\/ */
-/* 	} while (unlikely(owner)); */
-
-/* 	return 0; */
-/* } */
-
-/* static inline int cos_log_lock_release(void) */
-/* { */
-/* 	union cos_synchronization_atom *l = &PERCPU_GET(cos_sched_notifications)->cos_locks; */
-/* 	union cos_synchronization_atom p; */
-/* 	u16_t queued_thd; */
-	
-/* 	assert(l->c.owner_thd == cos_get_thd_id()); */
-/* 	do { */
-/* 		p.v           = l->v; */
-/* 		queued_thd    = p.c.queued_thd; */
-/* 	} while (unlikely(!cos_cas((unsigned long *)&l->v, p.v, 0))); */
-/* 	/\* If a thread is contending the lock. *\/ */
-/* 	if (queued_thd) { */
-/* /\* #ifdef LOG_MONITOR *\/ */
-/* /\* 		evt_enqueue(queued_thd, cos_spd_id(), 0, 0, 1); *\/ */
-/* /\* #endif *\/ */
-/* 		return cos___switch_thread(queued_thd, COS_SCHED_SYNC_UNBLOCK); */
-/* 	} */
-	
-/* 	return 0; */
-/* } */
-
+			      
 // print info for an event.
-static void 
+static void
 print_evt_info(struct evt_entry *entry)
 {
 	assert(entry);
 
 	int dest;
 	if (entry->evt_type == EVT_CINV && entry->to_spd > MAX_NUM_SPDS) {
-		/* printc("par2 entry->to_spd %lu\n", entry->to_spd); */
+		printc("par2 entry->to_spd %lu\n", entry->to_spd);
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->to_spd);
 		if (dest <= 0) assert(0);
 		entry->to_spd = dest;
 	}
 	else if (entry->evt_type == EVT_CRET && entry->from_spd > MAX_NUM_SPDS) {
-		/* printc("par2 entry->from_spd %lu\n", entry->from_spd); */
+		printc("par2 entry->from_spd %lu\n", entry->from_spd);
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->from_spd);
 		if (dest <= 0) assert(0);
 		entry->from_spd = dest;
@@ -137,15 +83,11 @@ print_evt_info(struct evt_entry *entry)
 
 	printc("thd (%d --> ", entry->from_thd);
 	printc("%d) ", entry->to_thd);
-
 	printc("spd (%lu --> ", entry->from_spd);
 	printc("%lu) ", entry->to_spd);
-
 	printc("func_num %d ", entry->func_num);
 	printc("para %d ", entry->para);
-
 	printc("type %d ", entry->evt_type);
-
 	printc("time_stamp %llu\n", entry->time_stamp);
 	
 	return;
@@ -164,8 +106,6 @@ evt_ring_is_full()
 	else return 0;
 }
 
-// 0 for CINV, 1 for SINV, 2 for SRET, 3 for CRET
-// 4 for CS, 5 for timer INT and 6 for network INT
 static inline void 
 evt_conf(struct evt_entry *evt, int par1, unsigned long par2, int par3, int par4, int type)
 {
@@ -194,6 +134,38 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, int par3, int par4
 	evt->index = 0;  //used for heap only
 	return;
 }
+
+cos_lock_t logrb_lock;
+
+/* #define SPD_SCHED  3 */
+/* #define SPD_MM  4 */
+/* #define SPD_BOOTER 6 */
+/* #define SPD_LOCK 7 */
+/* extern int sched_component_take(spdid_t spdid); */
+/* extern int sched_component_release(spdid_t spdid); */
+
+/* static int  */
+/* log_lock_take() */
+/* { */
+/* 	int spdid = cos_spd_id(); */
+/* 	if (spdid == SPD_LOCK || spdid == SPD_BOOTER) { */
+/* 		return 0; //sched_component_take(spdid); */
+/* 	} else if (spdid == SPD_SCHED || spdid == SPD_MM) { */
+/* 		return 0;//cos_sched_lock_take(); */
+/* 	} else return lock_take(&logrb_lock); */
+/* } */
+
+/* static int  */
+/* log_lock_release() */
+/* { */
+/* 	int spdid = cos_spd_id(); */
+/* 	if (spdid == SPD_LOCK || spdid == SPD_BOOTER) { */
+/* 		return 0; //sched_component_release(spdid); */
+/* 	} else if (spdid == SPD_SCHED || spdid == SPD_MM) { */
+/* 		return 0;//cos_sched_lock_release(); */
+/* 	} else return lock_release(&logrb_lock); */
+/* } */
+
 
 /*
   This function is responsible for tracking the event occurrence,
@@ -226,12 +198,16 @@ evt_enqueue(int par1, unsigned long par2, int par3, int par4, int evt_type)
 {
 	struct evt_entry evt;
 
+	/* assert(cos_spd_id() > 2); */
+
 	if (unlikely(!evt_ring)) {
 		printc("evt enqueue (spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id());
 		/* a page now */
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
 		assert(cli_addr);
 		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
+		
+		/* lock_static_init(&logrb_lock); */
 	}
 
 	if (unlikely(evt_ring_is_full())) {
@@ -242,7 +218,6 @@ evt_enqueue(int par1, unsigned long par2, int par3, int par4, int evt_type)
 
 	
 	/* Two problems to be concerned: 
-
 	 * 1) Race condition. Multiple producers are trying to record
 	 * their events into a single consumer buffer. A lock is used
 	 * around ck_ring_enqueue to solve this. Should this lock be
@@ -258,16 +233,13 @@ evt_enqueue(int par1, unsigned long par2, int par3, int par4, int evt_type)
 	 * stamp could be wrong. TODO:add a flag before and after and
 	 * check the log and record twice.
 	 * 
-	 * 3) When the log thread is activated due to the full buffer,
-	 * should not log any more since it is full at that point
 	 */
 
 	evt_conf(&evt, par1, par2, par3, par4, evt_type);
-	/* cos_log_lock_take(); */
 	print_evt_info(&evt);
+	/* if (log_lock_take()) assert(0); */
         while (unlikely(!CK_RING_ENQUEUE_SPSC(logevt_ring, evt_ring, &evt)));
-	/* cos_log_lock_release(); */
-
+	/* if (log_lock_release()) assert(0); */
 	return;
 
 }

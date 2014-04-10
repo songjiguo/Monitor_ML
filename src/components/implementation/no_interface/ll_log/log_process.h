@@ -6,8 +6,24 @@
 #include <ll_log.h>
 #include <hard_code_thd_spd.h>   // TODO: use name space
 #include <heap.h>
-#include <pi.h>
+#include <log_util.h>
 
+/* Questions 
+   1. scheduler and MM contention
+   2. booter /lock contention
+   3. RB lock contention logging?
+
+   Answer: Use a separate log buffer (for omission in the case of
+           contention).  Every time a contention happens, we invokes
+           log_mgr to log the time. Add "time stamp and owner" Should fit
+           into B term in RTA.
+	   
+   4. execution time for interrupt thread (make sure already have
+   this) 5. handler/localization (needs work on this now) 6. max_heap
+   done (statically) 
+
+   6. use epoch in such a way that track from the highest thread down
+*/
 /* ring buffer for event flow (one RB per component) */
 struct logmon_info {
 	spdid_t spdid;
@@ -16,8 +32,6 @@ struct logmon_info {
 	
 	struct evt_entry first_entry;
 };
-
-struct thd_dep;
 
 // FIXME: might not need save all information in log_process
 /* per-thread event flow, updated within the log_monitor  */
@@ -93,159 +107,81 @@ init_thread_trace()
 	return;
 }
 
-/**************************/
-/*    Utility Functions   */
-/**************************/
+struct heap *h;  // the pointer to the max_heap
 
-/* struct evt_heap { */
-/* 	struct heap h; */
-/* 	void *ptr[MAX_NUM_SPDS]; */
-/* 	char a; */
-/* }; */
-
-/* /\* heap functions for next earliest event *\/ */
-/* static int evt_cmp(void *a, void *b) */
-/* { */
-/* 	struct evt_entry *e1 = a, *e2 = b; */
-/* 	return e1->time_stamp >= e2->time_stamp; */
-/* } */
-
-/* static void evt_update(void *a, int pos) */
-/* { */
-/* 	((struct evt_entry *)a)->index = pos; */
-/* } */
-
-/* allocate a page from the heap */
-static inline void *
-llog_get_page()
-{
-	char *addr = NULL;
-	
-	addr = cos_get_heap_ptr();
-	if (!addr) goto done;
-	cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
-	if ((vaddr_t)addr !=
-	    __mman_get_page(cos_spd_id(), (vaddr_t)addr, 0)) {
-		printc("fail to get a page in logger\n");
-		assert(0); // or return -1?
-	}
-done:
-	return addr;
-}
-
-static int
-cap_to_dest(unsigned long long cap_no)
-{
-	if (cap_no <= MAX_NUM_SPDS) return (int)cap_no;
-	return cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, cap_no);
-}
-
+/* Add the earliest event from each spd onto the heap */
 static void
-update_dest_spd(struct evt_entry *entry)
+populate_evts()
 {
-	int d;
-	assert(entry && entry->evt_type > 0);
+	int i;
+        struct logmon_info *ret = NULL, *spdmon;
+	unsigned long long ts = LLONG_MAX;
+	CK_RING_INSTANCE(logevt_ring) *evtring;
+	
+	struct evt_entry *entry;
+	for (i = 1; i < MAX_NUM_SPDS; i++) {
+		spdmon = &logmon_info[i];
+		assert(spdmon);
+		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
+		if (!evtring) continue;
 
-	if (entry->evt_type == EVT_CINV) {
-		if ((d = cap_to_dest(entry->to_spd) <= 0)) assert(0);
-		entry->to_spd = d;
+		entry = &spdmon->first_entry;
+		assert(entry);
+		if (!CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, entry)) {
+			continue;
+		}
+		// if there is no event in a spd now, there should be
+		// no event until the log manger finish the processing
+		es[i].ts = LLONG_MAX - entry->time_stamp;
+		assert(!heap_add(h, &es[i]));
 	}
-	else if (entry->evt_type == EVT_CRET) {
-		if ((d = cap_to_dest(entry->to_spd) <= 0)) assert(0);
-		entry->from_spd = d;
-	}
+	/* validate_heap_entries(h, MAX_NUM_SPDS); */
 
 	return;
 }
 
 
+static struct evt_entry *
+find_next_evt(struct evt_entry *evt)
+{
+	int spdid;
+	struct evt_entry *ret = NULL;
+        struct logmon_info *spdmon;
+	struct hevtentry *next;
+	CK_RING_INSTANCE(logevt_ring) *evtring;
+
+	if (!evt) {
+		populate_evts();
+	} else {	
+		if (!(spdid = evt_in_spd(evt))) {
+			assert(0);
+			// Check the constraints here too....TODO
+		}
+		/* print_evt_info(evt); */
+		spdmon = &logmon_info[spdid];
+		assert(spdmon);
+		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
+		assert(evtring);
+		if (CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, evt)) {
+			es[spdid].ts = LLONG_MAX - evt->time_stamp;
+			heap_add(h, &es[spdid]);
+		}
+	}
+
+	next = heap_highest(h);
+	if (!next || next->ts == 0) goto done;
+	printc("earliest next spdid %d -- ts %llu\n", next->spdid, LLONG_MAX - next->ts);
+	spdmon = &logmon_info[next->spdid];
+	assert(spdmon);
+	ret = &spdmon->first_entry;
+	assert(ret);
+done:
+	return ret;
+}
+
 /**************************/
 /*    Constraints Check   */
 /**************************/
-
-static int
-dependency_crt(struct thd_trace *ttl, struct thd_trace *tth)
-{
-	struct thd_dep *ret = NULL;
-
-	printc("add dependency\n");
-	assert(ttl && tth);
-	
-	INIT_LIST(tth, _s, s_);
-
-	// used for checking the correctness of scheduling decision
-	ttl->epoch++;
-	tth->epoch = ttl->epoch;
-	tth->p = ttl;
-	if(!ttl->c) ttl->c = tth;
-	else        ADD_LIST(ttl->c, tth, _s, s_);
-	
-	return 0;
-}
-
-static int
-dependency_del(struct thd_trace *ttl)
-{
-	struct thd_trace *d, *n;
-	assert(ttl);
-	printc("remove dependency\n");
-
-	d = ttl->c;
-	if (!d) return 0;
-	while(d) {
-		n = FIRST_LIST(d, _s, s_);
-		REM_LIST(d, _s, s_);
-		ttl->epoch--;
-		d = (n == d) ? NULL : n;
-	}
-	assert(!ttl->c);
-	
-	// Can this happen in PIP? 
-	// Should always root node exits its CS first? Multiple locks?
-	/* assert(!ttl->p); */
-
-	/* if (ttl->p && ttl->p->c == ttl) { */
-	/* 	if (EMPTY_LIST(ttl, _s, s_)) ttl->p->c = NULL; */
-	/* 	else      ttl->p->c = FIRST_LIST(ttl, _s, s_); */
-	/* 	ttl->p->epoch--; */
-	/* } */
-	/* /\* ttl->p = NULL; *\/ */
-	/* REM_LIST(ttl, _s, s_); */
-
-	return 0;
-}
-
-/* PI begin condition:
-   1) The dependency from high to low (sched_block(spdid, low))
-   2) A context switch from high thd to low thd
-*/
-static int
-pi_begin(struct evt_entry *pe, int p_prio, 
-	   struct evt_entry *ce, int c_prio)
-{
-	return (ce->evt_type == EVT_CS &&
-		ce->from_thd != ce->to_thd &&
-		p_prio < c_prio &&
-		pe->evt_type == EVT_SINV && 
-		pe->func_num == FN_SCHED_BLOCK &&
-		pe->para > 0);
-}
-
-/* PI end condition:
-   1) Low thd wakes up high thd (sched_wakeup(spdid, high)); 
-   2) A context switch from low to high
-*/
-static int
-pi_end(struct evt_entry *pe, int p_prio, 
-	   struct evt_entry *ce, int c_prio)
-{
-	return (ce->evt_type == EVT_CS &&
-		ce->from_thd != ce->to_thd &&
-		p_prio > c_prio &&
-		pe->evt_type == EVT_SINV && 
-		pe->func_num == FN_SCHED_WAKEUP &&
-		pe->para > 0);
-}
 
 static void
 check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
@@ -254,17 +190,14 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 	if (!ttn) return;
 
 	/* add into dependency tree */
-	printc("check PI start?\n");
 	if (pi_begin(&last_entry, ttc->prio, entry, ttn->prio)) {
-		if (dependency_crt(ttn, ttc)) assert(0);
+		/* if (dependency_crt(ttn, ttc)) assert(0); */
 	}
 
 	/* remove from dependency tree (keep any dependency tree when
 	   monitor is running)*/
-	printc("check PI end?\n");
 	if (pi_end(&last_entry, ttc->prio, entry, ttn->prio)) {
-		if (dependency_del(ttc)) assert(0);
-
+		/* if (dependency_del(ttc)) assert(0); */
 		// TODO:check incorrect scheduling decision
 		// The highest thread that blocks on ttc should run
 		// ...
@@ -421,16 +354,13 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 }
 
 static void 
-check_timing(struct evt_entry *entry)
+constraint_check(struct evt_entry *entry)
 {
 	struct thd_trace *ttc, *ttn = NULL;
 	unsigned long long up_t;
 	int from_thd, from_spd;
 
-	assert(entry);
-	// for CINV and CRET, convert cap_no to spdid here
-	/* update_dest_spd(entry); */
-	assert(entry->evt_type > 0);
+	assert(entry && entry->evt_type > 0);
 	
 	if (entry->evt_type == EVT_NINT || entry->evt_type == EVT_NINT) {
 		if (likely(last_entry.from_thd && last_entry.from_spd)) {
@@ -478,9 +408,11 @@ check_timing(struct evt_entry *entry)
 		assert(0);
 		break;
 	}	
-	printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec);
 	// TODO: check thread WCET here
 	// ...
+	printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec);
+	
+	/* update_dest_spd(entry); */
 	
 	check_inv_spdexec(ttc, ttn, entry, up_t);
 	check_interrupt(ttc, entry);
@@ -495,22 +427,6 @@ check_timing(struct evt_entry *entry)
 	last_entry.evt_type = entry->evt_type;
 	
 	return;
-}
-
-
-//FIXME: name
-/* compute the highest power of 2 less or equal than 32-bit v */
-static unsigned int get_powerOf2(unsigned int orig) {
-        unsigned int v = orig - 1;
-
-        v |= v >> 1;
-        v |= v >> 2;
-        v |= v >> 4;
-        v |= v >> 8;
-        v |= v >> 16;
-        v++;
-
-        return (v == orig) ? v : v >> 1;
 }
 
 #endif
