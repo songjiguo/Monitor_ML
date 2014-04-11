@@ -2,7 +2,10 @@
 #include <timed_blk.h>
 #include <print.h>
 
+#ifdef LOG_MONITOR
+#define LOG_LOCK_LOCk
 #include <log.h>
+#endif
 
 vaddr_t __sg_timed_event_block(spdid_t spdid, unsigned int amnt)
 {

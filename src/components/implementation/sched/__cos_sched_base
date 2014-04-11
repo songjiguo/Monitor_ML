@@ -513,7 +513,9 @@ static void sched_timer_tick(void)
 	while (1) {
 /* Timer interrupt logging here*/
 #ifdef LOG_MONITOR
-	evt_enqueue(cos_get_thd_id(), cos_spd_id(), 0, 0, EVT_TINT);
+		cos_sched_lock_take();
+		evt_enqueue(cos_get_thd_id(), cos_spd_id(), 0, 0, EVT_TINT);
+		cos_sched_lock_release();
 #endif
 		cos_sched_lock_take();
 		report_event(TIMER_TICK);

@@ -2,7 +2,10 @@
 #include <periodic_wake.h>
 #include <print.h>
 
+#ifdef LOG_MONITOR
+#define TEST_LOCK_LOCK
 #include <log.h>
+#endif
 
 int __sg_periodic_wake_create(spdid_t spdid, unsigned int period)
 {

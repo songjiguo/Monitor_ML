@@ -2,7 +2,7 @@ C_OBJS=f.o
 ASM_OBJS=
 COMPONENT=fpu.o
 INTERFACES=
-DEPENDENCIES=sched printc timed_blk ll_log monitor_upcall valloc_local
+DEPENDENCIES=lock sched printc timed_blk ll_log monitor_upcall valloc_local
 IF_LIB=
 
 include ../../Makefile.subsubdir

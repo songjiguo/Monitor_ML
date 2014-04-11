@@ -11,7 +11,7 @@ fprr.o-print.o|[parent_]mm.o|[faulthndlr_]llboot.o|[parent_]lllog.o;\
 boot.o-print.o|fprr.o|mm.o|llboot.o|lllog.o;\
 va.o-fprr.o|print.o|mm.o|l.o|boot.o|lllog.o|llboot.o;\
 l.o-fprr.o|mm.o|print.o|lllog.o|llboot.o;\
-te.o-print.o|fprr.o|mm.o|lllog.o|llboot.o;\
+te.o-print.o|fprr.o|mm.o|l.o|lllog.o|llboot.o;\
 mon_p.o-print.o|fprr.o|mm.o|te.o|lllog.o|llboot.o;\
 \
 lmoncli1.o-print.o|va.o|fprr.o|l.o|mm.o|lmonser1.o|te.o|lllog.o|llboot.o;\

@@ -71,76 +71,9 @@ update_dest_spd(struct evt_entry *entry)
 	return;
 }
 
-/* compute the highest power of 2 less or equal than 32-bit v */
-static unsigned int get_powerOf2(unsigned int orig) {
-        unsigned int v = orig - 1;
-
-        v |= v >> 1;
-        v |= v >> 2;
-        v |= v >> 4;
-        v |= v >> 8;
-        v |= v >> 16;
-        v++;
-
-        return (v == orig) ? v : v >> 1;
-}
-
 /*************************/
 /* PI related functions  */
 /*************************/
-
-/* static int */
-/* dependency_crt(struct thd_trace *ttl, struct thd_trace *tth) */
-/* { */
-/* 	struct thd_dep *ret = NULL; */
-
-/* 	printc("add dependency\n"); */
-/* 	assert(ttl && tth); */
-	
-/* 	INIT_LIST(tth, _s, s_); */
-
-/* 	// used for checking the correctness of scheduling decision */
-/* 	ttl->epoch++; */
-/* 	tth->epoch = ttl->epoch; */
-/* 	tth->p = ttl; */
-/* 	if(!ttl->c) ttl->c = tth; */
-/* 	else        ADD_LIST(ttl->c, tth, _s, s_); */
-	
-/* 	return 0; */
-/* } */
-
-/* static int */
-/* dependency_del(struct thd_trace *ttl) */
-/* { */
-/* 	struct thd_trace *d, *n; */
-/* 	assert(ttl); */
-/* 	printc("remove dependency\n"); */
-
-/* 	d = ttl->c; */
-/* 	if (!d) return 0; */
-/* 	while(d) { */
-/* 		n = FIRST_LIST(d, _s, s_); */
-/* 		REM_LIST(d, _s, s_); */
-/* 		ttl->epoch--; */
-/* 		d = (n == d) ? NULL : n; */
-/* 	} */
-/* 	assert(!ttl->c); */
-	
-/* 	// Can this happen in PIP?  */
-/* 	// Should always root node exits its CS first? Multiple locks? */
-/* 	/\* assert(!ttl->p); *\/ */
-
-/* 	/\* if (ttl->p && ttl->p->c == ttl) { *\/ */
-/* 	/\* 	if (EMPTY_LIST(ttl, _s, s_)) ttl->p->c = NULL; *\/ */
-/* 	/\* 	else      ttl->p->c = FIRST_LIST(ttl, _s, s_); *\/ */
-/* 	/\* 	ttl->p->epoch--; *\/ */
-/* 	/\* } *\/ */
-/* 	/\* /\\* ttl->p = NULL; *\\/ *\/ */
-/* 	/\* REM_LIST(ttl, _s, s_); *\/ */
-
-/* 	return 0; */
-/* } */
-
 /* PI begin condition:
    1) The dependency from high to low (sched_block(spdid, low))
    2) A context switch from high thd to low thd
@@ -227,4 +160,19 @@ static struct heap *log_heap_alloc(int max_sz, cmp_fn_t c, update_fn_t u)
 	return h;
 }
 
+/* compute the highest power of 2 less or equal than 32-bit v */
+static unsigned int get_powerOf2(unsigned int orig) {
+        unsigned int v = orig - 1;
+
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;
+
+        return (v == orig) ? v : v >> 1;
+}
+
 #endif   // LOG_UTIL
+

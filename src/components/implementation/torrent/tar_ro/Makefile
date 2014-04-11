@@ -2,7 +2,7 @@ C_OBJS=tar.o
 ASM_OBJS=
 COMPONENT=rotar.o
 INTERFACES=torrent
-DEPENDENCIES=printc cbufp cbuf_c evt lock mem_mgr_large valloc uniq_map initf ll_log monitor_upcall
+DEPENDENCIES=printc cbufp cbuf_c evt lock sched mem_mgr_large valloc uniq_map initf ll_log monitor_upcall
 
 include ../../Makefile.subsubdir
 

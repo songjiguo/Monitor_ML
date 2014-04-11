@@ -1,6 +1,6 @@
 C_OBJS=trans.o
 COMPONENT=utrans.o
-DEPENDENCIES=cbufp cbuf_c printt valloc mem_mgr_large unit_cbuf lock torrent evt ll_log monitor_upcall
+DEPENDENCIES=cbufp cbuf_c printt valloc mem_mgr_large unit_cbuf lock sched torrent evt ll_log monitor_upcall
 FN_PREPEND=print_
 
 include ../../Makefile.subsubdir

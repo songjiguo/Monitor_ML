@@ -2,7 +2,10 @@
 #include <sched.h>
 #include <print.h>
 
+#ifdef LOG_MONITOR
+#define LOG_LOCK_SCHED
 #include <log.h>
+#endif
 
 int __sg_sched_block(spdid_t spdid, unsigned short int dependency_thd)
 {

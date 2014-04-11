@@ -4,7 +4,6 @@
 /* Data structure for tracking information in log_manager */
 
 #include <ll_log.h>
-#include <hard_code_thd_spd.h>   // TODO: use name space
 #include <heap.h>
 #include <log_util.h>
 
@@ -12,17 +11,14 @@
    1. scheduler and MM contention
    2. booter /lock contention
    3. RB lock contention logging?
-
    Answer: Use a separate log buffer (for omission in the case of
            contention).  Every time a contention happens, we invokes
-           log_mgr to log the time. Add "time stamp and owner" Should fit
-           into B term in RTA.
-	   
-   4. execution time for interrupt thread (make sure already have
-   this) 5. handler/localization (needs work on this now) 6. max_heap
-   done (statically) 
-
-   6. use epoch in such a way that track from the highest thread down
+           log_mgr to log the time. Add "contender and owner". This 
+	   should fit into B term in RTA.
+   Done!
+   
+   4. use epoch in such a way that track from the highest thread down
+   5. handler/localization
 */
 /* ring buffer for event flow (one RB per component) */
 struct logmon_info {
@@ -36,8 +32,9 @@ struct logmon_info {
 // FIXME: might not need save all information in log_process
 /* per-thread event flow, updated within the log_monitor  */
 struct thd_trace {
-	int thd_id;
-	int prio;  // hard code priority for PI testing
+	int thd_id, prio;
+	int h_thd, h_prio;
+	int next_thd, next_prio;
 
 	// d and c for a periodic task
 	unsigned long long period;
@@ -61,8 +58,8 @@ struct thd_trace {
 	unsigned long long depth;
         // used to indicate the status of a thread (place holder)
 	int status;
-	// for dependency tree
-	struct thd_trace *p, *c, *_s, *s_;
+	// for dependency list
+	struct thd_trace *next, *lowest;
 
 	// WCET in a spd due to an invocation to that spd by this thread
 	unsigned long long inv_spd_exec[MAX_NUM_SPDS];
@@ -81,6 +78,8 @@ init_thread_trace()
 	memset(thd_trace, 0, sizeof(struct thd_trace) * MAX_NUM_THREADS);
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
 		thd_trace[i].thd_id	 = i;
+		thd_trace[i].h_thd	 = i;
+		thd_trace[i].next_thd	 = 0;
 
 		thd_trace[i].period	    = 0;  // same as deadline d
 		thd_trace[i].execution	    = 0;  // same as period p
@@ -97,6 +96,8 @@ init_thread_trace()
 		thd_trace[i].epoch = 0; // used to detect scheduling decision
 		thd_trace[i].depth = 0; // used to detect deadlock
 		thd_trace[i].status = 0;// ?? place holder
+		thd_trace[i].next = NULL;
+		thd_trace[i].lowest = &thd_trace[i];
 		
 		// spd related (number of events and timing)
 		for (j = 0; j < MAX_NUM_SPDS; j++) {
@@ -183,37 +184,57 @@ done:
 /*    Constraints Check   */
 /**************************/
 
-static void
+static int
 check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
 {
 	assert(ttc && entry);
-	if (!ttn) return;
+	if (!ttn) return 0;
 
-	/* add into dependency tree */
 	if (pi_begin(&last_entry, ttc->prio, entry, ttn->prio)) {
-		/* if (dependency_crt(ttn, ttc)) assert(0); */
-	}
+		printc("add dependency\n");
+		assert(ttc && ttn);
+		assert(!ttc->next);
+		ttc->next = ttn;
+		ttc->lowest = ttn->lowest;
+		if (ttc->h_prio < ttc->lowest->h_prio) {
+			ttc->lowest->next_prio = ttc->lowest->h_prio;
+			ttc->lowest->next_thd = ttc->lowest->h_thd;
 
-	/* remove from dependency tree (keep any dependency tree when
-	   monitor is running)*/
+			ttc->lowest->h_prio = ttc->h_prio;
+			ttc->lowest->h_thd  = ttc->thd_id;
+		}
+		
+		goto done;
+	}
+	/* remove dependency ( update and check epoch )*/
 	if (pi_end(&last_entry, ttc->prio, entry, ttn->prio)) {
-		/* if (dependency_del(ttc)) assert(0); */
-		// TODO:check incorrect scheduling decision
-		// The highest thread that blocks on ttc should run
-		// ...
-		assert(ttc->epoch == ttn->epoch);
+		struct thd_trace *d, *n, *m;
+		printc("remove dependency\n");
+		assert(ttc->lowest->h_thd);
+		d = &thd_trace[ttc->lowest->h_thd];
+		assert(d && d->next);
+		do {
+			n = d;
+			m = n->next;
+			if (!m->next) break;
+		} while((d = d->next));
+		assert(n && m && !m->next);
+		m->epoch++;
+		n->epoch = m->epoch;
+                // if not match, an error occurs
+		if (n->epoch != ttn->epoch) return 1;
+		else {   // set to the next highest thread
+			/* n->lowest = n; */
+			/* n->lowest = &thd_trace[m->next_thd]; */
+			m->h_prio = m->next_prio;
+			m->h_thd = m->next_thd;
+		}
 	}
-
-	return;
+	
+	// TODO: localize the faulty spd ...here
+done:
+	return 0;
 }
-
-//  Do we still nee this? 
-/* static void */
-/* check_invocation_stack(struct thd_trace *ttc, struct evt_entry *entry) */
-/* { */
-/* 	assert(ttc && entry); */
-/* 	return; */
-/* } */
 
 static void
 check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
@@ -258,8 +279,7 @@ check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
 		break;
 	}
 
-	// TODO: check the casual ordering here if something wrong
-	// ...
+	// TODO: localize the faulty spd ... here
 done:
 	return;
 }
@@ -384,9 +404,10 @@ constraint_check(struct evt_entry *entry)
 	
 	switch (entry->evt_type) {
 	case EVT_CINV:
+	case EVT_CRET:
+		update_dest_spd(entry); // convert cap_no to spdid
 	case EVT_SINV:
 	case EVT_SRET:
-	case EVT_CRET:
 		assert(entry->to_thd == entry->from_thd);
 		up_t = entry->time_stamp - ttc->last_ts;
 		ttc->tot_exec += up_t;
@@ -408,20 +429,22 @@ constraint_check(struct evt_entry *entry)
 		assert(0);
 		break;
 	}	
-	// TODO: check thread WCET here
-	// ...
 	printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec);
-	
-	/* update_dest_spd(entry); */
-	
+
+	/***************************/
+	/* Constraint check begins */
+	/***************************/
 	check_inv_spdexec(ttc, ttn, entry, up_t);
 	check_interrupt(ttc, entry);
 	check_invocation(ttc, entry);
 	check_ordering(ttc, entry);
-
 	check_priority_inversion(ttc, ttn, entry);
+	//check_thd_wcet(ttc, ttn, entry, up_t);
+	/***************************/
+	/* Constraint check done ! */
+	/***************************/
 	
-        // save info for EVT_INT
+        // save info for the last event
 	last_entry.from_thd = entry->to_thd;
 	last_entry.from_spd = entry->to_spd; 
 	last_entry.evt_type = entry->evt_type;

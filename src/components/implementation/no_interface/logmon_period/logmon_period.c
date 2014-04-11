@@ -32,8 +32,7 @@ void cos_init(void)
 			while(1){
 				periodic_wake_wait(cos_spd_id());
 				printc("periodic process log....\n");
-				//llog_process(cos_spd_id());
-				monitor_upcall(cos_spd_id());
+				logmgr_active(cos_spd_id());
 			}
 		}
 	}

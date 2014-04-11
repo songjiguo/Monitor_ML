@@ -1,5 +1,5 @@
 /*
-   Jiguo 2014 -- The header file for the log monitor latent fault
+   Jiguo 2014 -- The header file for the log monitor (latent fault work)
 */
 
 #ifndef LOGGER_H
@@ -7,26 +7,71 @@
 
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
-
-extern int monitor_upcall(spdid_t spdid);
+extern int logmgr_active(spdid_t spdid);
+extern int llog_corb(spdid_t spdid, unsigned int owner, unsigned int contender, int flag);
 
 #include <cos_list.h>
 #include <ck_ring_cos.h>
-#include <cos_synchronization.h>
-/* #include "../implementation/sched/cos_sched_sync.h" */
 
 #include <cos_types.h>
 PERCPU_EXTERN(cos_sched_notifications);
 
+/**********************/
+/*  Define locks here */
+/**********************/
+#ifdef LOG_LOCK_NORM
+#include <cos_synchronization.h>
+cos_lock_t log_lock;
+#define LOG_TAKE()     do { if (lock_take(&log_lock))    assert(0); } while(0)
+#define LOG_RELEASE()  do { if (lock_release(&log_lock)) assert(0); } while(0)
+
+#elif defined(LOG_LOCK_LOCk)
+extern int sched_component_take(spdid_t spdid);
+extern int sched_component_release(spdid_t spdid);
+#define LOG_TAKE()     do { if (sched_component_take(cos_spd_id()))    assert(0); } while (0)
+#define LOG_RELEASE()  do { if (sched_component_release(cos_spd_id())) assert(0); } while (0)
+
+#elif defined(LOG_LOCK_SCHED)
+#include "../implementation/sched/cos_sched_sync.h"
+#define LOG_TAKE()     if (cos_sched_lock_take())    assert(0);
+#define LOG_RELEASE()  if (cos_sched_lock_release()) assert(0);
+
+#else
+#define LOG_TAKE()
+#define LOG_RELEASE()
+#endif
+
 #define MEAS_WITH_LOG
 //#define MEAS_WITHOUT_LOG
 
-// hard code interface function number
+/********************************/
+/*  Hard code spd and thread ID */
+/********************************/
+// component ID
+#define SCHED_SPD	3
+#define MM_SPD		4
+#define BOOTER_SPD	6
+#define LOCK_SPD        7
+#define NETIF_SPD	25
+
+// thread ID
+#define TIMER_THD	6
+#define NETWORK_THD	20
+
+#define NUM_PRIOS    32
+#define PRIO_LOWEST  (NUM_PRIOS-1)
+#define PRIO_HIGHEST 0
+
+/*******************************/
+/* Function ID and event type  */
+/*******************************/
+// function ID
 enum{
 	FN_SCHED_BLOCK = 1,
-	FN_SCHED_WAKEUP
+	FN_SCHED_WAKEUP,
+	FN_LOCK_COMPONENT_TAKE,
+	FN_LOCK_COMPONENT_RELEASE
 };
-
 // event type
 enum{
 	EVT_CINV = 1,
@@ -47,16 +92,14 @@ struct evt_entry {
 
 	int func_num;   // hard code which function call FIXME:naming space
 	int para;   // record passed parameter (e.g. dep_thd)
-
-	int index;  // used for heap
 };
 
 #ifndef CK_RING_CONTINUOUS
 #define CK_RING_CONTINUOUS
 #endif
 
-#ifndef __RING_DEFINED
-#define __RING_DEFINED
+#ifndef __EVTRING_DEFINED
+#define __EVTRING_DEFINED
 CK_RING(evt_entry, logevt_ring);
 CK_RING_INSTANCE(logevt_ring) *evt_ring;
 #endif
@@ -69,13 +112,13 @@ print_evt_info(struct evt_entry *entry)
 
 	int dest;
 	if (entry->evt_type == EVT_CINV && entry->to_spd > MAX_NUM_SPDS) {
-		printc("par2 entry->to_spd %lu\n", entry->to_spd);
+		/* printc("par2 entry->to_spd %lu\n", entry->to_spd); */
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->to_spd);
 		if (dest <= 0) assert(0);
 		entry->to_spd = dest;
 	}
 	else if (entry->evt_type == EVT_CRET && entry->from_spd > MAX_NUM_SPDS) {
-		printc("par2 entry->from_spd %lu\n", entry->from_spd);
+		/* printc("par2 entry->from_spd %lu\n", entry->from_spd); */
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, entry->from_spd);
 		if (dest <= 0) assert(0);
 		entry->from_spd = dest;
@@ -111,6 +154,8 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, int par3, int par4
 {
 	unsigned long long ts;
 
+	assert(evt);
+
 	rdtscll(ts);
 	evt->time_stamp = ts;
 	evt->from_thd = cos_get_thd_id();
@@ -131,40 +176,8 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, int par3, int par4
 
 	evt->evt_type = type;
 
-	evt->index = 0;  //used for heap only
 	return;
 }
-
-cos_lock_t logrb_lock;
-
-/* #define SPD_SCHED  3 */
-/* #define SPD_MM  4 */
-/* #define SPD_BOOTER 6 */
-/* #define SPD_LOCK 7 */
-/* extern int sched_component_take(spdid_t spdid); */
-/* extern int sched_component_release(spdid_t spdid); */
-
-/* static int  */
-/* log_lock_take() */
-/* { */
-/* 	int spdid = cos_spd_id(); */
-/* 	if (spdid == SPD_LOCK || spdid == SPD_BOOTER) { */
-/* 		return 0; //sched_component_take(spdid); */
-/* 	} else if (spdid == SPD_SCHED || spdid == SPD_MM) { */
-/* 		return 0;//cos_sched_lock_take(); */
-/* 	} else return lock_take(&logrb_lock); */
-/* } */
-
-/* static int  */
-/* log_lock_release() */
-/* { */
-/* 	int spdid = cos_spd_id(); */
-/* 	if (spdid == SPD_LOCK || spdid == SPD_BOOTER) { */
-/* 		return 0; //sched_component_release(spdid); */
-/* 	} else if (spdid == SPD_SCHED || spdid == SPD_MM) { */
-/* 		return 0;//cos_sched_lock_release(); */
-/* 	} else return lock_release(&logrb_lock); */
-/* } */
 
 
 /*
@@ -200,32 +213,46 @@ evt_enqueue(int par1, unsigned long par2, int par3, int par4, int evt_type)
 
 	/* assert(cos_spd_id() > 2); */
 
+	/*********************************/
+	/* slow path : contention,       */
+	/* initialize RB, async process */
+	/*********************************/
+	// contention path of lock
+	if (unlikely(par3 == FN_LOCK_COMPONENT_TAKE)) {
+		assert(par4 > 0);
+		if (evt_type == EVT_CINV) {
+			if (llog_corb(cos_spd_id(), par4, cos_get_thd_id(), 0)) assert(0);				
+		} else return;
+	}
+	if (unlikely(par3 == FN_LOCK_COMPONENT_RELEASE)) {
+		if (evt_type == EVT_CINV) {
+			if (llog_corb(cos_spd_id(), cos_get_thd_id(), 0, 1)) assert(0);				
+		} else return;
+	}
+
+	// shared RB is created when the first event happens in this spd
 	if (unlikely(!evt_ring)) {
-		printc("evt enqueue (spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id());
-		/* a page now */
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
 		assert(cli_addr);
 		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
-		
-		/* lock_static_init(&logrb_lock); */
+#ifdef LOG_LOCK_NORM
+		lock_static_init(&log_lock);
+#endif
 	}
 
+	// log_mgr need process when any RB is full
 	if (unlikely(evt_ring_is_full())) {
-		printc("evt_ring is full(spd %ld, thd %d) \n", cos_spd_id(), cos_get_thd_id());
-		/* llog_process(cos_spd_id()); */
-		monitor_upcall(cos_spd_id());
+		logmgr_active(cos_spd_id());
 	}
 
-	
-	/* Two problems to be concerned: 
-	 * 1) Race condition. Multiple producers are trying to record
-	 * their events into a single consumer buffer. A lock is used
-	 * around ck_ring_enqueue to solve this. Should this lock be
-	 * the lock used in that component?  For example, lock/booter
-	 * spd uses sched_component_take/release, sched/mm uses
-	 * cos_sched_lock_take/release. Other component uses
-	 * lock_take. Critical section is short and need avoid
-	 * recursive locking.
+	/* Two problems need to be solved here: 1) Lock. Multiple
+	 * producers are trying to record their events into a single
+	 * consumer buffer. A lock is used around rb. The contention
+	 * can cause the recursive lock issue
+	 * here. (lock/booter/time_evt spd uses
+	 * sched_component_take/release, sched/mm uses
+	 * cos_sched_lock_take/release). Other component uses
+	 * lock_take.
 
 	 * 2) Record consistency. For example, a thread can be
 	 * preempted right after evt_conf and before writes into the
@@ -235,13 +262,14 @@ evt_enqueue(int par1, unsigned long par2, int par3, int par4, int evt_type)
 	 * 
 	 */
 
+	// Fast path
 	evt_conf(&evt, par1, par2, par3, par4, evt_type);
-	print_evt_info(&evt);
-	/* if (log_lock_take()) assert(0); */
-        while (unlikely(!CK_RING_ENQUEUE_SPSC(logevt_ring, evt_ring, &evt)));
-	/* if (log_lock_release()) assert(0); */
-	return;
+	/* print_evt_info(&evt); */
+	LOG_TAKE();
+	while (unlikely(!CK_RING_ENQUEUE_SPSC(logevt_ring, evt_ring, &evt)));
+	LOG_RELEASE();
 
+	return;
 }
 
 

@@ -11,6 +11,11 @@
 
 CSTUB_FN_ARGS_3(int, lock_component_take, spdid_t, spdid, unsigned long, lock_id, unsigned short int, thd_id)
 
+#ifdef LOG_MONITOR
+func_num = FN_LOCK_COMPONENT_TAKE;
+para     = thd_id;
+#endif
+
 /* printc("cli lock: take (thd %d)\n", cos_get_thd_id()); */
 CSTUB_ASM_3(lock_component_take, spdid, lock_id, thd_id)
 

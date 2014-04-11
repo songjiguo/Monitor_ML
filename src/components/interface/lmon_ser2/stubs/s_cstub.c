@@ -3,7 +3,9 @@
 
 #include <lmon_ser2.h>
 
-#include <ll_log.h>
+#ifdef LOG_MONITOR
+#include <log.h>
+#endif
 
 vaddr_t __sg_lmon_ser2_test(spdid_t spdid, int event_id)
 {

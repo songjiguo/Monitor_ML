@@ -2,7 +2,7 @@ C_OBJS=pong.o
 ASM_OBJS=
 COMPONENT=ppong.o
 INTERFACES=pong
-DEPENDENCIES=sched printc valloc ll_log monitor_upcall
+DEPENDENCIES=lock sched printc valloc ll_log monitor_upcall
 IF_LIB=
 
 include ../../Makefile.subsubdir

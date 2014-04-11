@@ -462,6 +462,7 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_next->next_thd_flags = flags;
 
 #ifdef LOG_MONITOR
+	// lock is already taken
 	evt_enqueue(thd_id, cos_spd_id(), 0, 0, EVT_CS);
 #endif
 
