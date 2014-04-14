@@ -359,6 +359,9 @@ typedef enum {
 static int service_get_spdid(struct service_symbs *ss);
 static int is_booter_loaded(struct service_symbs *s)
 {
+	/* return (!(strstr(s->obj, INIT_COMP) || strstr(s->obj, LLBOOT_COMP))); */
+
+	// for log manager
 	return (!(strstr(s->obj, INIT_COMP) || strstr(s->obj, LLBOOT_COMP)));
 //	return s->is_composite_loaded;
 }
@@ -2111,9 +2114,7 @@ void make_spd_scheduler(int cntl_fd, struct service_symbs *s, struct service_sym
 	struct spd_info *spd = s->extern_info, *parent = NULL;
 //	struct cos_component_information *ci;
 	struct cos_sched_data_area *sched_page_ptr;
-
 	if (p) parent = p->extern_info;
-
 	sched_page_ptr = (struct cos_sched_data_area*)get_symb_address(&s->exported, SCHED_NOTIF);
 	sched_page = (vaddr_t)sched_page_ptr;
 
@@ -2802,6 +2803,7 @@ static void setup_kernel(struct service_symbs *services)
 	}
 	thd.spd_handle = ((struct spd_info *)s->extern_info)->spd_handle;//spd0->spd_handle;
 
+	
 	/* This will hopefully avoid hugely annoying fsck runs */
 	sync();
 

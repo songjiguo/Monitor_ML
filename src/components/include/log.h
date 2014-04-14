@@ -81,7 +81,7 @@ CK_RING_INSTANCE(logevt_ring) *evt_ring;
 static void
 print_evt_info(struct evt_entry *entry)
 {
-	assert(entry);
+	/* assert(entry); */
 
 	int dest;
 
@@ -91,7 +91,7 @@ print_evt_info(struct evt_entry *entry)
 	if (entry->evt_type == EVT_CRET && entry->from_spd > MAX_NUM_SPDS) {
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 
 				    entry->to_spd, entry->from_spd);
-		assert (dest > 0);
+		/* assert (dest > 0); */
 		/* entry->from_spd = dest; */
 		printc("spd (%d --> ", dest);
 	} else printc("spd (%lu --> ", entry->from_spd);
@@ -99,7 +99,7 @@ print_evt_info(struct evt_entry *entry)
 	if (entry->evt_type == EVT_CINV && entry->to_spd > MAX_NUM_SPDS) {
 		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 
 				    entry->from_spd, entry->to_spd);
-		assert (dest > 0);
+		/* assert (dest > 0); */
 		printc("%d) ", dest);
 		/* entry->to_spd = dest; */
 	} else printc("%lu) ", entry->to_spd);
@@ -118,7 +118,7 @@ evt_ring_is_full()
 {
 	int capacity, size;
 
-	assert(evt_ring);
+	/* assert(evt_ring); */
 	capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 	size = CK_RING_SIZE(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 	// unlikely
@@ -130,7 +130,7 @@ static inline void
 evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3, int par4, int par5, int type)
 {
 	unsigned long long ts;
-	assert(evt);
+	/* assert(evt); */
 
 	rdtscll(ts);
 
@@ -181,7 +181,7 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 	// shared RB is created when the first event happens in this spd
 	if (unlikely(!evt_ring)) {
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
-		assert(cli_addr);
+		/* assert(cli_addr); */
 		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
 	}
 

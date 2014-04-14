@@ -201,25 +201,22 @@ llboot_thd_done(void)
 	}
 
 	if (tid == llboot->monitor_thd) {
-		/* while(1) { */
-		/* 	printc("ll_booter: core %ld: monitor thread %d\n", cos_cpuid(), llboot->monitor_thd); */
-		/* 	int     pmthd = llboot->prev_mthd; */
-		/* 	spdid_t mspd = llboot->monitor_spd; */
-		/* 	assert(tid == llboot->monitor_thd); */
+		while(1) {
+			int     pmthd = llboot->prev_mthd;
+			spdid_t mspd = llboot->monitor_spd;
+			assert(tid == llboot->monitor_thd);
 			
-		/* 	printc("mspd is %d\n", mspd); */
-		/* 	if (mspd) { */
-		/* 		assert(pmthd); */
-		/* 		llboot->monitor_spd = 0; */
-				
-		/* 		cos_upcall_args(mspd, COS_UPCALL_LOG_PROCESS); */
-		/* 		assert(0); */
-		/* 	} else { */
-		/* 		assert(pmthd && pmthd != tid); */
-		/* 		llboot->prev_mthd = 0; */
-		/* 		cos_switch_thread(pmthd, 0); */
-		/* 	} */
-		/* } */
+			if (mspd) {
+				assert(pmthd);
+				llboot->monitor_spd = 0;
+				cos_upcall_args(COS_UPCALL_LOG_PROCESS, mspd, 0);
+				assert(0);
+			} else {
+				assert(pmthd && pmthd != tid);
+				llboot->prev_mthd = 0;
+				cos_switch_thread(pmthd, 0);
+			}
+		}
 	}
 
 	if (tid == llboot->recovery_thd) {
@@ -255,19 +252,18 @@ llboot_thd_done(void)
 	}
 }
 
-/* // only called by ll_log_mgr once to activate the logmgr_thd */
-/* int */
-/* logmgr_active(spdid_t spdid) */
-/* { */
-/* 	struct llbooter_per_core *llboot = PERCPU_GET(llbooter); */
-/* 	llboot->prev_mthd     = cos_get_thd_id(); */
-/* 	llboot->monitor_spd   = LLBOOT_LOG; */
+// only called by ll_log_mgr to switch to processing thread
+int
+logmgr_active(spdid_t spdid)
+{
+	struct llbooter_per_core *llboot = PERCPU_GET(llbooter);
+	llboot->prev_mthd     = cos_get_thd_id();
+	llboot->monitor_spd   = spdid;
 
-/* 	printc("monitor upcall in llbooter....and monitor spd %d\n", LLBOOT_LOG);	 */
-/* 	while (llboot->prev_mthd == cos_get_thd_id()) cos_switch_thread(llboot->monitor_thd, 0); */
+	while (llboot->prev_mthd == cos_get_thd_id()) cos_switch_thread(llboot->monitor_thd, 0);
 
-/* 	return 0; */
-/* } */
+	return 0;
+}
 
 /* can only be called from mmgr/scheduler */
 /* In eager recovery (ramFS) can also be upcalled within booter */

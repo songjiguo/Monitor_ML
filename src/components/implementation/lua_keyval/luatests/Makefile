@@ -10,6 +10,6 @@ ASM_OBJS=
 COMPONENT=luatests.o
 INTERFACES=
 IF_LIB=$(LUAOBJ)
-DEPENDENCIES=sched printc ll_log monitor_upcall valloc_local
+DEPENDENCIES=sched printc ll_log  valloc_local
 
 include ../../Makefile.subsubdir

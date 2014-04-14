@@ -2,7 +2,7 @@ C_OBJS=pgfault.o
 ASM_OBJS=
 COMPONENT=pf.o
 INTERFACES=pgfault
-DEPENDENCIES=printc ll_log monitor_upcall
+DEPENDENCIES=printc ll_log 
 IF_LIB=
 
 include ../../Makefile.subsubdir

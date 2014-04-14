@@ -7,9 +7,9 @@
 #include <log_report.h>      // for log report/ print
 #include <log_process.h>   // check all constraints
 
+extern int logmgr_active(spdid_t spdid);
 #define LM_SYNC_PERIOD 50
 
-volatile int prev_mthd, processed;
 int logmgr_thd;
 
 /* contention_omission ring buffer (corb) entry */
@@ -51,6 +51,7 @@ lmgr_setuprb(spdid_t spdid, vaddr_t cli_addr) {
 	} else {
 		assert(cli_addr > 0);
 		spdmon = &logmon_info[spdid];
+		printc("spdmon->spdid %d spdid %d\n", spdmon->spdid, spdid);
 		assert(spdmon->spdid == spdid);
 		spdmon->mon_ring = (vaddr_t)addr;
 		cli_ring = cli_addr;
@@ -77,8 +78,6 @@ lmgr_action()
         vaddr_t mon_ring, cli_ring;
 	struct evt_entry *evt;
 
-	assert(!processed);
-
 	evt = find_next_evt(NULL);
 	if (!evt) return;
 	do {
@@ -88,45 +87,12 @@ lmgr_action()
 	return;
 }
 
-
-static void
-lmgr_loop(void) { 
-	while(1) {
-		assert(cos_get_thd_id() == logmgr_thd);
-		
-		printc("Jiguo:core %ld: monitor thread %d\n", cos_cpuid(), logmgr_thd);
-		int     pmthd	    = prev_mthd;
-		int     processed_f = processed;
-		if (processed_f) {
-			assert(pmthd);
-			processed = 0;   // start process
-			lmgr_action();
-		} else {
-			assert(pmthd && pmthd != logmgr_thd);
-			prev_mthd = 0;
-			processed = 1;   // end process
-			cos_switch_thread(pmthd, 0);
-		}
-	}
-
-	return;
-}
-
 /* Initialize log manager here...do this only once */
 static inline void
 lmgr_initialize(void)
 {
-	/* /\* // ll_log is going to create/manage its threads *\/ */
-	/* if (parent_sched_child_cntl_thd(cos_spd_id())) BUG(); */
-	/* if (cos_sched_cntl(COS_SCHED_EVT_REGION, 0, (long)PERCPU_GET(cos_sched_notifications))) BUG(); */
-	/* logmgr_thd = cos_create_thread((int)lmgr_loop, (int)0, 0); */
-	/* assert(logmgr_thd >= 0); */
-	/* printc("logmgr_thd %d is created here by %d\n", */
-	/*        logmgr_thd, cos_get_thd_id()); */
-
-	printc("logmgr is initialized here by %d\n", cos_get_thd_id());
-
 	// init log manager
+	printc("logmgr is initialized here by %d\n", cos_get_thd_id());
 	memset(logmon_info, 0, sizeof(struct logmon_info) * MAX_NUM_SPDS);
 	int i, j;
 	for (i = 0; i < MAX_NUM_SPDS; i++) {
@@ -152,7 +118,6 @@ lmgr_initialize(void)
 	assert(h);
 	
 	corb_evt_ring = NULL;
-	processed = 1;
 
 	return;
 }
@@ -160,14 +125,17 @@ lmgr_initialize(void)
 void 
 cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
+	/* printc("upcall type is %d, arg1 %d, arg2 %d, arg3 %d\n",  */
+	/*        t, (int)arg1,  (int)arg2,  (int)arg3); */
+	// arg 2 is the passed spdid, need this?
 	switch (t) {
 	case COS_UPCALL_BOOTSTRAP:
 		lmgr_initialize(); break;
+	case COS_UPCALL_LOG_PROCESS:
+		lmgr_action(); break;
 	default:
-		/* printc("thread here is %d\n", cos_get_thd_id()); */
 		return;
 	}
-
 	return;
 }
 
@@ -175,15 +143,11 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 /*  External functions  */
 /***********************/
 
-/* activate logmgr_thd to process the thread (sync or async) */
-static int first = 1;
+/* activate to process log */
 int
 llog_process()
 {
-	prev_mthd     = cos_get_thd_id();
-	printc("logmgr_thd is activated here ...!!!!\n");
-	/* while (prev_mthd == cos_get_thd_id()) cos_switch_thread(logmgr_thd, 0); */
-	return 0;
+	return logmgr_active(cos_spd_id());
 }
 
 /* Return the periodicity for asynchronously monitor processing  */
