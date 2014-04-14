@@ -9,6 +9,6 @@
 .text	
 
 cos_asm_server_stub_spdid(llog_init)
-cos_asm_server_stub_spdid(llog_get_syncp)
-cos_asm_server_stub_spdid(llog_init_prio)
-cos_asm_server_stub_spdid(llog_corb)	
+cos_asm_server_stub_spdid(llog_process)	
+cos_asm_server_stub_spdid(llog_getsyncp)
+cos_asm_server_stub_spdid(llog_setprio)

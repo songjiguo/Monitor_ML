@@ -27,12 +27,12 @@ void cos_init(void)
 		if (cos_get_thd_id() == high) {
 			printc("<<<....>>>\n");
 			int lm_sync_period;
-			lm_sync_period = llog_get_syncp(cos_spd_id());
+			lm_sync_period = llog_getsyncp(cos_spd_id());
 			periodic_wake_create(cos_spd_id(), lm_sync_period);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
 				printc("periodic process log....\n");
-				logmgr_active(cos_spd_id());
+				llog_process();
 			}
 		}
 	}

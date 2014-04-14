@@ -6,8 +6,8 @@
 !lmonser1.o, ;!lmonser2.o, ;!va.o,a2:\
 c0.o-llboot.o;\
 lllog.o-print.o|[parent_]llboot.o;\
-mm.o-[parent_]lllog.o|print.o|[faulthndlr_]llboot.o;\
-fprr.o-print.o|[parent_]mm.o|[faulthndlr_]llboot.o|[parent_]lllog.o;\
+mm.o-lllog.o|print.o|[faulthndlr_]llboot.o|[parent_]llboot.o;\
+fprr.o-print.o|[parent_]mm.o|[faulthndlr_]llboot.o|lllog.o;\
 boot.o-print.o|fprr.o|mm.o|llboot.o|lllog.o;\
 va.o-fprr.o|print.o|mm.o|l.o|boot.o|lllog.o|llboot.o;\
 l.o-fprr.o|mm.o|print.o|lllog.o|llboot.o;\

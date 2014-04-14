@@ -9,6 +9,9 @@
 
 #define LM_SYNC_PERIOD 50
 
+volatile int prev_mthd, processed;
+int logmgr_thd;
+
 /* contention_omission ring buffer (corb) entry */
 struct corb_entry {
 	unsigned int owner, contender;
@@ -32,7 +35,7 @@ CK_RING_INSTANCE(corb_ring) *corb_evt_ring;
    2) cli_addr > 0 : shared RB between spd and log_mgr
 */
 static int 
-log_rb_setup(spdid_t spdid, vaddr_t cli_addr) {
+lmgr_setuprb(spdid_t spdid, vaddr_t cli_addr) {
         struct logmon_info *spdmon = NULL;
         vaddr_t log_ring, cli_ring = 0;
 	char *addr, *hp;
@@ -67,39 +70,74 @@ err:
 	return -1;
 }
 
-static int
-log_process()
+static void
+lmgr_action()
 {
         struct logmon_info *spdmon;
         vaddr_t mon_ring, cli_ring;
 	struct evt_entry *evt;
 
+	assert(!processed);
+
 	evt = find_next_evt(NULL);
-	if (!evt) return 0;
+	if (!evt) return;
 	do {
 		constraint_check(evt);
 	} while ((evt = find_next_evt(evt)));
 
-	return 0;
+	return;
 }
 
-static inline void
-log_mgr_init(void)
-{
-	int i;
-	if (cos_get_thd_id() == MONITOR_THD) {
-		log_process();
-		return;
+
+static void
+lmgr_loop(void) { 
+	while(1) {
+		assert(cos_get_thd_id() == logmgr_thd);
+		
+		printc("Jiguo:core %ld: monitor thread %d\n", cos_cpuid(), logmgr_thd);
+		int     pmthd	    = prev_mthd;
+		int     processed_f = processed;
+		if (processed_f) {
+			assert(pmthd);
+			processed = 0;   // start process
+			lmgr_action();
+		} else {
+			assert(pmthd && pmthd != logmgr_thd);
+			prev_mthd = 0;
+			processed = 1;   // end process
+			cos_switch_thread(pmthd, 0);
+		}
 	}
 
-	/* do this once */
-	printc("ll_log (spd %ld) init as thread %d\n", cos_spd_id(), cos_get_thd_id());
-	// Initialize log manager here...
+	return;
+}
+
+/* Initialize log manager here...do this only once */
+static inline void
+lmgr_initialize(void)
+{
+	/* /\* // ll_log is going to create/manage its threads *\/ */
+	/* if (parent_sched_child_cntl_thd(cos_spd_id())) BUG(); */
+	/* if (cos_sched_cntl(COS_SCHED_EVT_REGION, 0, (long)PERCPU_GET(cos_sched_notifications))) BUG(); */
+	/* logmgr_thd = cos_create_thread((int)lmgr_loop, (int)0, 0); */
+	/* assert(logmgr_thd >= 0); */
+	/* printc("logmgr_thd %d is created here by %d\n", */
+	/*        logmgr_thd, cos_get_thd_id()); */
+
+	printc("logmgr is initialized here by %d\n", cos_get_thd_id());
+
+	// init log manager
 	memset(logmon_info, 0, sizeof(struct logmon_info) * MAX_NUM_SPDS);
+	int i, j;
 	for (i = 0; i < MAX_NUM_SPDS; i++) {
-		logmon_info[i].spdid = i;
+		logmon_info[i].spdid	= i;
 		logmon_info[i].mon_ring = 0;
 		logmon_info[i].cli_ring = 0;
+
+		for (j = 0; j < MAX_STATIC_CAP; j++) {
+			logmon_info[i].capdest[j].dest  = 0;
+			logmon_info[i].capdest[j].capno = 0;
+		}
 		/* logmon_info[i].first_entry = (struct evt_entry *)malloc(sizeof(struct evt_entry)); */
 		memset(&logmon_info[i].first_entry, 0, sizeof(struct evt_entry));
 		// initialize the heap entry
@@ -114,7 +152,22 @@ log_mgr_init(void)
 	assert(h);
 	
 	corb_evt_ring = NULL;
-	
+	processed = 1;
+
+	return;
+}
+
+void 
+cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
+{
+	switch (t) {
+	case COS_UPCALL_BOOTSTRAP:
+		lmgr_initialize(); break;
+	default:
+		/* printc("thread here is %d\n", cos_get_thd_id()); */
+		return;
+	}
+
 	return;
 }
 
@@ -122,11 +175,21 @@ log_mgr_init(void)
 /*  External functions  */
 /***********************/
 
+/* activate logmgr_thd to process the thread (sync or async) */
+static int first = 1;
+int
+llog_process()
+{
+	prev_mthd     = cos_get_thd_id();
+	printc("logmgr_thd is activated here ...!!!!\n");
+	/* while (prev_mthd == cos_get_thd_id()) cos_switch_thread(logmgr_thd, 0); */
+	return 0;
+}
+
 /* Return the periodicity for asynchronously monitor processing  */
 unsigned int
-llog_get_syncp(spdid_t spdid)
+llog_getsyncp()
 {
-	assert(spdid);
 	return LM_SYNC_PERIOD;
 }
 
@@ -135,7 +198,7 @@ llog_get_syncp(spdid_t spdid)
    inversion, scheduling decision, deadlock, etc.
  */
 int 
-llog_init_prio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
+llog_setprio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
 {
         struct logmon_info *spdmon;
 	struct thd_trace *ttl = NULL;
@@ -148,62 +211,10 @@ llog_init_prio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
 	/* LOCK(); */
 	ttl = &thd_trace[thd_id];
 	assert(ttl);
-	ttl->prio = ttl->h_prio = prio;
-	ttl->next_prio = 0;
+	ttl->prio = prio;
 
 	/* UNLOCK(); */
 
-	return 0;
-}
-
-static inline void 
-corb_evt_conf(struct corb_entry *evt, int spdid, unsigned int owner, unsigned int contender, int flag)
-{
-	unsigned long long ts;
-
-	assert(evt);
-
-	rdtscll(ts);
-	evt->time_stamp = ts;
-	evt->owner	= owner;
-	evt->contender	= contender;
-	evt->spdid	= spdid;
-	evt->flag	= flag;
-	
-	return;
-}
-
-
-/* Log the event of contention. This should only be called when some
-   contention happens and we want to omit the following event in order
-   to avoid the recursive lock issue on regular RB (e.g. contends for
-   the lock in the scheduler and when the contention event (CS) needs
-   to be written into regular RB, the lock is needed for RB as well.)
-   flag:  0 -- contention starts, 1 -- contention ends
-   Hope this will not cause async log process (contention should be low!)
- */
-int 
-llog_corb(spdid_t spdid, unsigned int owner, unsigned int contender, int flag)
-{
-	/* LOCK(); */
-	
-	struct corb_entry corb_evt;
-
-	printc("Contention!!!\n");	
-	// initialize the contention_omission RB (CORB)
-	if (!corb_evt_ring) {
-		if (log_rb_setup(cos_spd_id(), 0)) {
-			printc("failed to setup CORB\n");
-			assert(0);
-		}
-		printc("corb_ring is setup now!\n");
-		assert(corb_evt_ring);
-	} else {
-		corb_evt_conf(&corb_evt, spdid, owner, contender, flag);
-		while (unlikely(!CK_RING_ENQUEUE_SPSC(corb_ring, corb_evt_ring, &corb_evt)));	
-	}
-
-	/* UNLOCK(); */
 	return 0;
 }
 
@@ -220,8 +231,8 @@ llog_init(spdid_t spdid, vaddr_t addr)
 
 	assert(spdid);
 	spdmon = &logmon_info[spdid];
-	
 	assert(spdmon);
+
 	// limit one RB per component here, not per interface
 	if (spdmon->mon_ring && spdmon->cli_ring){
 		ret = spdmon->mon_ring;
@@ -229,7 +240,7 @@ llog_init(spdid_t spdid, vaddr_t addr)
 	}
 
 	/* printc("llog_init...(thd %d spd %d)\n", cos_get_thd_id(), spdid); */
-	if (log_rb_setup(spdid, addr)) {
+	if (lmgr_setuprb(spdid, addr)) {
 		printc("failed to setup shared rings\n");
 		goto done;
 	}
@@ -240,15 +251,3 @@ done:
 	return ret;
 }
 
-void 
-cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
-{
-	switch (t) {
-	case COS_UPCALL_BOOTSTRAP:
-		log_mgr_init(); break;
-	default:
-		BUG(); return;
-	}
-
-	return;
-}

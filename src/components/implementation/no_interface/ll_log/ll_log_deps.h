@@ -1,11 +1,6 @@
-/*
- * Jiguo: Now we will have a log manger layer between llbooter and mm
- *
- *  llbooter  --> log_manager  --> mm/sched/booter/....
- *
- *
+/* Jiguo: Now we will have a log manger layer between llbooter and mm
+   (llbooter  --> log_manager  --> mm/sched/booter/....)
 */
-
 #ifndef LL_LOG_H
 #define LL_LOG_H
 
@@ -17,23 +12,12 @@
 #include <res_spec.h>
 
 #define MONITOR_THD 3
-
-enum { /* hard-coded spd number */
-	LLBOOT_LOG   = 2,
-	LLBOOT_SCHED = 3,
-	LLBOOT_MM    = 4
-};
-
-static int     frame_frontier    = 0; /* which physical frames have we used? */
+static int     frame_frontier    = 0;
 
 #include "../../sched/cos_sched_sync.h"
 #include "../../sched/cos_sched_ds.h"
-/* synchronization... */
 #define LOCK()   if (cos_sched_lock_take())    BUG();
 #define UNLOCK() if (cos_sched_lock_release()) BUG();
-
-static void
-log_ret_thd(void) { return; }
 
 /* memory operations... */
 static vaddr_t init_hp = 0; 		/* initial heap pointer */
@@ -41,6 +25,7 @@ static vaddr_t init_hp = 0; 		/* initial heap pointer */
 static inline int
 __vpage2frame(vaddr_t addr) { return (addr - init_hp) / PAGE_SIZE; }
 
+/* used for getting a page in the log manager */
 static vaddr_t
 __mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 {
@@ -49,6 +34,7 @@ __mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	return addr;
 }
 
+/* used for setting up the shared rb in log manager */
 static vaddr_t
 __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
@@ -65,7 +51,6 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 /*******************************/
 /*** The base-case scheduler ***/
 /*******************************/
-
 #include <sched_hier.h>
 
 int  sched_init(int reboot)   { return 0; }

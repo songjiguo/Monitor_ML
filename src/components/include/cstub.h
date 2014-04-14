@@ -28,7 +28,7 @@
 
 #ifdef LOG_MONITOR
 #define CSTUB_ASM_PRE(name)						\
-	evt_enqueue(cos_get_thd_id(), uc->cap_no, func_num, para, EVT_CINV); \
+	evt_enqueue(cos_get_thd_id(), cos_spd_id(), uc->cap_no, func_num, para, EVT_CINV); \
 	__CSTUB_ASM_PRE
 
 #define CSTUB_PRE(type, name)		\
@@ -59,7 +59,7 @@
 
 #ifdef LOG_MONITOR
 #define CSTUB_POST							\
-	evt_enqueue(cos_get_thd_id(), uc->cap_no, func_num, para, EVT_CRET); \
+	evt_enqueue(cos_get_thd_id(), uc->cap_no, cos_spd_id(), func_num, para, EVT_CRET); \
 	return ret;							\
 }
 #else 

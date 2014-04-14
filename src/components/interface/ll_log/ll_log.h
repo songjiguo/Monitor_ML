@@ -4,9 +4,9 @@
 //#include <log.h>
 
 vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
-int llog_init_prio(spdid_t spdid, unsigned int thd_id, unsigned int prio);
-int llog_corb(spdid_t spdid, unsigned int owner, unsigned int contender, int flag);
-unsigned int llog_get_syncp(spdid_t spdid);
+unsigned int llog_getsyncp();
+int llog_setprio(spdid_t spdid, unsigned int thd_id, unsigned int prio);
+int llog_process();
 
 
 #endif /* LOG_INT_H */

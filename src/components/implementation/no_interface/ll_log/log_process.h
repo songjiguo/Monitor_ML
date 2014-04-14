@@ -7,34 +7,26 @@
 #include <heap.h>
 #include <log_util.h>
 
-/* Questions 
-   1. scheduler and MM contention
-   2. booter /lock contention
-   3. RB lock contention logging?
-   Answer: Use a separate log buffer (for omission in the case of
-           contention).  Every time a contention happens, we invokes
-           log_mgr to log the time. Add "contender and owner". This 
-	   should fit into B term in RTA.
-   Done!
-   
-   4. use epoch in such a way that track from the highest thread down
-   5. handler/localization
-*/
+// cache the dest for a cap_no
+struct spd_cap {
+	int dest;
+	unsigned long capno;
+};
+
 /* ring buffer for event flow (one RB per component) */
 struct logmon_info {
 	spdid_t spdid;
 	vaddr_t mon_ring;
 	vaddr_t cli_ring;
 	
+	struct spd_cap capdest[MAX_STATIC_CAP];
+
 	struct evt_entry first_entry;
 };
 
-// FIXME: might not need save all information in log_process
-/* per-thread event flow, updated within the log_monitor  */
 struct thd_trace {
 	int thd_id, prio;
-	int h_thd, h_prio;
-	int next_thd, next_prio;
+	/* int h_thd, h_prio; */
 
 	// d and c for a periodic task
 	unsigned long long period;
@@ -59,7 +51,7 @@ struct thd_trace {
         // used to indicate the status of a thread (place holder)
 	int status;
 	// for dependency list
-	struct thd_trace *next, *lowest;
+	/* struct thd_trace *next, *lowest; */
 
 	// WCET in a spd due to an invocation to that spd by this thread
 	unsigned long long inv_spd_exec[MAX_NUM_SPDS];
@@ -70,6 +62,7 @@ struct thd_trace {
 struct logmon_info logmon_info[MAX_NUM_SPDS];
 struct thd_trace thd_trace[MAX_NUM_THREADS];
 struct evt_entry last_entry;
+struct heap *h;  // the pointer to the max_heap
 
 static void 
 init_thread_trace()
@@ -78,8 +71,7 @@ init_thread_trace()
 	memset(thd_trace, 0, sizeof(struct thd_trace) * MAX_NUM_THREADS);
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
 		thd_trace[i].thd_id	 = i;
-		thd_trace[i].h_thd	 = i;
-		thd_trace[i].next_thd	 = 0;
+		/* thd_trace[i].h_thd	 = i; */
 
 		thd_trace[i].period	    = 0;  // same as deadline d
 		thd_trace[i].execution	    = 0;  // same as period p
@@ -96,8 +88,8 @@ init_thread_trace()
 		thd_trace[i].epoch = 0; // used to detect scheduling decision
 		thd_trace[i].depth = 0; // used to detect deadlock
 		thd_trace[i].status = 0;// ?? place holder
-		thd_trace[i].next = NULL;
-		thd_trace[i].lowest = &thd_trace[i];
+		/* thd_trace[i].next = NULL; */
+		/* thd_trace[i].lowest = &thd_trace[i]; */
 		
 		// spd related (number of events and timing)
 		for (j = 0; j < MAX_NUM_SPDS; j++) {
@@ -108,7 +100,54 @@ init_thread_trace()
 	return;
 }
 
-struct heap *h;  // the pointer to the max_heap
+
+// cache dest spdid or use cached one
+static int
+lookup_dest(int spdid, unsigned long cap_no)
+{
+	int i, ret = 0;
+	struct logmon_info *spdmon = &logmon_info[spdid];
+	assert(spdmon && cap_no);
+
+	printc("look for dest for cap_no %lu\n", cap_no);	
+	for (i = 0; i < MAX_STATIC_CAP; i++){
+		if (unlikely(!spdmon->capdest[i].capno)) {
+			ret = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, spdid, cap_no);
+			assert(ret > 0);
+			spdmon->capdest[i].capno = cap_no;
+			spdmon->capdest[i].dest	 = ret;
+			printc("add dest %d for cap_no %lu\n", ret, cap_no);
+			goto done;
+			
+		} else if (spdmon->capdest[i].capno == cap_no) {
+			ret = spdmon->capdest[i].dest;
+			assert(ret > 0);
+			printc("found dest %d for cap_no %lu\n", ret, cap_no);
+			goto done;
+		}
+	}
+done:	
+	assert(ret >0);
+	return ret;
+}
+
+static void
+cap_to_dest(struct evt_entry *entry)
+{
+	int d;
+	
+	assert(entry && (entry->evt_type == EVT_CINV || 
+		entry->evt_type == EVT_CRET));
+	print_evt_info(entry);
+	if (entry->to_spd < MAX_NUM_SPDS) return;
+	
+	d = lookup_dest(entry->from_spd, entry->to_spd);
+	assert(d > 0 && d < MAX_NUM_SPDS);
+	if (entry->evt_type == EVT_CINV) entry->to_spd = d;
+	else entry->from_spd = d;
+	
+	return;
+}
 
 /* Add the earliest event from each spd onto the heap */
 static void
@@ -184,57 +223,53 @@ done:
 /*    Constraints Check   */
 /**************************/
 
-static int
-check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
-{
-	assert(ttc && entry);
-	if (!ttn) return 0;
+/* // Sort threads and pop/push per thread, not use centralized next_hi */
+/* // check list everytime */
+/* static int */
+/* check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry) */
+/* { */
+/* 	assert(ttc && entry); */
+/* 	if (!ttn) return 0; */
 
-	if (pi_begin(&last_entry, ttc->prio, entry, ttn->prio)) {
-		printc("add dependency\n");
-		assert(ttc && ttn);
-		assert(!ttc->next);
-		ttc->next = ttn;
-		ttc->lowest = ttn->lowest;
-		if (ttc->h_prio < ttc->lowest->h_prio) {
-			ttc->lowest->next_prio = ttc->lowest->h_prio;
-			ttc->lowest->next_thd = ttc->lowest->h_thd;
-
-			ttc->lowest->h_prio = ttc->h_prio;
-			ttc->lowest->h_thd  = ttc->thd_id;
-		}
+/* 	if (pi_begin(&last_entry, ttc->prio, entry, ttn->prio)) { */
+/* 		printc("add dependency\n"); */
+/* 		assert(ttc && ttn); */
+/* 		assert(!ttc->next); */
+/* 		ttc->next = ttn; */
+/* 		ttc->lowest = ttn->lowest; */
+/* 		if (ttc->h_prio < ttc->lowest->h_prio) { */
+/* 			ttc->lowest->h_prio = ttc->h_prio; */
+/* 			ttc->lowest->h_thd  = ttc->thd_id; */
+/* 		} */
 		
-		goto done;
-	}
-	/* remove dependency ( update and check epoch )*/
-	if (pi_end(&last_entry, ttc->prio, entry, ttn->prio)) {
-		struct thd_trace *d, *n, *m;
-		printc("remove dependency\n");
-		assert(ttc->lowest->h_thd);
-		d = &thd_trace[ttc->lowest->h_thd];
-		assert(d && d->next);
-		do {
-			n = d;
-			m = n->next;
-			if (!m->next) break;
-		} while((d = d->next));
-		assert(n && m && !m->next);
-		m->epoch++;
-		n->epoch = m->epoch;
-                // if not match, an error occurs
-		if (n->epoch != ttn->epoch) return 1;
-		else {   // set to the next highest thread
-			/* n->lowest = n; */
-			/* n->lowest = &thd_trace[m->next_thd]; */
-			m->h_prio = m->next_prio;
-			m->h_thd = m->next_thd;
-		}
-	}
+/* 		goto done; */
+/* 	} */
+/* 	/\* remove dependency ( update and check epoch )*\/ */
+/* 	if (pi_end(&last_entry, ttc->prio, entry, ttn->prio)) { */
+/* 		struct thd_trace *d, *n, *m; */
+/* 		printc("remove dependency\n"); */
+/* 		assert(ttc->lowest->h_thd); */
+/* 		d = &thd_trace[ttc->lowest->h_thd]; */
+/* 		assert(d && d->next); */
+/* 		do { */
+/* 			n = d; */
+/* 			m = n->next; */
+/* 			if (!m->next) break; */
+/* 		} while((d = d->next)); */
+/* 		assert(n && m && !m->next); */
+/* 		m->epoch++; */
+/* 		n->epoch = m->epoch; */
+/*                 // if not match, an error occurs */
+/* 		if (n->epoch != ttn->epoch) return 1; */
+/* 		else {   // set to the next highest thread */
+/* 			/\* n->lowest = n; *\/ */
+/* 		} */
+/* 	} */
 	
-	// TODO: localize the faulty spd ...here
-done:
-	return 0;
-}
+/* 	// TODO: localize the faulty spd ...here */
+/* done: */
+/* 	return 0; */
+/* } */
 
 static void
 check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
@@ -246,6 +281,7 @@ check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
 	int n_type = entry->evt_type; // next event type
 	assert(n_type > 0);
 
+	// thread local detection and global events !!! TODO:
 	switch (p_type) {
 	case EVT_CINV:
 		if (n_type == EVT_SINV || n_type == EVT_NINT || 
@@ -382,7 +418,7 @@ constraint_check(struct evt_entry *entry)
 
 	assert(entry && entry->evt_type > 0);
 	
-	if (entry->evt_type == EVT_NINT || entry->evt_type == EVT_NINT) {
+	if (entry->evt_type == EVT_TINT || entry->evt_type == EVT_NINT) {
 		if (likely(last_entry.from_thd && last_entry.from_spd)) {
 			from_thd = last_entry.from_thd;
 			from_spd = last_entry.from_spd;
@@ -405,7 +441,7 @@ constraint_check(struct evt_entry *entry)
 	switch (entry->evt_type) {
 	case EVT_CINV:
 	case EVT_CRET:
-		update_dest_spd(entry); // convert cap_no to spdid
+		cap_to_dest(entry); // convert cap_no to spdid (TODO:cache this!)
 	case EVT_SINV:
 	case EVT_SRET:
 		assert(entry->to_thd == entry->from_thd);
@@ -429,17 +465,19 @@ constraint_check(struct evt_entry *entry)
 		assert(0);
 		break;
 	}	
-	printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec);
+	/* printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec); */
 
 	/***************************/
 	/* Constraint check begins */
 	/***************************/
-	check_inv_spdexec(ttc, ttn, entry, up_t);
-	check_interrupt(ttc, entry);
-	check_invocation(ttc, entry);
-	check_ordering(ttc, entry);
-	check_priority_inversion(ttc, ttn, entry);
-	//check_thd_wcet(ttc, ttn, entry, up_t);
+	/* check_inv_spdexec(ttc, ttn, entry, up_t); */
+	/* check_interrupt(ttc, entry); */
+	/* check_invocation(ttc, entry); */
+	/* check_ordering(ttc, entry); */
+
+	/* check_priority_inversion(ttc, ttn, entry); */
+
+	/* check_thd_wcet(ttc, ttn, entry, up_t); */
 	/***************************/
 	/* Constraint check done ! */
 	/***************************/

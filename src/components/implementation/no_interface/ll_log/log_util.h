@@ -3,6 +3,8 @@
 #ifndef LOG_UTIL
 #define LOG_UTIL
 
+#include <log_process.h>
+
 /* get a page from the heap */
 static inline void *
 llog_get_page()
@@ -44,31 +46,6 @@ evt_in_spd (struct evt_entry *entry)
 	}
 	
 	return logged_in_spd;
-}
-
-static int
-cap_to_dest(unsigned long long cap_no)
-{
-	if (cap_no <= MAX_NUM_SPDS) return (int)cap_no;
-	return cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 0, cap_no);
-}
-
-static void
-update_dest_spd(struct evt_entry *entry)
-{
-	int d;
-	assert(entry && entry->evt_type > 0);
-
-	if (entry->evt_type == EVT_CINV) {
-		if ((d = cap_to_dest(entry->to_spd) <= 0)) assert(0);
-		entry->to_spd = d;
-	}
-	else if (entry->evt_type == EVT_CRET) {
-		if ((d = cap_to_dest(entry->to_spd) <= 0)) assert(0);
-		entry->from_spd = d;
-	}
-
-	return;
 }
 
 /*************************/

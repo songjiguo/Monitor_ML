@@ -461,11 +461,6 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_next->next_thd_id = thd_id;
 	cos_next->next_thd_flags = flags;
 
-#ifdef LOG_MONITOR
-	// lock is already taken
-	evt_enqueue(thd_id, cos_spd_id(), 0, 0, EVT_CS);
-#endif
-
 	cos_sched_lock_release();
 
 	/* kernel will read next thread information from cos_next */
@@ -480,6 +475,11 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 		rdtscll(start);
 	}
 #endif
+
+#ifdef LOG_MONITOR
+	evt_enqueue(thd_id, cos_spd_id(), cos_spd_id(), 0, 0, EVT_CS);
+#endif
+
 	return cos___switch_thread(thd_id, flags); 
 }
 

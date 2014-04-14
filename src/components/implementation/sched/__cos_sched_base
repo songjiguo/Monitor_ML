@@ -514,7 +514,7 @@ static void sched_timer_tick(void)
 /* Timer interrupt logging here*/
 #ifdef LOG_MONITOR
 		cos_sched_lock_take();
-		evt_enqueue(cos_get_thd_id(), cos_spd_id(), 0, 0, EVT_TINT);
+		evt_enqueue(cos_get_thd_id(), cos_spd_id(), cos_spd_id(), 0, 0, EVT_TINT);
 		cos_sched_lock_release();
 #endif
 		cos_sched_lock_take();
@@ -1189,7 +1189,7 @@ static struct sched_thd *sched_setup_thread_arg(void *metric_str, crt_thd_fn_t f
 	else      thread_params_set(new, (char *)metric_str);
 	
 #ifdef LOG_MONITOR
-	llog_init_prio(cos_spd_id(), new->id, sched_get_metric(new)->priority);
+	llog_setprio(cos_spd_id(), new->id, sched_get_metric(new)->priority);
 #endif
 
 	return new;

@@ -201,26 +201,25 @@ llboot_thd_done(void)
 	}
 
 	if (tid == llboot->monitor_thd) {
-		while(1) {
-			printc("core %ld: monitor thread %d\n", cos_cpuid(), llboot->monitor_thd);
-			int     pmthd = llboot->prev_mthd;
-			spdid_t mspd = llboot->monitor_spd;
+		/* while(1) { */
+		/* 	printc("ll_booter: core %ld: monitor thread %d\n", cos_cpuid(), llboot->monitor_thd); */
+		/* 	int     pmthd = llboot->prev_mthd; */
+		/* 	spdid_t mspd = llboot->monitor_spd; */
+		/* 	assert(tid == llboot->monitor_thd); */
 			
-			assert(tid == llboot->monitor_thd);
-			
-			/* printc("mspd is %d\n", mspd); */
-			if (mspd) {
-				assert(pmthd);
-				llboot->monitor_spd = 0;
+		/* 	printc("mspd is %d\n", mspd); */
+		/* 	if (mspd) { */
+		/* 		assert(pmthd); */
+		/* 		llboot->monitor_spd = 0; */
 				
-				cos_upcall(mspd);
-				assert(0);
-			} else {
-				assert(pmthd && pmthd != tid);
-				llboot->prev_mthd = 0;
-				cos_switch_thread(pmthd, 0);
-			}
-		}
+		/* 		cos_upcall_args(mspd, COS_UPCALL_LOG_PROCESS); */
+		/* 		assert(0); */
+		/* 	} else { */
+		/* 		assert(pmthd && pmthd != tid); */
+		/* 		llboot->prev_mthd = 0; */
+		/* 		cos_switch_thread(pmthd, 0); */
+		/* 	} */
+		/* } */
 	}
 
 	if (tid == llboot->recovery_thd) {
@@ -256,18 +255,19 @@ llboot_thd_done(void)
 	}
 }
 
-int
-logmgr_active(spdid_t spdid)
-{
-	struct llbooter_per_core *llboot = PERCPU_GET(llbooter);
-	llboot->prev_mthd     = cos_get_thd_id();
-	llboot->monitor_spd   = LLBOOT_LOG;
+/* // only called by ll_log_mgr once to activate the logmgr_thd */
+/* int */
+/* logmgr_active(spdid_t spdid) */
+/* { */
+/* 	struct llbooter_per_core *llboot = PERCPU_GET(llbooter); */
+/* 	llboot->prev_mthd     = cos_get_thd_id(); */
+/* 	llboot->monitor_spd   = LLBOOT_LOG; */
 
-	printc("monitor upcall in llbooter....and monitor spd %d\n", LLBOOT_LOG);	
-	while (llboot->prev_mthd == cos_get_thd_id()) cos_switch_thread(llboot->monitor_thd, 0);
+/* 	printc("monitor upcall in llbooter....and monitor spd %d\n", LLBOOT_LOG);	 */
+/* 	while (llboot->prev_mthd == cos_get_thd_id()) cos_switch_thread(llboot->monitor_thd, 0); */
 
-	return 0;
-}
+/* 	return 0; */
+/* } */
 
 /* can only be called from mmgr/scheduler */
 /* In eager recovery (ramFS) can also be upcalled within booter */
@@ -604,8 +604,7 @@ int
 sched_child_cntl_thd(spdid_t spdid) 
 {
 	if (unlikely(cos_sched_introspect(COS_SCHED_HAS_PARENT, spdid, 0))) return 0;
-	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) {BUG(); while(1);}
-	/* printc("Grant thd %d to sched %d\n", cos_get_thd_id(), spdid); */
+	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) {BUG() while(1);}
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 	return 0;
 }

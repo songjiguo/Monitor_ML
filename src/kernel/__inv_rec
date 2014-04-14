@@ -4170,10 +4170,10 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 	/* TODO: access control */
 
 	if (option == COS_CAP_GET_SER_SPD) {   //Jiguo: for monitor
-		/* printk("cos: capid %d, called from spd %d\n", arg2 >> 20, arg1 >> 16); */
 		capid = arg2 >> 20;
-		/* printk("cos: caller spdid %d and capid %d\n", spdid, capid); */
-		sspd = spd_get_by_index(spdid);
+		/* printk("cos: (log) call from %d and capid %d\n",  */
+		/*        arg1, capid); */
+		sspd = spd_get_by_index(arg1);
 		if (!sspd) return -1;
 	} else {
 		cspdid = arg1 >> 16;
