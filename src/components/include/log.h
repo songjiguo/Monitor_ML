@@ -1,5 +1,40 @@
 /*
-   Jiguo 2014 -- The header file for the log monitor (latent fault work)
+  Jiguo 2014 -- The header file for the log monitor
+
+  evt_enqueue() function is responsible for tracking the event
+  occurrence, including CINV, CRET, SINV, SRET, CS, INT. We need track
+  the type of event properly. Here are parameters for different
+  events:
+
+  par1 -- to_thread id
+          (CINV, CRET, SINV and SRET: this is the current thread)
+          (CS: this is the next thread that is about to be dispatched)
+          (INT: this is the interrupt thread)
+  par2 -- from_component id 
+          (this is to_spd (for CINV and SRET))
+          (this is from_spd (for SINV and CRET))
+	  (INT : this is net_if)
+	  (CS : this is scheduler)	  
+  par3 -- to_component id 
+          (this is to_spd (for CINV and SRET))
+          (this is from_spd (for SINV and CRET))
+	  (INT : this is net_if)
+	  (CS : this is scheduler)	  
+  par4 -- function number 
+          (hard coded now: 0 for none, 1 for sched_block ...)
+  par5 -- extra parameter
+          e.g. dep_thd in sched_block, for PI detection. 
+
+  1) Lock. Multiple producers are trying to record their events into a
+  single consumer buffer. A lock is used around rb. The contention can
+  cause the recursive lock issue here. (lock/booter/time_evt spd uses
+  sched_component_take/release, sched/mm uses
+  cos_sched_lock_take/release). Other component uses lock_take.
+  
+  2) Record consistency. For example, a thread can be preempted right
+  after evt_conf and before writes into the shared RB. When the event
+  is actually written, its time stamp could be wrong. TODO: directly
+  write to RB entry (need change ck) 
 */
 
 #ifndef LOGGER_H
@@ -15,6 +50,10 @@ extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 #include <cos_types.h>
 PERCPU_EXTERN(cos_sched_notifications);
 
+#ifndef CFORCEINLINE
+#define CFORCEINLINE __attribute__((always_inline))
+#endif
+
 #define MEAS_WITH_LOG
 //#define MEAS_WITHOUT_LOG
 
@@ -22,6 +61,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 /*  Hard code spd and thread ID */
 /********************************/
 // component ID
+#define LLLOG_SPD       2
 #define SCHED_SPD	3
 #define MM_SPD		4
 #define BOOTER_SPD	6
@@ -48,13 +88,14 @@ enum{
 };
 // event type
 enum{
-	EVT_CINV = 1,
-	EVT_SINV,
-	EVT_SRET,
-	EVT_CRET,
-	EVT_CS,
-	EVT_TINT,   // timer interrupt
-	EVT_NINT    // network interrupt
+	EVT_CINV = 1,   // inv in client
+	EVT_SINV,       // inv in server
+	EVT_SRET,       // ret in server
+	EVT_CRET,       // ret in client 
+	EVT_CS,         // context switch
+	EVT_TINT,       // timer interrupt
+	EVT_NINT,       // network interrupt
+	EVT_RBCONTEND   // contention on a rb
 };
 
 /* event entry in the ring buffer (per event) */
@@ -81,27 +122,20 @@ CK_RING_INSTANCE(logevt_ring) *evt_ring;
 static void
 print_evt_info(struct evt_entry *entry)
 {
-	/* assert(entry); */
-
 	int dest;
 
+	assert(entry);
 	printc("thd (%d --> ", entry->from_thd);
 	printc("%d) ", entry->to_thd);
 
 	if (entry->evt_type == EVT_CRET && entry->from_spd > MAX_NUM_SPDS) {
-		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 
-				    entry->to_spd, entry->from_spd);
-		/* assert (dest > 0); */
-		/* entry->from_spd = dest; */
+		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, entry->to_spd, entry->from_spd);
 		printc("spd (%d --> ", dest);
 	} else printc("spd (%lu --> ", entry->from_spd);
 
 	if (entry->evt_type == EVT_CINV && entry->to_spd > MAX_NUM_SPDS) {
-		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, 
-				    entry->from_spd, entry->to_spd);
-		/* assert (dest > 0); */
+		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, entry->from_spd, entry->to_spd);
 		printc("%d) ", dest);
-		/* entry->to_spd = dest; */
 	} else printc("%lu) ", entry->to_spd);
 
 	printc("func_num %d ", entry->func_num);
@@ -112,29 +146,26 @@ print_evt_info(struct evt_entry *entry)
 	return;
 }
 
-// check if RB is full
-static inline int 
+static inline CFORCEINLINE int 
 evt_ring_is_full()
 {
 	int capacity, size;
 
-	/* assert(evt_ring); */
+	assert(evt_ring);
 	capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 	size = CK_RING_SIZE(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
-	// unlikely
-	if (capacity == size + 1) return 1;
+	if (unlikely(capacity == size + 1)) return 1;
 	else return 0;
 }
 
-static inline void 
+static inline CFORCEINLINE void 
 evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3, int par4, int par5, int type)
 {
 	unsigned long long ts;
-	/* assert(evt); */
+	assert(evt);
 
-	rdtscll(ts);
+	rdtscll(evt->time_stamp);
 
-	evt->time_stamp = ts;
 	evt->from_thd	= cos_get_thd_id();
 	evt->to_thd	= par1;
 	evt->from_spd	= par2;
@@ -146,71 +177,34 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3
 	return;
 }
 
-//CFORINLINE  -- always inline
-/*
-  This function is responsible for tracking the event occurrence,
-  including CINV, CRET, SINV, SRET, CS, INT. We need track the type of
-  event properly. Here are parameters for different events:
-
-  par1 -- to_thread id
-          (CINV, CRET, SINV and SRET: this is the current thread)
-          (CS: this is the next thread that is about to be dispatched)
-          (INT: this is the interrupt thread)
-  par2 -- from_component id 
-          (this is to_spd (for CINV and SRET))
-          (this is from_spd (for SINV and CRET))
-	  (INT : this is net_if)
-	  (CS : this is scheduler)	  
-  par3 -- to_component id 
-          (this is to_spd (for CINV and SRET))
-          (this is from_spd (for SINV and CRET))
-	  (INT : this is net_if)
-	  (CS : this is scheduler)	  
-  par4 -- function number 
-          (hard coded now: 0 for none, 1 for sched_block ...)
-  par5 -- extra parameter
-          e.g. dep_thd in sched_block, for PI detection. 
-*/
-
-static inline void 
+static inline CFORCEINLINE void 
 evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
-	struct evt_entry evt;
-
-	/* assert(cos_spd_id() > 2); */
-	// shared RB is created when the first event happens in this spd
+	// create shared RB
 	if (unlikely(!evt_ring)) {
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
-		/* assert(cli_addr); */
+		assert(cli_addr);
 		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
 	}
 
-	// log_mgr need process when any RB is full
+	// process log if any RB is full
 	if (unlikely(evt_ring_is_full())) {
+		// contention RB better not be full before any other RB is full
+		assert(par1 != LLLOG_SPD);
+		printc("FULL!!!!! %d\n", sizeof(unsigned int));
 		llog_process();
 	}
 
-	/* Two problems need to be solved here: 1) Lock. Multiple
-	 * producers are trying to record their events into a single
-	 * consumer buffer. A lock is used around rb. The contention
-	 * can cause the recursive lock issue
-	 * here. (lock/booter/time_evt spd uses
-	 * sched_component_take/release, sched/mm uses
-	 * cos_sched_lock_take/release). Other component uses
-	 * lock_take.
+	// log the event (take slot first, then record)
+	struct evt_entry *evt;
+	while(!(evt = (struct evt_entry *)CK_RING_ENQUEUE_SPSCPRE(logevt_ring, evt_ring)));
 
-	 * 2) Record consistency. For example, a thread can be
-	 * preempted right after evt_conf and before writes into the
-	 * shared RB. When the event is actually written, its time
-	 * stamp could be wrong. TODO: directly write to RB entry
-	 * (need change ck)
-	 */
-
-	evt_conf(&evt, par1, par2, par3, par4, par5, evt_type);
-	/* print_evt_info(&evt); */
-	while (unlikely(!CK_RING_ENQUEUE_SPSC(logevt_ring, evt_ring, &evt)));
-
+	if (likely(evt != (void *)1)) {   // no contention
+		evt_conf(evt, par1, par2, par3, par4, par5, evt_type);
+	}
+	
 	return;
 }
 
 #endif /* LOGGER_H */
+

@@ -90,7 +90,7 @@ static inline int cos_sched_lock_take(void)
 			/* If another thread holds the lock, notify
 			 * kernel to switch */
 #ifdef LOG_MONITOR
-#if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)  // llbooter calls this as well
+#if defined(SCHED_LL_LOG) || defined (MM_LL_LOG)
 			evt_enqueue(owner, cos_spd_id(), cos_spd_id(), 0, 0, EVT_CS);
 #endif
 #endif

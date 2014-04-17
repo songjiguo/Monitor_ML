@@ -55,12 +55,14 @@ struct llbooter_per_core {
 	 * recover_spd:  the spd that will require rebooting
 	 */
 	int     alpha, init_thd, recovery_thd;
+#ifdef LOG_MONITOR
 	int     monitor_thd;
+	volatile int prev_mthd, monitor_spd;
+#endif
 	int     sched_offset;      
 	volatile int prev_thd, recover_spd;
 	volatile vaddr_t recovery_arg;
 	volatile int operation;
-	volatile int prev_mthd, monitor_spd;
 } __attribute__((aligned(4096))); /* Avoid the copy-on-write issue for us. */
 
 PERCPU(struct llbooter_per_core, llbooter);
@@ -200,10 +202,11 @@ llboot_thd_done(void)
 		BUG();
 	}
 
+#ifdef LOG_MONITOR
 	if (tid == llboot->monitor_thd) {
 		while(1) {
 			int     pmthd = llboot->prev_mthd;
-			spdid_t mspd = llboot->monitor_spd;
+			spdid_t mspd  = llboot->monitor_spd;
 			assert(tid == llboot->monitor_thd);
 			
 			if (mspd) {
@@ -218,7 +221,7 @@ llboot_thd_done(void)
 			}
 		}
 	}
-
+#endif
 	if (tid == llboot->recovery_thd) {
 		while (1) {
 			int     pthd = llboot->prev_thd;
@@ -252,7 +255,8 @@ llboot_thd_done(void)
 	}
 }
 
-// only called by ll_log_mgr to switch to processing thread
+// called by log manager only
+#ifdef LOG_MONITOR
 int
 logmgr_active(spdid_t spdid)
 {
@@ -261,9 +265,11 @@ logmgr_active(spdid_t spdid)
 	llboot->monitor_spd   = spdid;
 
 	while (llboot->prev_mthd == cos_get_thd_id()) cos_switch_thread(llboot->monitor_thd, 0);
-
 	return 0;
 }
+#else
+int logmgr_active(spdid_t spdid) { return 0; }
+#endif
 
 /* can only be called from mmgr/scheduler */
 /* In eager recovery (ramFS) can also be upcalled within booter */
@@ -499,13 +505,22 @@ boot_create_init_thds(void)
 	llboot->alpha        = cos_get_thd_id();
 	llboot->recovery_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(llboot->recovery_thd >= 0);
+#ifdef LOG_MONITOR
 	llboot->monitor_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(llboot->monitor_thd >= 0);
+#endif
 	llboot->init_thd     = cos_create_thread((int)llboot_ret_thd, 0, 0);
+#ifdef LOG_MONITOR
 	printc("Core %ld, Low-level booter created threads:\n\t"
 	       "%d: alpha\n\t%d: recov\n\t%d: monitor\n\t%d: init\n",
 	       cos_cpuid(), llboot->alpha, 
 	       llboot->recovery_thd, llboot->monitor_thd, llboot->init_thd);
+#else
+	printc("Core %ld, Low-level booter created threads:\n\t"
+	       "%d: alpha\n\t%d: recov\n\t%d: init\n",
+	       cos_cpuid(), llboot->alpha, 
+	       llboot->recovery_thd, llboot->init_thd);
+#endif
 	assert(llboot->init_thd >= 0);
 }
 

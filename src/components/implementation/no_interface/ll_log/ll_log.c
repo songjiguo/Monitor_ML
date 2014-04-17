@@ -12,59 +12,33 @@ extern int logmgr_active(spdid_t spdid);
 
 int logmgr_thd;
 
-/* contention_omission ring buffer (corb) entry */
-struct corb_entry {
-	unsigned int owner, contender;
-	int spdid, flag;
-	unsigned long long time_stamp;
-};
+void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages) 
+{ return NULL; }
 
-#ifndef CK_RING_CONTINUOUS
-#define CK_RING_CONTINUOUS
-#endif
-
-#ifndef __CORBRING_DEFINED
-#define __CORBRING_DEFINED
-CK_RING(corb_entry, corb_ring);
-CK_RING_INSTANCE(corb_ring) *corb_evt_ring;
-#endif
-
-/* 
-   Set up ring buffer (assume a page for now)
-   1) cli_addr = 0 : the contention_omission RB
-   2) cli_addr > 0 : shared RB between spd and log_mgr
-*/
+/* Set up ring buffer (assume a page for now, not including ll_log) */
 static int 
 lmgr_setuprb(spdid_t spdid, vaddr_t cli_addr) {
         struct logmon_info *spdmon = NULL;
         vaddr_t log_ring, cli_ring = 0;
 	char *addr, *hp;
 	
-	assert(spdid);
+	assert(spdid && cli_addr);
 	addr = llog_get_page();
 	if (!addr) goto err;
-	
-	if (!cli_addr) {
-		corb_evt_ring = (void *)addr;
-		CK_RING_INIT(corb_ring, (CK_RING_INSTANCE(corb_ring) *)((void *)addr), NULL,
-			     get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_corb_ring))/sizeof(struct corb_entry)));
-	} else {
-		assert(cli_addr > 0);
-		spdmon = &logmon_info[spdid];
-		printc("spdmon->spdid %d spdid %d\n", spdmon->spdid, spdid);
-		assert(spdmon->spdid == spdid);
-		spdmon->mon_ring = (vaddr_t)addr;
-		cli_ring = cli_addr;
-		if (unlikely(cli_ring != __mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, cli_ring))) {
-			printc("alias rings %d failed.\n", spdid);
-			assert(0);
-		}
-		// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))	
-		spdmon->cli_ring = cli_ring;
-		CK_RING_INIT(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)addr), NULL,
-			     get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_logevt_ring))/sizeof(struct evt_entry)));
+	spdmon = &logmon_info[spdid];
+	assert(spdmon);
+
+	cli_ring = cli_addr;
+	spdmon->mon_ring = (vaddr_t)addr;
+
+	if (unlikely(cli_ring != __mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, cli_ring))) {
+		printc("alias rings %d failed.\n", spdid);
+		assert(0);
 	}
-	
+	// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))	
+	spdmon->cli_ring = cli_ring;
+	CK_RING_INIT(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)addr), NULL,
+		     get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_logevt_ring))/sizeof(struct evt_entry)));
 	
 	return 0;
 err:
@@ -88,11 +62,9 @@ lmgr_action()
 }
 
 /* Initialize log manager here...do this only once */
-static inline void
+static void
 lmgr_initialize(void)
 {
-	// init log manager
-	printc("logmgr is initialized here by %d\n", cos_get_thd_id());
 	memset(logmon_info, 0, sizeof(struct logmon_info) * MAX_NUM_SPDS);
 	int i, j;
 	for (i = 0; i < MAX_NUM_SPDS; i++) {
@@ -104,8 +76,8 @@ lmgr_initialize(void)
 			logmon_info[i].capdest[j].dest  = 0;
 			logmon_info[i].capdest[j].capno = 0;
 		}
-		/* logmon_info[i].first_entry = (struct evt_entry *)malloc(sizeof(struct evt_entry)); */
 		memset(&logmon_info[i].first_entry, 0, sizeof(struct evt_entry));
+
 		// initialize the heap entry
 		es[i].ts = 0; 
 		es[i].spdid = i;
@@ -113,11 +85,14 @@ lmgr_initialize(void)
 		
 	init_thread_trace();
 
-        // get a page for heap (assume a page for now)
+        // alloc a page for heap operation (assume a page for now)
 	h = log_heap_alloc(MAX_NUM_SPDS, evtcmp, evtupdate);
 	assert(h);
-	
-	corb_evt_ring = NULL;
+
+        // local RB for contention only
+	evt_ring = (CK_RING_INSTANCE(logevt_ring) *)llog_get_page();
+	assert(evt_ring);
+	logmon_info[cos_spd_id()].mon_ring = (vaddr_t)evt_ring;
 
 	return;
 }
@@ -125,9 +100,6 @@ lmgr_initialize(void)
 void 
 cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
-	/* printc("upcall type is %d, arg1 %d, arg2 %d, arg3 %d\n",  */
-	/*        t, (int)arg1,  (int)arg2,  (int)arg3); */
-	// arg 2 is the passed spdid, need this?
 	switch (t) {
 	case COS_UPCALL_BOOTSTRAP:
 		lmgr_initialize(); break;
@@ -157,6 +129,28 @@ llog_getsyncp()
 	return LM_SYNC_PERIOD;
 }
 
+/* Log the event of contention. This should only be called when
+   contention happens on RB and we want to skip that event to avoid
+   the recursive lock issue (e.g. contends for the lock in the
+   scheduler and when the contention event (CS) needs be logged in a
+   RB, the lock is needed for that RB again) */
+
+int
+llog_contention(spdid_t spdid, unsigned int owner)
+{
+        struct evt_entry cont_evt;
+        /* printc("Contention!!! spd %d owner %d contender %d\n", spdid, owner, contender); */
+	assert(spdid != cos_spd_id());
+
+        LOCK();
+
+	evt_enqueue(owner, spdid, spdid, 0, 0, EVT_RBCONTEND);
+
+        UNLOCK();
+        return 0;
+}
+
+
 /* Initialize thread priority. This should only be called when a
    thread is created and the priority is used to detect the priority
    inversion, scheduling decision, deadlock, etc.
@@ -169,16 +163,13 @@ llog_setprio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
 
 	assert(spdid == SCHED_SPD && thd_id > 0 && prio <= PRIO_LOWEST);
 
-	printc("llog_init_prio thd %d (passed from spd %d thd %d with prio %d)\n", 
-	       cos_get_thd_id(), spdid, thd_id, prio);
+	LOCK();
 
-	/* LOCK(); */
 	ttl = &thd_trace[thd_id];
 	assert(ttl);
 	ttl->prio = prio;
 
-	/* UNLOCK(); */
-
+	UNLOCK();
 	return 0;
 }
 
@@ -191,27 +182,23 @@ llog_init(spdid_t spdid, vaddr_t addr)
         struct logmon_info *spdmon;
 
 	printc("llog_init thd %d (passed spd %d for RB)\n", cos_get_thd_id(), spdid);
-	/* LOCK(); */
-
 	assert(spdid);
 	spdmon = &logmon_info[spdid];
 	assert(spdmon);
 
-	// limit one RB per component here, not per interface
-	if (spdmon->mon_ring && spdmon->cli_ring){
-		ret = spdmon->mon_ring;
-		goto done;
-	}
+	assert(!spdmon->mon_ring && !spdmon->cli_ring);
 
+	LOCK();
 	/* printc("llog_init...(thd %d spd %d)\n", cos_get_thd_id(), spdid); */
 	if (lmgr_setuprb(spdid, addr)) {
 		printc("failed to setup shared rings\n");
 		goto done;
 	}
-	assert(spdmon->cli_ring);
+	assert(spdmon->mon_ring && spdmon->cli_ring);
+
 	ret = spdmon->cli_ring;
 done:
-	/* UNLOCK(); */
+	UNLOCK();
 	return ret;
 }
 

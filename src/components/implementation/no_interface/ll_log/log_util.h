@@ -34,6 +34,7 @@ evt_in_spd (struct evt_entry *entry)
 	case EVT_SRET:
 		logged_in_spd = entry->from_spd;
 		break;
+	case EVT_RBCONTEND:
 	case EVT_SINV:
 	case EVT_CRET:
 	case EVT_TINT:

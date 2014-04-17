@@ -7,7 +7,7 @@
 #include <heap.h>
 #include <log_util.h>
 
-// cache the dest for a cap_no
+/* cache the dest for a cap_no */
 struct spd_cap {
 	int dest;
 	unsigned long capno;
@@ -24,6 +24,7 @@ struct logmon_info {
 	struct evt_entry first_entry;
 };
 
+/* per thread tracking data structure */
 struct thd_trace {
 	int thd_id, prio;
 	/* int h_thd, h_prio; */
@@ -138,7 +139,7 @@ cap_to_dest(struct evt_entry *entry)
 	
 	assert(entry && (entry->evt_type == EVT_CINV || 
 		entry->evt_type == EVT_CRET));
-	print_evt_info(entry);
+	/* print_evt_info(entry); */
 	if (entry->to_spd < MAX_NUM_SPDS) return;
 	
 	d = lookup_dest(entry->from_spd, entry->to_spd);
@@ -149,7 +150,7 @@ cap_to_dest(struct evt_entry *entry)
 	return;
 }
 
-/* Add the earliest event from each spd onto the heap */
+/* Add the earliest event from each spd onto the heap. Do this once */
 static void
 populate_evts()
 {
@@ -157,14 +158,14 @@ populate_evts()
         struct logmon_info *ret = NULL, *spdmon;
 	unsigned long long ts = LLONG_MAX;
 	CK_RING_INSTANCE(logevt_ring) *evtring;
-	
+
 	struct evt_entry *entry;
 	for (i = 1; i < MAX_NUM_SPDS; i++) {
 		spdmon = &logmon_info[i];
 		assert(spdmon);
+
 		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
 		if (!evtring) continue;
-
 		entry = &spdmon->first_entry;
 		assert(entry);
 		if (!CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, entry)) {
@@ -172,11 +173,11 @@ populate_evts()
 		}
 		// if there is no event in a spd now, there should be
 		// no event until the log manger finish the processing
-		es[i].ts = LLONG_MAX - entry->time_stamp;
+		es[i].ts = LLONG_MAX - entry->time_stamp;			
 		assert(!heap_add(h, &es[i]));
-	}
+	}	
 	/* validate_heap_entries(h, MAX_NUM_SPDS); */
-
+	
 	return;
 }
 
@@ -190,13 +191,11 @@ find_next_evt(struct evt_entry *evt)
 	struct hevtentry *next;
 	CK_RING_INSTANCE(logevt_ring) *evtring;
 
-	if (!evt) {
+	if (unlikely(!evt)) {
 		populate_evts();
 	} else {	
-		if (!(spdid = evt_in_spd(evt))) {
-			assert(0);
-			// Check the constraints here too....TODO
-		}
+		assert((spdid = evt_in_spd(evt)));
+		// Check the constraints here too....TODO
 		/* print_evt_info(evt); */
 		spdmon = &logmon_info[spdid];
 		assert(spdmon);
@@ -210,7 +209,7 @@ find_next_evt(struct evt_entry *evt)
 
 	next = heap_highest(h);
 	if (!next || next->ts == 0) goto done;
-	printc("earliest next spdid %d -- ts %llu\n", next->spdid, LLONG_MAX - next->ts);
+	/* printc("earliest next spdid %d -- ts %llu\n", next->spdid, LLONG_MAX - next->ts); */
 	spdmon = &logmon_info[next->spdid];
 	assert(spdmon);
 	ret = &spdmon->first_entry;
