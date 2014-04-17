@@ -53,8 +53,6 @@
 //#define CK_RING_CONTINUOUS(type, name)
 
 #ifdef LOG_MONITOR
-extern int 
-llog_contention(spdid_t spdid, unsigned int owner);
 #define CK_RING(type, name)							\
 	struct ck_ring_##name {							\
 		unsigned int c_head;						\
@@ -119,18 +117,8 @@ llog_contention(spdid_t spdid, unsigned int owner);
 	ck_ring_enqueue_spscpre_##name(struct ck_ring_##name *ring)	        \
 	{									\
 		unsigned int consumer, producer, delta;				\
-		unsigned int owner;					        \
 		unsigned int mask = ring->mask;					\
 										\
-		owner = ck_pr_load_uint(&ring->owner);			        \
-                if (unlikely(owner)) {                                          \
-			llog_contention(cos_spd_id(), owner);	        	\
-			return (void *)1;				        \
-		} else {				         		\
-			ck_pr_fence_store();			        	\
-			ck_pr_store_uint(&ring->owner, cos_get_thd_id());       \
-		}							        \
-									        \
                 consumer = ck_pr_load_uint(&ring->c_head);	        	\
 		producer = ring->p_tail;					\
 		delta = producer + 1;						\
@@ -146,7 +134,21 @@ llog_contention(spdid_t spdid, unsigned int owner);
 									        \
 		return (void *)&ring->ring[producer & mask];		        \
 	}									\
-	CK_CC_INLINE static bool						\
+	CK_CC_INLINE static unsigned int         				\
+	ck_ring_enqueue_spsccont_##name(struct ck_ring_##name *ring)	        \
+	{								        \
+		unsigned int owner;					        \
+									        \
+		owner = ck_pr_load_uint(&ring->owner);                  	\
+		if (unlikely(owner)) {    					\
+			return owner;    					\
+		} else {         						\
+			ck_pr_fence_store();     				\
+			ck_pr_store_uint(&ring->owner, cos_get_thd_id());       \
+			return false;      					\
+		}        							\
+	}		         						\
+	CK_CC_INLINE static bool					        \
 	ck_ring_enqueue_spsc_##name(struct ck_ring_##name *ring,		\
 				    struct type *entry)				\
 	{									\
@@ -447,6 +449,8 @@ llog_contention(spdid_t spdid, unsigned int owner);
 #ifdef LOG_MONITOR
 #define CK_RING_ENQUEUE_SPSCPRE(name, object)           	\
 	ck_ring_enqueue_spscpre_##name(object)
+#define CK_RING_ENQUEUE_SPSCCONT(name, object)           	\
+	ck_ring_enqueue_spsccont_##name(object)
 
 struct ck_ring {
 	unsigned int c_head;
@@ -533,17 +537,7 @@ CK_CC_INLINE static void *
 ck_ring_enqueue_spscpre(struct ck_ring *ring)
 {
 	unsigned int consumer, producer, delta;
-	unsigned int owner;
 	unsigned int mask = ring->mask;
-
-	owner = ck_pr_load_uint(&ring->owner);
-	if (unlikely(owner)) {
-		llog_contention(cos_spd_id(), owner);
-		return (void *)1;  // not log this event due to the contention on RB
-	} else {
-		ck_pr_fence_store();
-		ck_pr_store_uint(&ring->owner, cos_get_thd_id()); // set the owner
-	}
 
 	consumer = ck_pr_load_uint(&ring->c_head);
 	producer = ring->p_tail;
@@ -560,6 +554,22 @@ ck_ring_enqueue_spscpre(struct ck_ring *ring)
 
 	return (void *)&ring->ring[producer & mask];
 }
+
+CK_CC_INLINE static unsigned int
+ck_ring_enqueue_spsccont(struct ck_ring *ring)
+{
+	unsigned int owner;
+
+	owner = ck_pr_load_uint(&ring->owner);
+	if (unlikely(owner)) {
+		return owner;  // there is contention and returns the owner
+	} else {
+		ck_pr_fence_store();   // no contention
+		ck_pr_store_uint(&ring->owner, cos_get_thd_id()); // set the owner
+		return false;
+	}
+}
+
 #endif
 
 

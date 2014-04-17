@@ -4200,8 +4200,10 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 		ret = spd_read_reset_invocation_cnt(cspd, sspd);
 		break;
 	case COS_CAP_GET_SER_SPD:   // Jiguo: use cap to find dest spd
+#ifdef LOG_MONITOR
 		ret = spd_cap_get_dest(sspd, capid);
 		/* printk("cos: dest spd %d\n", ret); */
+#endif
 		break;
 	case COS_CAP_SET_FAULT:
 		if (spd_cap_set_fault_handler(cspd, capid, arg2)) ret = -1;

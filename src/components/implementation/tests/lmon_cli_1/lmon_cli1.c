@@ -7,18 +7,13 @@
 #include <periodic_wake.h>
 #include <timed_blk.h>
 
+#include <test_monitor.h>
 #include <lmon_ser1.h>
 
 int high, low, med;
 int warm;
 
 #define ITER 5
-
-//#define NORM
-//#define MEAS_OVERHEAD
-#define EXAMINE_PI
-//#define EXAMINE_DEADLINE
-
 
 #ifdef MEAS_OVERHEAD
 #define RUN 10
@@ -56,7 +51,7 @@ cos_init(void)
 	} else {
 #ifdef MEAS_OVERHEAD  // only 1 cli and 1 ser
 		if (cos_get_thd_id() == high) {
-			timed_event_block(cos_spd_id(), 50);
+			timed_event_block(cos_spd_id(), 2);
 			unsigned long long start, end;
 			printc("<<< SIMPLE PPONG TEST BEGIN! >>>\n");
 			

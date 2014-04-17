@@ -1,12 +1,6 @@
 #ifndef CSTUB_H
 #define CSTUB_H
 
-/* #ifdef LOG_MONITOR */
-/* #if !defined(LOG_LOCK_LOCK) && !defined(LOG_LOCK_SCHED) */
-/* #define LOG_LOCK_NORM */
-/* #endif */
-/* #endif */
-
 #define __CSTUB_ASM_PRE			\
 	__asm__ __volatile__(		\
 	"pushl %%ebp\n\t"		\

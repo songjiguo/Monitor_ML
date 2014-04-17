@@ -674,7 +674,7 @@ static void fp_idle_loop(void *d)
 		int upcall_pending_request;
 		upcall_pending_request = cos_mpd_cntl(COS_DEBUG_WEB, 0, 0);
 		if (upcall_pending_request && upcall_pending_request != upcall_pending_request_old) {
-			printc("upcall_pending_request %d\n", upcall_pending_request);
+			/* printc("upcall_pending_request %d\n", upcall_pending_request); */
 			upcall_pending_request_old = upcall_pending_request;
 		}
 		/* if (this_ret > 24000000) { */

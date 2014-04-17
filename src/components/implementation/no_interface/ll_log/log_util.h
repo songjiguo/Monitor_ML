@@ -3,6 +3,7 @@
 #ifndef LOG_UTIL
 #define LOG_UTIL
 
+#include <log.h>
 #include <log_process.h>
 
 /* get a page from the heap */

@@ -110,20 +110,20 @@ lookup_dest(int spdid, unsigned long cap_no)
 	struct logmon_info *spdmon = &logmon_info[spdid];
 	assert(spdmon && cap_no);
 
-	printc("look for dest for cap_no %lu\n", cap_no);	
+	/* printc("look for dest for cap_no %lu\n", cap_no);	 */
 	for (i = 0; i < MAX_STATIC_CAP; i++){
 		if (unlikely(!spdmon->capdest[i].capno)) {
 			ret = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, spdid, cap_no);
 			assert(ret > 0);
 			spdmon->capdest[i].capno = cap_no;
 			spdmon->capdest[i].dest	 = ret;
-			printc("add dest %d for cap_no %lu\n", ret, cap_no);
+			/* printc("add dest %d for cap_no %lu\n", ret, cap_no); */
 			goto done;
 			
 		} else if (spdmon->capdest[i].capno == cap_no) {
 			ret = spdmon->capdest[i].dest;
 			assert(ret > 0);
-			printc("found dest %d for cap_no %lu\n", ret, cap_no);
+			/* printc("found dest %d for cap_no %lu\n", ret, cap_no); */
 			goto done;
 		}
 	}
