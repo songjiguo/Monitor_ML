@@ -50,6 +50,22 @@ evt_in_spd (struct evt_entry *entry)
 	return logged_in_spd;
 }
 
+static void
+last_evt_update(struct evt_entry *last, struct evt_entry *src)
+{
+	assert(last && src);
+	
+	last->from_thd = src->to_thd;
+	last->from_spd = src->to_spd; 
+	last->evt_type = src->evt_type;
+	last->para     = src->para;
+	last->func_num = src->func_num;
+
+	return;
+}
+
+
+
 /*************************/
 /* PI related functions  */
 /*************************/

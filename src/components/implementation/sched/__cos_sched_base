@@ -524,6 +524,7 @@ static void sched_timer_tick(void)
 			/* cos_stats(); */
 		}
 		/* are we done running? */
+		/* printc("done running ???? ticks %llu\n", PERCPU_GET(sched_base_state)->ticks); */
 		if (unlikely(PERCPU_GET(sched_base_state)->ticks >= RUNTIME_SEC*TIMER_FREQ+1)) {
 			sched_exit();
 			while (COS_SCHED_RET_SUCCESS !=
@@ -1675,7 +1676,7 @@ int sched_add_thd_to_brand(spdid_t spdid, unsigned short int bid, unsigned short
 extern void parent_sched_exit(void);
 void sched_exit(void)
 {
-	/* printc("In sched_exit, core %ld, switching to %d\n", cos_cpuid(), PERCPU_GET(sched_base_state)->init->id); */
+	printc("In sched_exit, core %ld, switching to %d\n", cos_cpuid(), PERCPU_GET(sched_base_state)->init->id);
 	cos_sched_clear_events();
 //	cos_switch_thread_release(PERCPU_GET(sched_base_state)->init->id, 0);
 	while (1) {

@@ -12,7 +12,6 @@ extern unsigned long lock_component_alloc(spdid_t spd);
 
 int __sg_lock_component_take(spdid_t spdid, unsigned long lock_id, unsigned short int thd_id)
 {
-	/* printc("ser lock: take (thd %d)\n", cos_get_thd_id()); */
 	int ret;
 #ifdef LOG_MONITOR
 	evt_enqueue(cos_get_thd_id(), spdid, cos_spd_id(), 0, 0, EVT_SINV);

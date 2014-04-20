@@ -19,6 +19,11 @@
 #include <linux/kernel.h>
 #include "include/fpu.h"
 #include "include/recovery.h"
+
+#ifdef LOAD_MONITOR
+#define LOGMGR_THD     3
+#endif
+
 /* 
  * These are the 1) page for the pte for the shared region and 2) the
  * page to hold general data including cpuid, thread id, identity
@@ -842,7 +847,6 @@ remove_preempted_status(struct thread *thd)
 		thd->interrupted_thread = NULL;
 	}
 
-	/* printk("before unset preempt flags: %p\n", thd->flags); */
 	/* printk("thread %d preempted status is removed\n", thd_get_id(thd)); */
 	thd->flags &= ~THD_STATE_PREEMPTED;
 }
@@ -944,15 +948,12 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 	}
 
 	/* We have valid threads, lets make sure we can schedule them! */
-	/* except recovery thread. */
-	if (likely(thd_get_id(curr) != 2)) {
-		if (unlikely(!thd_scheduled_by(curr, curr_spd) ||
-			     !thd_scheduled_by(thd, curr_spd))) {
-			*ret_code = COS_SCHED_RET_ERROR;
-			goto ret_err;
-		}
+	if (unlikely(!thd_scheduled_by(curr, curr_spd) ||
+		     !thd_scheduled_by(thd, curr_spd))) {
+		*ret_code = COS_SCHED_RET_ERROR;
+		goto ret_err;
 	}
-
+	
 	/* struct thread *test_thd; */
 	/* assert(spd_is_scheduler(curr_spd)); */
 	/* test_thd = sched_thread_lookup(curr_spd, tid); */
@@ -1572,6 +1573,7 @@ static void brand_completion_switch_to(struct thread *curr, struct thread *prev)
 
 	break_preemption_chain(curr);
 
+	/* printk("brand_completion switch: curr %d  -- prev %d ", thd_get_id(curr), thd_get_id(prev)); */
 	curr->flags &= ~THD_STATE_ACTIVE_UPCALL;
 	curr->flags |= THD_STATE_READY_UPCALL;
 	/* 
@@ -1608,7 +1610,8 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 {
 	struct thread *prev, *brand = curr->thread_brand;
     	struct composite_spd *cspd = (struct composite_spd *)thd_get_thd_spdpoly(curr);
-	
+
+	/* printk("3 brand_completion\n");	 */
 	assert((curr->flags & THD_STATE_ACTIVE_UPCALL) &&
 	       !(curr->flags & THD_STATE_READY_UPCALL));
 	assert(brand && cspd);
@@ -1688,7 +1691,6 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 		return &curr->regs;
 	}
 
-	/* printk("3\n"); */
 	/* printk("curr %d prev %d\n", thd_get_id(curr), thd_get_id(prev)); */
 	event_record("brand completion, switch to interrupted thread", thd_get_id(curr), thd_get_id(prev));
 	brand_completion_switch_to(curr, prev);
@@ -2817,15 +2819,24 @@ brand_higher_urgency(struct thread *upcall, struct thread *prev)
 	 * shutting down the system but still get a packet.  This will
 	 * shut it up for now.
 	 */
+
 	if (unlikely(!thd_get_sched_info(prev, d)->thread_notifications)) {
 		if (!thd_get_sched_info(upcall, d)->thread_notifications) {
-			printk("cos: skimping on brand metadata maintenance, and returning.\n");
+			/* printk("upcall thd %d -- prev thd %d\n", thd_get_id(upcall), thd_get_id(prev)); */
+			/* printk("cos: skimping on brand metadata maintenance, and returning.\n"); */
+			// Jiguo: unset ACTIVE in order to notify timer
+			//        thread after monitor thread. Similar for recovery thread
+#ifdef LOG_MONITOR			
+			upcall->flags &= ~THD_STATE_ACTIVE_UPCALL;
+			upcall->flags |= THD_STATE_READY_UPCALL;
+#endif
 			return 0;
 		} else {
 			/* upcall has the proper structure, prev doesn't! */
 			return 1;
 		}
 	}
+
 	u_urg = thd_get_depth_urg(upcall, d);
 	p_urg = thd_get_depth_urg(prev, d);
 	/* We should not run the upcall if it doesn't have more
@@ -2871,7 +2882,8 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	/* struct rb_buff_track_t rbb; */
 	/* unsigned int tail; */
 
-	/* printk("\n\nbrand_next: preempted %d  -- brand upcall %d \n", thd_get_id(preempted), thd_get_id(upcall)); */
+	/* printk("brand_next: preempted %d  -- brand upcall %d ", thd_get_id(preempted), thd_get_id(upcall)); */
+	/* printk(" (upcall->flags) %p \n", upcall->flags); */
 	/* printk("brand %d  its upcall %d \n", thd_get_id(brand), thd_get_id(upcall)); */
 	/* // timer: 7 (brand 6) */
 	/* // network: 12 (brand 13) */
@@ -2937,7 +2949,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 		/* 	/\* printk("return to %d \n", thd_get_id(preempted)); *\/ */
 		/* } */
 		/* ////////////////////////// */
-
+		/* printk("<<1>> return preempted %d \n", thd_get_id(preempted)); */
 		return preempted;
 	}
 
@@ -3041,7 +3053,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 		/* 	printk("higher urgency!!!\n"); */
 		/* } */
 		/* ////////////////////////// */
-
+		/* printk("<<2>> return upcall %d \n", thd_get_id(upcall)); */
 		return upcall;
 	}
 		
@@ -3076,6 +3088,7 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 	report_upcall("d", upcall);
 
 	cos_meas_event(COS_MEAS_BRAND_DELAYED);
+	/* printk("<<3>> return preempted %d\n", thd_get_id(preempted)); */
 	return preempted;
 }
 

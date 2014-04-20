@@ -13,25 +13,27 @@ int high;
 
 void cos_init(void)
 {
-	static int first = 0, flag = 0;
-	union sched_param sp;
+	/* static int first = 0, flag = 0; */
+	/* union sched_param sp; */
 
-	if(first == 0){
-		first = 1;
-		sp.c.type = SCHEDP_PRIO;
-		sp.c.value = 5;
-		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
+	/* if(first == 0){ */
+	/* 	first = 1; */
+	/* 	sp.c.type = SCHEDP_PRIO; */
+	/* 	sp.c.value = 5; */
+	/* 	high = sched_create_thd(cos_spd_id(), sp.v, 0, 0); */
 
-	} else {
-		if (cos_get_thd_id() == high) {
-			int lm_sync_period;
-			lm_sync_period = llog_getsyncp(cos_spd_id());
-			periodic_wake_create(cos_spd_id(), lm_sync_period);
-			while(1){
-				periodic_wake_wait(cos_spd_id());
-				/* printc("periodic process log....\n"); */
-				/* llog_process(); */
-			}
-		}
-	}
+	/* } else { */
+	/* 	if (cos_get_thd_id() == high) { */
+	/* 		int lm_sync_period; */
+	/* 		lm_sync_period = llog_getsyncp(cos_spd_id()); */
+	/* 		periodic_wake_create(cos_spd_id(), lm_sync_period); */
+	/* 		while(1){ */
+	/* 			periodic_wake_wait(cos_spd_id()); */
+	/* 			printc("periodic process log....\n"); */
+	/* 			llog_process(); */
+	/* 		} */
+	/* 	} */
+	/* } */
+	
+	return;
 }

@@ -77,7 +77,7 @@ const char *INIT_FILE      = "initfs.o";
 const char *INIT_FILE_NAME = "init.tar";
 
 
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
 typedef enum {
 	LLBOOT_COMPN = 1,
 	LLBOOT_LOG   = 2,

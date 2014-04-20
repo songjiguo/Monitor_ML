@@ -11,4 +11,6 @@
 .text
 
 cos_asm_server_fn_stub_spdid(lmon_ser1_test, __sg_lmon_ser1_test)
-//cos_asm_server_stub(lmon_test2)
+cos_asm_server_stub(try_cs_lp)
+cos_asm_server_stub(try_cs_mp)
+cos_asm_server_stub(try_cs_hp)

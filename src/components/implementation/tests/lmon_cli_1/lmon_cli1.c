@@ -16,7 +16,7 @@ int warm;
 #define ITER 5
 
 #ifdef MEAS_OVERHEAD
-#define RUN 10
+#define RUN 100
 #define RUNITER 10000
 #endif
 
@@ -56,12 +56,13 @@ cos_init(void)
 			printc("<<< SIMPLE PPONG TEST BEGIN! >>>\n");
 			
 			for (k = 0; k < RUN; k++){
-				rdtscll(start);
 				for (i = 0; i< RUNITER; i++) {
+					rdtscll(start);
 					lmon_ser1_test();
+					rdtscll(end);
+					/* printc("invocation cost: %llu\n", (end-start)); */
+
 				}
-				rdtscll(end);
-				printc("avg invocations cost: %llu\n", (end-start)/RUNITER);
 			}
 			printc("\n<<< PPONG TEST END! >>>\n");
 		}
@@ -69,19 +70,19 @@ cos_init(void)
 #ifdef EXAMINE_PI   // 1 cli and 1 ser, also depends on lock, scheduler (maybe period if we need periodic task)
 		if (cos_get_thd_id() == high) {
 			printc("<<<high thd %d>>>\n", cos_get_thd_id());
-			timed_event_block(cos_spd_id(), 5);
-			lmon_ser1_test();
+			timed_event_block(cos_spd_id(), 6);
+			try_cs_hp();
 		}
 
 		if (cos_get_thd_id() == med) {
 			printc("<<<med thd %d>>>\n", cos_get_thd_id());
-			lmon_ser1_test();
+			timed_event_block(cos_spd_id(), 3);
+			try_cs_mp();
 		}
 
 		if (cos_get_thd_id() == low) {
 			printc("<<<low thd %d>>>\n", cos_get_thd_id());
-			timed_event_block(cos_spd_id(), 2);
-			lmon_ser1_test();
+			try_cs_lp();
 		}
 #endif
 #ifdef EXAMINE_DEADLINE   //  periodic task

@@ -8,9 +8,7 @@
 #include <log_process.h>   // check all constraints
 
 extern int logmgr_active(spdid_t spdid);
-#define LM_SYNC_PERIOD 50
-
-int logmgr_thd;
+#define LM_SYNC_PERIOD 50   // period for asynchronous processing
 
 void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages) 
 { return NULL; }
@@ -52,11 +50,19 @@ lmgr_action()
         vaddr_t mon_ring, cli_ring;
 	struct evt_entry *evt;
 
+	printc("process log now!!!!!\n");
+
+	rdtscll(lpc_start);
 	evt = find_next_evt(NULL);
-	if (!evt) return;
+	if (!evt) goto done;
 	do {
 		constraint_check(evt);
 	} while ((evt = find_next_evt(evt)));
+	printc("process log done!!!!!\n");
+done:
+	rdtscll(lpc_end);
+	lpc_last = lpc_end - lpc_start;
+	update_proc(lpc_last);
 
 	return;
 }
@@ -71,7 +77,7 @@ lmgr_initialize(void)
 		logmon_info[i].spdid	= i;
 		logmon_info[i].mon_ring = 0;
 		logmon_info[i].cli_ring = 0;
-
+		
 		for (j = 0; j < MAX_STATIC_CAP; j++) {
 			logmon_info[i].capdest[j].dest  = 0;
 			logmon_info[i].capdest[j].capno = 0;
@@ -93,6 +99,8 @@ lmgr_initialize(void)
 	evt_ring = (CK_RING_INSTANCE(logevt_ring) *)llog_get_page();
 	assert(evt_ring);
 	logmon_info[cos_spd_id()].mon_ring = (vaddr_t)evt_ring;
+
+	lpc_start = lpc_end = lpc_last = 0;
 
 	return;
 }

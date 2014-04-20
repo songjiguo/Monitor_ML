@@ -27,7 +27,6 @@ struct logmon_info {
 /* per thread tracking data structure */
 struct thd_trace {
 	int thd_id, prio;
-	/* int h_thd, h_prio; */
 
 	// d and c for a periodic task
 	unsigned long long period;
@@ -35,24 +34,23 @@ struct thd_trace {
 
 	// Execution time of this thread
 	unsigned long long tot_exec;
-	// how long this thread has been in PI?
-	unsigned long long pi_time; 
 	// Last time stamp for this thread
 	unsigned long long last_ts;
 
 	// number of timer interrupt while this thread running
 	unsigned long long timer_int;
 	// number of network interrupt while this thread running
-	unsigned long long network_int; 
+	unsigned int network_int; 
 
+	// how long this thread has been in PI?
+	unsigned long long pi_time, passed_process_time; 
         // used to detect scheduling decision
 	unsigned long long epoch;
         // used to detect deadlock
-	unsigned long long depth;
-        // used to indicate the status of a thread (place holder)
-	int status;
-	// for dependency list
-	/* struct thd_trace *next, *lowest; */
+	unsigned int depth;
+	// for dependency list (next, lowest and highest)
+	struct thd_trace *n, *l, *h;
+	
 
 	// WCET in a spd due to an invocation to that spd by this thread
 	unsigned long long inv_spd_exec[MAX_NUM_SPDS];
@@ -65,38 +63,65 @@ struct thd_trace thd_trace[MAX_NUM_THREADS];
 struct evt_entry last_entry;
 struct heap *h;  // the pointer to the max_heap
 
+// time of start/end log processing and the duration of last time processing
+volatile unsigned long long lpc_start, lpc_end, lpc_last;
+
 static void 
 init_thread_trace()
 {
 	int i, j;
 	memset(thd_trace, 0, sizeof(struct thd_trace) * MAX_NUM_THREADS);
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
-		thd_trace[i].thd_id	 = i;
-		/* thd_trace[i].h_thd	 = i; */
-
-		thd_trace[i].period	    = 0;  // same as deadline d
-		thd_trace[i].execution	    = 0;  // same as period p
-
+		thd_trace[i].thd_id    = i;
+		thd_trace[i].period    = 0;	// same as deadline d
+		thd_trace[i].execution = 0;	// same as period p
+		
 		// timing info for a thread
-		thd_trace[i].tot_exec = 0;    // the total exec time for thd
-		thd_trace[i].pi_time = 0; // how long a thread is in PI status
-		thd_trace[i].last_ts = 0;// the last time stamp for this thd
+		thd_trace[i].tot_exec = 0;	// the total exec time for thd
+		thd_trace[i].last_ts  = 0;	// the last time stamp for this thd
 
 		// number of events 
-		thd_trace[i].timer_int = 0;  // number of timer INT while thd
-		thd_trace[i].network_int = 0; // number of network INT while thd
+		thd_trace[i].timer_int	 = 0;	// number of timer INT while thd
+		thd_trace[i].network_int = 0;	// number of network INT while thd
 		// dependency tree info
-		thd_trace[i].epoch = 0; // used to detect scheduling decision
-		thd_trace[i].depth = 0; // used to detect deadlock
-		thd_trace[i].status = 0;// ?? place holder
-		/* thd_trace[i].next = NULL; */
-		/* thd_trace[i].lowest = &thd_trace[i]; */
+		thd_trace[i].pi_time  = 0;	// how long a thread is in PI status
+		thd_trace[i].passed_process_time  = 0;	// how long process time since PI
+		thd_trace[i].epoch	 = 0;	// used to detect scheduling decision
+		thd_trace[i].depth	 = 0;	// used to detect deadlock
+		thd_trace[i].n = thd_trace[i].l = thd_trace[i].h = &thd_trace[i];
 		
 		// spd related (number of events and timing)
 		for (j = 0; j < MAX_NUM_SPDS; j++) {
 			thd_trace[i].inv_spd_exec[j] = 0;
 			thd_trace[i].invocation[j]   = 0;
 		}
+	}
+	return;
+}
+
+// exclude the log processing time from accumulated timing for thread
+static void
+update_proc(unsigned long long process_time)
+{
+	int i;
+	struct thd_trace *ttc;
+	
+	assert(process_time > 0);
+
+	for (i = 0; i < MAX_NUM_THREADS; i++) {
+		ttc = &thd_trace[i];
+		assert(ttc);
+		// update PI time
+		if (ttc->pi_time > 0) {
+			ttc->pi_time = ttc->pi_time + process_time;
+			assert(ttc->pi_time > 0);
+		}
+		// update up running time for a thread
+		if (ttc->last_ts > 0) {
+			ttc->last_ts = ttc->last_ts + process_time;
+			assert(ttc->last_ts > 0);
+		}
+		// other timing here...
 	}
 	return;
 }
@@ -132,6 +157,7 @@ done:
 	return ret;
 }
 
+// convert cap to destination spd id
 static void
 cap_to_dest(struct evt_entry *entry)
 {
@@ -181,7 +207,7 @@ populate_evts()
 	return;
 }
 
-
+// look for the next earliest event
 static struct evt_entry *
 find_next_evt(struct evt_entry *evt)
 {
@@ -221,54 +247,94 @@ done:
 /**************************/
 /*    Constraints Check   */
 /**************************/
+// debug only, print dependencies
+static void
+print_deps(struct thd_trace *root)
+{
+	struct thd_trace *d, *n, *m;
+	assert(root);
 
-/* // Sort threads and pop/push per thread, not use centralized next_hi */
-/* // check list everytime */
-/* static int */
-/* check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry) */
-/* { */
-/* 	assert(ttc && entry); */
-/* 	if (!ttn) return 0; */
+	if (root->h == root) return;
+	m = d = root->h;
+	while(1) {
+		n = d;
+		d = d->n;
+		if (n == d) break;
+		printc("%d<--", n->thd_id);
+	}
+	assert(n == d->n);
+	printc("%d", n->thd_id);
+	printc("\n");
 
-/* 	if (pi_begin(&last_entry, ttc->prio, entry, ttn->prio)) { */
-/* 		printc("add dependency\n"); */
-/* 		assert(ttc && ttn); */
-/* 		assert(!ttc->next); */
-/* 		ttc->next = ttn; */
-/* 		ttc->lowest = ttn->lowest; */
-/* 		if (ttc->h_prio < ttc->lowest->h_prio) { */
-/* 			ttc->lowest->h_prio = ttc->h_prio; */
-/* 			ttc->lowest->h_thd  = ttc->thd_id; */
-/* 		} */
+	return;
+}
+
+/* If the log process starts after PI happens and before PI ends, we
+ * might incorrectly account log processing time into PI
+ * time. Need to subtract processing time. */
+
+static int
+check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
+{
+	struct thd_trace *d, *n, *m, *root;
+
+	assert(ttc && entry);
+	if (!ttn) return 0;
+
+	/* print_evt_info(&last_entry); */
+	/* print_evt_info(entry); */
+
+	if (unlikely(pi_begin(&last_entry, ttc->prio, entry, ttn->prio))) {
+		printc("\nPI add: ");
+		root = ttn->l;
+		assert(root);
+
+		ttc->n	     = ttn;
+		ttc->l	     = root;
+		root->h	     = ttc;
+		ttc->pi_time = entry->time_stamp;  // start accounting PI time
+		ttc->passed_process_time = lpc_start;;
+
+		print_deps(root);
+		return 0;
+	}
+	/* remove dependency ( update and check epoch )*/
+	if (unlikely(pi_end(&last_entry, ttc->prio, entry, ttn->prio))) {
+		root = ttc->l;
+		assert(root);
+
+		printc("Before PI remove: ");
+		print_deps(root);
+
+		m = d = root->h;
+		root->h = m->n;
+		while(1) {
+			n = d;
+			d = d->n;
+			if (n == d) break;
+		}
+		assert(n == d->n);
+		n->epoch++;
+		m->epoch = n->epoch;
+                // if not match, an error occurs
+		if (m->epoch != ttn->epoch) {
+			// TODO: localize the faulty spd ...here
+			return 1;
+		} else {
+			m->n = m;
+		}
+
+		ttn->pi_time = entry->time_stamp - ttn->pi_time;
 		
-/* 		goto done; */
-/* 	} */
-/* 	/\* remove dependency ( update and check epoch )*\/ */
-/* 	if (pi_end(&last_entry, ttc->prio, entry, ttn->prio)) { */
-/* 		struct thd_trace *d, *n, *m; */
-/* 		printc("remove dependency\n"); */
-/* 		assert(ttc->lowest->h_thd); */
-/* 		d = &thd_trace[ttc->lowest->h_thd]; */
-/* 		assert(d && d->next); */
-/* 		do { */
-/* 			n = d; */
-/* 			m = n->next; */
-/* 			if (!m->next) break; */
-/* 		} while((d = d->next)); */
-/* 		assert(n && m && !m->next); */
-/* 		m->epoch++; */
-/* 		n->epoch = m->epoch; */
-/*                 // if not match, an error occurs */
-/* 		if (n->epoch != ttn->epoch) return 1; */
-/* 		else {   // set to the next highest thread */
-/* 			/\* n->lowest = n; *\/ */
-/* 		} */
-/* 	} */
+		printc("After PI remove: ");
+		print_deps(root);
+		printc("thd %d is in PI for %llu\n", ttn->thd_id, ttn->pi_time);
+		printc("\n\n");
+		ttn->pi_time = 0;
+	}
 	
-/* 	// TODO: localize the faulty spd ...here */
-/* done: */
-/* 	return 0; */
-/* } */
+	return 0;
+}
 
 static void
 check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
@@ -372,7 +438,7 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 	assert(entry->evt_type > 0);
 
 	// reset to 0 when interrupt happens (start execution)
-	if (entry->evt_type == EVT_NINT || entry->evt_type == EVT_NINT) {
+	if (entry->evt_type == EVT_NINT || entry->evt_type == EVT_TINT) {
 		assert(ttn);
 		ttn->inv_spd_exec[entry->to_spd] = 0;
 	}		
@@ -391,7 +457,7 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 		}
 		
 		if (entry->evt_type == EVT_SRET) {
-			printc("<<thd %d in spd %d in one invocation is %llu >>\n", ttc->thd_id, spdid, ttc->inv_spd_exec[spdid]);
+			if (spdid == SCHED_SPD) printc("<<thd %d in spd %d in one invocation is %llu >>\n", ttc->thd_id, spdid, ttc->inv_spd_exec[spdid]);
 			// TODO:check WCET in spd due to invocation here
 			// ....
 			ttc->inv_spd_exec[spdid] = 0;
@@ -414,6 +480,8 @@ constraint_check(struct evt_entry *entry)
 	struct thd_trace *ttc, *ttn = NULL;
 	unsigned long long up_t;
 	int from_thd, from_spd;
+
+	/* print_evt_info(entry); */
 
 	assert(entry && entry->evt_type > 0);
 	
@@ -474,7 +542,7 @@ constraint_check(struct evt_entry *entry)
 	/* check_invocation(ttc, entry); */
 	/* check_ordering(ttc, entry); */
 
-	/* check_priority_inversion(ttc, ttn, entry); */
+	check_priority_inversion(ttc, ttn, entry);
 
 	/* check_thd_wcet(ttc, ttn, entry, up_t); */
 	/***************************/
@@ -482,9 +550,7 @@ constraint_check(struct evt_entry *entry)
 	/***************************/
 	
         // save info for the last event
-	last_entry.from_thd = entry->to_thd;
-	last_entry.from_spd = entry->to_spd; 
-	last_entry.evt_type = entry->evt_type;
+	last_evt_update(&last_entry, entry);
 	
 	return;
 }

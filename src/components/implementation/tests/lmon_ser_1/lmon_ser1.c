@@ -14,10 +14,20 @@ static int hig = 12;
 #include <../lmon_cli_1/test_monitor.h>
 
 #include <cos_synchronization.h>
-cos_lock_t t_lock;
-#define LOCK_TAKE()    lock_take(&t_lock)
-#define LOCK_RELEASE() lock_release(&t_lock)
-#define LOCK_INIT()    lock_static_init(&t_lock);
+cos_lock_t lock1, lock2;
+#define LOCK1_TAKE()    lock_take(&lock1)
+#define LOCK1_RELEASE() lock_release(&lock1)
+#define LOCK1_INIT()    lock_static_init(&lock1)
+#define LOCK2_TAKE()    lock_take(&lock2)
+#define LOCK2_RELEASE() lock_release(&lock2)
+#define LOCK2_INIT()    lock_static_init(&lock2)
+
+
+#ifndef EXAMINE_PI
+int try_cs_hp(void) { return 0;}
+int try_cs_mp(void) { return 0;}
+int try_cs_lp(void) { return 0;}
+#endif
 
 #ifdef NORMAL
 vaddr_t lmon_ser1_test(void)
@@ -30,83 +40,101 @@ vaddr_t lmon_ser1_test(void)
 #ifdef MEAS_OVERHEAD
 vaddr_t lmon_ser1_test(void)
 {
+	/* printc("test\n"); */
 	return 0;
 }
 #endif
 
 #ifdef EXAMINE_PI
+
 volatile int spin = 1;
+volatile int spin2 = 1;
 unsigned long long start, end, sum;
 
-static void try_crisec_hp(void)
+int try_cs_hp(void)
 {
 	int i;
 	while(1) {
 		printc("thread h : %d is doing something\n", cos_get_thd_id());
-		/* periodic_wake_wait(cos_spd_id()); */
 
-		timed_event_block(cos_spd_id(), 9);
-		spin = 0;
-		printc("thread h : %d try to take lock\n", cos_get_thd_id());
-		/* rdtscll(start); */
-		LOCK_TAKE();
-		/* rdtscll(end); */
-		/* printc("it takes %llu for high thread to get the lock\n", end-start); */
+		timed_event_block(cos_spd_id(), 5);
+		spin2 = 0;
+		printc("thread h : %d try to take lock1\n", cos_get_thd_id());
+		LOCK1_TAKE();
 
-		printc("thread h : %d has the lock\n", cos_get_thd_id());
+		printc("thread h : %d has the lock1\n", cos_get_thd_id());
 
-		LOCK_RELEASE();
-		printc("thread h : %d released lock\n", cos_get_thd_id());
-		/* periodic_wake_wait(cos_spd_id()); */
+		LOCK1_RELEASE();
+		printc("thread h : %d released lock1\n", cos_get_thd_id());
 	}
-	return;
+	return 0;
 }
 
-static void try_crisec_mp(void)
+int try_cs_mp(void)
+{
+	int i;
+	while(1) {
+		printc("thread m : %d is doing something\n", cos_get_thd_id());
+
+		timed_event_block(cos_spd_id(), 1);
+
+		/* LOCK2_TAKE(); */
+		/* printc("thread m : %d has the lock2\n", cos_get_thd_id()); */
+
+		spin = 0;
+		printc("thread m : %d try to take lock1\n", cos_get_thd_id());
+		LOCK1_TAKE();
+		printc("thread m : %d has the lock1\n", cos_get_thd_id());
+
+		LOCK1_RELEASE();
+		printc("thread m : %d released lock1\n", cos_get_thd_id());
+
+		/* LOCK2_RELEASE(); */
+		/* printc("thread m : %d released lock2\n", cos_get_thd_id()); */
+	}
+	return 0;
+}
+
+
+int try_cs_lp(void)
 {
 	volatile int jj, kk;
 	while (1) {
-		printc("thread m : %d sched_block\n", cos_get_thd_id());
-		sched_block(cos_spd_id(), 0);
-		printc("thread m : %d is doing something\n", cos_get_thd_id());
-		jj = 0;
-		kk = 0;
-		while(jj++ < 1000000){
-			while(kk++ < 1000000);
-		}
-	}
-	return;
-}
-
-
-static void try_crisec_lp(void)
-{
-	volatile int jj = 0;
-	while (1) {
 		printc("<<< thread l : %d is doing something \n", cos_get_thd_id());
-		printc("thread l : %d try to take lock\n", cos_get_thd_id());
-		LOCK_TAKE();
-		printc("thread l : %d has the lock\n", cos_get_thd_id());
+		printc("thread l : %d try to take lock1\n", cos_get_thd_id());
+		LOCK1_TAKE();
+		printc("thread l : %d has the lock1\n", cos_get_thd_id());
 
-		printc("thread l : %d spinning\n", cos_get_thd_id());
+		printc("thread l : %d spin\n", cos_get_thd_id());
 		while (spin);
 		spin = 1;
-
-		printc("thread l : %d is doing something\n", cos_get_thd_id());
+		printc("thread l : %d after spin\n", cos_get_thd_id());
 		jj = 0;
-		/* while(jj++ < 100000); */
-		sched_wakeup(cos_spd_id(), mid);
-		/* while(1); */
-		printc("thread l : %d try to release lock\n", cos_get_thd_id());
-		LOCK_RELEASE();
-		/* jj = 0; */
-		/* while(jj++ < 100000); */
-		/* periodic_wake_wait(cos_spd_id()); */
+		kk = 0;
+		while(jj++ < 100){
+			while(kk++ < 1000);
+		}
+		printc("thread l : %d spin2\n", cos_get_thd_id());
+		while(spin2);
+		spin2 = 1;
+		printc("thread l : %d after spin2\n", cos_get_thd_id());
+
+		printc("thread l : %d try to release lock1\n", cos_get_thd_id());
+		LOCK1_RELEASE();
 	}
-	return;
+	return 0;
 }
 
-#define US_PER_TICK 10000
+vaddr_t lmon_ser1_test(void)
+{
+	return 0;
+}
+#endif
+
+#ifdef EXAMINE_DEADLINE
+
+volatile int spin = 1;
+unsigned long long start, end, sum;
 
 static int blk_num = 0;
 
@@ -157,10 +185,6 @@ static void lp_deadline(void)    // ct/t 12/56
 
 vaddr_t lmon_ser1_test(void)
 {
-	/* if (cos_get_thd_id() == hig) try_crisec_hp(); */
-	/* if (cos_get_thd_id() == mid) try_crisec_mp(); */
-	/* if (cos_get_thd_id() == low) try_crisec_lp(); */
-
 	if (cos_get_thd_id() == hig) hp_deadline();
 	if (cos_get_thd_id() == mid) mp_deadline();
 	if (cos_get_thd_id() == low) lp_deadline();
@@ -172,10 +196,9 @@ vaddr_t lmon_ser1_test(void)
 void 
 cos_init(void) 
 {
-	printc("thd %d is trying to init lock\n", cos_get_thd_id());
-	LOCK_INIT();
-	printc("after init LOCK\n");
+	printc("ser1\n");
+	LOCK1_INIT();
+	LOCK2_INIT();
+	return;
 }
-
-
 

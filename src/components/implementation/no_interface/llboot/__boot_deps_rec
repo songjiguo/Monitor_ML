@@ -55,7 +55,7 @@ struct llbooter_per_core {
 	 * recover_spd:  the spd that will require rebooting
 	 */
 	int     alpha, init_thd, recovery_thd;
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
 	int     monitor_thd;
 	volatile int prev_mthd, monitor_spd;
 #endif
@@ -67,7 +67,7 @@ struct llbooter_per_core {
 
 PERCPU(struct llbooter_per_core, llbooter);
 
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
 enum { /* hard-coded initialization schedule */
 	LLBOOT_LOG   = 2,
 	LLBOOT_SCHED = 3,
@@ -83,7 +83,7 @@ enum { /* hard-coded initialization schedule */
 struct comp_boot_info {
 	int symbols_initialized, initialized, memory_granted;
 };
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
 #define NCOMPS 7 	/* comp0, us, a log monitor and the four other components */
 #else
 #define NCOMPS 6 	/* comp0, us, and the four other components */
@@ -91,7 +91,7 @@ struct comp_boot_info {
 
 static struct comp_boot_info comp_boot_nfo[NCOMPS];
 
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
 static spdid_t init_schedule[]   = {LLBOOT_LOG, LLBOOT_MM, LLBOOT_SCHED, 0};
 static int     init_mem_access[] = {1, 1, 0, 0};
 static int     init_mem_amnt[]   = {128, 0, 0, 0};  // 128 pages for LL_LOG, 0 for default (evenly for the rest)
@@ -202,7 +202,8 @@ llboot_thd_done(void)
 		BUG();
 	}
 
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
+	/* unsigned long long test_s, test_e; */
 	if (tid == llboot->monitor_thd) {
 		while(1) {
 			int     pmthd = llboot->prev_mthd;
@@ -212,11 +213,14 @@ llboot_thd_done(void)
 			if (mspd) {
 				assert(pmthd);
 				llboot->monitor_spd = 0;
+				/* rdtscll(test_s); */
 				cos_upcall_args(COS_UPCALL_LOG_PROCESS, mspd, 0);
 				assert(0);
 			} else {
 				assert(pmthd && pmthd != tid);
 				llboot->prev_mthd = 0;
+				/* rdtscll(test_e); */
+				/* printc("monitor thread is running for %llu\n", test_e-test_s); */
 				cos_switch_thread(pmthd, 0);
 			}
 		}
@@ -255,8 +259,7 @@ llboot_thd_done(void)
 	}
 }
 
-// called by log manager only
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR  // called by log manager only
 int
 logmgr_active(spdid_t spdid)
 {
@@ -505,12 +508,12 @@ boot_create_init_thds(void)
 	llboot->alpha        = cos_get_thd_id();
 	llboot->recovery_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(llboot->recovery_thd >= 0);
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
 	llboot->monitor_thd = cos_create_thread((int)llboot_ret_thd, (int)0, 0);
 	assert(llboot->monitor_thd >= 0);
 #endif
 	llboot->init_thd     = cos_create_thread((int)llboot_ret_thd, 0, 0);
-#ifdef LOG_MONITOR
+#ifdef LOAD_MONITOR
 	printc("Core %ld, Low-level booter created threads:\n\t"
 	       "%d: alpha\n\t%d: recov\n\t%d: monitor\n\t%d: init\n",
 	       cos_cpuid(), llboot->alpha, 

@@ -510,9 +510,7 @@ static int interrupt_wait(void)
 
 /* Network interrupt logging here*/
 #ifdef LOG_MONITOR
-	NET_LOCK_TAKE();
 	evt_enqueue(cos_get_thd_id(), cos_spd_id(), cos_spd_id(), 0, 0, EVT_NINT);
-	NET_LOCK_RELEASE();
 #endif
 	rdtscll(start);
 	if (ret > 0) {

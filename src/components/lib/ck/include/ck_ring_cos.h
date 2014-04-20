@@ -118,6 +118,7 @@
 	{									\
 		unsigned int consumer, producer, delta;				\
 		unsigned int mask = ring->mask;					\
+		void *addr;						        \
 										\
                 consumer = ck_pr_load_uint(&ring->c_head);	        	\
 		producer = ring->p_tail;					\
@@ -125,14 +126,14 @@
 										\
 		if ((delta & mask) == (consumer & mask))			\
 			return NULL;						\
-										\
+							        		\
+		addr = (void *)&ring->ring[producer & mask];			\
+								        	\
 		ck_pr_fence_store();						\
 		ck_pr_store_uint(&ring->p_tail, delta);				\
-									        \
-		ck_pr_fence_store();					        \
 		ck_pr_store_uint(&ring->owner, 0);			        \
 									        \
-		return (void *)&ring->ring[producer & mask];		        \
+		return addr;						        \
 	}									\
 	CK_CC_INLINE static unsigned int         				\
 	ck_ring_enqueue_spsccont_##name(struct ck_ring_##name *ring)	        \
@@ -305,23 +306,6 @@
 		ck_pr_fence_store();						\
 		ck_pr_store_uint(&ring->p_tail, delta);				\
 		return true;							\
-	}									\
-	CK_CC_INLINE static void *       				        \
-	ck_ring_enqueue_spscpre_##name(struct ck_ring_##name *ring)	        \
-	{									\
-		unsigned int consumer, producer, delta;				\
-		unsigned int mask = ring->mask;					\
-										\
-		consumer = ck_pr_load_uint(&ring->c_head);			\
-		producer = ring->p_tail;					\
-		delta = producer + 1;						\
-										\
-		if ((delta & mask) == (consumer & mask))			\
-			return NULL;						\
-										\
-		ck_pr_fence_store();						\
-		ck_pr_store_uint(&ring->p_tail, delta);				\
-		return (void *)&ring->ring[producer & mask];		        \
 	}									\
 	CK_CC_INLINE static bool						\
 	ck_ring_enqueue_spsc_##name(struct ck_ring_##name *ring,		\
@@ -539,6 +523,8 @@ ck_ring_enqueue_spscpre(struct ck_ring *ring)
 	unsigned int consumer, producer, delta;
 	unsigned int mask = ring->mask;
 
+	void *addr;
+
 	consumer = ck_pr_load_uint(&ring->c_head);
 	producer = ring->p_tail;
 	delta = producer + 1;
@@ -546,13 +532,14 @@ ck_ring_enqueue_spscpre(struct ck_ring *ring)
 	if ((delta & mask) == (consumer & mask))
 		return NULL;
 
+	addr = (void *)&ring->ring[producer & mask];
+
 	ck_pr_fence_store();
 	ck_pr_store_uint(&ring->p_tail, delta);
-
-	ck_pr_fence_store();
+	/* ck_pr_fence_store(); */
 	ck_pr_store_uint(&ring->owner, 0);  // clear the owner
 
-	return (void *)&ring->ring[producer & mask];
+	return addr;
 }
 
 CK_CC_INLINE static unsigned int

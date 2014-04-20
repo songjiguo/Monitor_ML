@@ -1428,6 +1428,7 @@ int chal_attempt_brand(struct thread *brand)
 	/* Recovery use */
 	struct thd_invocation_frame *thd_frame;
 
+	/* printk("\n\n((0)).... brand %d\n", thd_get_id(brand)); */
 	local_irq_save(flags);
 	if (likely(cos_thd_per_core[get_cpuid()].cos_thd)/* == current*/) {
 		struct thread *cos_current;
@@ -1481,7 +1482,9 @@ int chal_attempt_brand(struct thread *brand)
 			 * be an issue later on.
 			 */
 			next = brand_next_thread(brand, cos_current, 0);
-			/* printk("next ....\n"); */
+			/* printk("((1)).... next %d cos_current %d\n",  */
+			/*        thd_get_id(next), thd_get_id(cos_current)); */
+			
 			/* return 0; */
 			if (next != cos_current) {
 				/* update the fault counter (recovery) */
@@ -1543,6 +1546,8 @@ int chal_attempt_brand(struct thread *brand)
 
 			/* the major work here: */
 			next = brand_next_thread(brand, cos_current, 1);
+			/* printk("((2)).... next %d cos_current %d\n",  */
+			/*        thd_get_id(next), thd_get_id(cos_current)); */
 			if (next != cos_current) {
 				thd_save_preempted_state(cos_current, regs);
                                 fpu_save(next);

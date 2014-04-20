@@ -53,11 +53,12 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 /*******************************/
 #include <sched_hier.h>
 
-int  sched_init(int reboot)   { return 0; }
+//int sched_init(int reboot)   { return 0; }
 extern void parent_sched_exit(void);
 void 
 sched_exit(void)   
 {
+	printc("thread is %d is exiting\n", cos_get_thd_id());
 	parent_sched_exit();
 }
 

@@ -70,7 +70,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define NETIF_SPD	25
 
 // thread ID
-#define TIMER_THD	6
+#define TIMER_THD	7
 #define NETWORK_THD	20
 
 #define NUM_PRIOS    32
@@ -85,7 +85,8 @@ enum{
 	FN_SCHED_BLOCK = 1,
 	FN_SCHED_WAKEUP,
 	FN_LOCK_COMPONENT_TAKE,
-	FN_LOCK_COMPONENT_RELEASE
+	FN_LOCK_COMPONENT_RELEASE,
+	FN_MAX
 };
 // event type
 enum{
@@ -96,7 +97,8 @@ enum{
 	EVT_CS,         // context switch
 	EVT_TINT,       // timer interrupt
 	EVT_NINT,       // network interrupt
-	EVT_RBCONTEND   // contention on a rb
+	EVT_RBCONTEND,  // contention on a rb
+	EVT_MAX
 };
 
 /* event entry in the ring buffer (per event) */
@@ -175,12 +177,18 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3
 	evt->para	= par5;
 	evt->evt_type	= type;
 
+	/* print_evt_info(evt); */
+
 	return;
 }
+
+
+volatile unsigned long long log_start, log_end;
 
 static inline CFORCEINLINE void 
 evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
+	/* rdtscll(log_start); */
 	// create shared RB
 	if (unlikely(!evt_ring)) {
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
@@ -192,22 +200,27 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 	if (unlikely(evt_ring_is_full())) {
 		// contention RB better not be full before any other RB is full
 		assert(par1 != LLLOG_SPD);
+		/* printc("<<<FULL !!!!! spd %lu thd %d>>>\n", cos_spd_id(), cos_get_thd_id()); */
 		llog_process();
 	}
 
 #ifdef LOG_MONITOR   // due to ck library now has LOG_MONITOR
 	int owner = CK_RING_ENQUEUE_SPSCCONT(logevt_ring, evt_ring);
 	if (unlikely(owner)) {   // contention on this RB
+		printc("<<<Contention on RB !!!!! %lu thd %d>>>\n", 
+		       cos_spd_id(), cos_get_thd_id());
 		llog_contention(cos_spd_id(), owner);
 		return;
 	}
 
 	// log the event (take slot first, then record)
 	struct evt_entry *evt;
+
 	while(!(evt = (struct evt_entry *)CK_RING_ENQUEUE_SPSCPRE(logevt_ring, evt_ring)));
 	evt_conf(evt, par1, par2, par3, par4, par5, evt_type);
+	/* rdtscll(log_end); */
+	/* printc("evt_enqueue cost %llu\n", log_end-log_start); */
 #endif	
-
 	return;
 }
 

@@ -427,16 +427,17 @@ static inline struct spd *thd_get_depth_sched(struct thread *t, unsigned short i
 	return thd_get_sched_info(t, d)->scheduler;
 }
 
-static inline int thd_scheduled_by(struct thread *thd, struct spd *spd) 
-{
-	return thd_get_sched_info(thd, spd->sched_depth)->scheduler == spd;
-}
-
 static inline unsigned short int thd_get_id(struct thread *thd)
 {
 	assert(NULL != thd);
 
 	return thd->thread_id;
+}
+
+static inline int thd_scheduled_by(struct thread *thd, struct spd *spd) 
+{
+	/* printk("thd_scheduled_by: thd_%d spd %d\n", thd_get_id(thd), spd_get_index(spd)); */
+	return thd_get_sched_info(thd, spd->sched_depth)->scheduler == spd;
 }
 
 static inline int thd_spd_in_composite(struct spd_poly *comp, struct spd *spd)

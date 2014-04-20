@@ -69,7 +69,11 @@
 #define LAZY_RECOVERY   1               // 1 will enable the lazy recovery, 0 for eager recovery
 #define SWIFI_ENABLE    0		// 1 enable the fault injection (swifi component), 0 disable
 
-#define LOG_MONITOR   1// Macro for low level log monitor 
+#define LOAD_MONITOR      1// Load monitor
+
+#ifdef LOAD_MONITOR
+#define LOG_MONITOR   1// Enable monitoring 
+#endif
 
 #define DEBUG_PERIOD  // for network debug only
 
