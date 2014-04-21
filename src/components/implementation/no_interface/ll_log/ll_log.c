@@ -56,7 +56,14 @@ lmgr_action()
 	evt = find_next_evt(NULL);
 	if (!evt) goto done;
 	do {
+#ifdef MEAS_LOG_OVERHEAD		
+		rdtscll(logmeas_start);
+#endif
 		constraint_check(evt);
+#ifdef MEAS_LOG_OVERHEAD		
+		rdtscll(logmeas_end);
+		printc("single event constraint check cost %llu\n", logmeas_end - logmeas_start);
+#endif
 	} while ((evt = find_next_evt(evt)));
 	printc("process log done!!!!!\n");
 done:

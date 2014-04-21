@@ -5,7 +5,9 @@
 #include <timed_blk.h>
 #include <cstub.h>
 
+#ifdef LOG_MONITOR
 #include <log.h>
+#endif
 
 CSTUB_FN_ARGS_2(int, timed_event_block, spdid_t, spdinv, unsigned int, amnt)
 

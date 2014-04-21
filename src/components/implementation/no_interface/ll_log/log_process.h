@@ -7,6 +7,11 @@
 #include <heap.h>
 #include <log_util.h>
 
+//#define MEAS_LOG_OVERHEAD
+#ifdef MEAS_LOG_OVERHEAD
+volatile unsigned long long logmeas_start, logmeas_end;
+#endif
+
 /* cache the dest for a cap_no */
 struct spd_cap {
 	int dest;
@@ -263,27 +268,6 @@ print_deps(struct thd_trace *root)
 	return;
 }
 
-/* static void */
-/* print_deps(struct thd_trace *top) */
-/* { */
-/* 	struct thd_trace *d, *n, *m; */
-/* 	assert(top); */
-
-/* 	if (top->n == top) return; */
-	
-/* 	m = d = top; */
-/* 	while(1) { */
-/* 		n = d; */
-/* 		d = d->n; */
-/* 		if (d == n) break; */
-/* 		printc("%d-->", n->thd_id); */
-/* 	} */
-/* 	printc("%d", n->thd_id); */
-/* 	printc("\n"); */
-
-/* 	return; */
-/* } */
-
 /* If the log process starts after PI happens and before PI ends, we
  * might incorrectly account log processing time into PI
  * time. Need to subtract processing time. */
@@ -296,59 +280,54 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 	assert(ttc && entry);
 	if (!ttn) return 0;
 
-	/* print_evt_info(&last_entry); */
-	/* print_evt_info(entry); */
-
 	if (unlikely(pi_begin(&last_entry, ttc->prio, entry, ttn->prio))) {
-		printc("\nPI add: ");
-		root = ttn->l;
+		root = &thd_trace[last_entry.para];
 		assert(root);
 
 		ttc->n	     = root->h;
 		ttc->l	     = root;
 		root->h	     = ttc;
-		ttc->pi_start_t = ttn->tot_exec;  // start accounting PI time
-		printc("ttc->pi_start_t %llu (set thd %d)\n", ttc->pi_start_t, ttc->thd_id);
-
-		print_deps(root);
+		ttc->pi_start_t = root->tot_exec; // start accounting PI time
+		ttc->pi_time    = 0;
 		return 0;
 	}
 	/* remove dependency ( update and check epoch )*/
 	if (unlikely(pi_end(&last_entry, ttc->prio, entry, ttn->prio))) {
-		root = ttc->l;
+		root = ttc;
 		assert(root);
-		printc("root %d\n", root->thd_id);
-		printc("Before PI remove: ttc %d ttn %d ", ttc->thd_id, ttn->thd_id);
-		print_deps(root);
 		m = d = root->h;
-		while(1) {
-			n = d;
-			d = d->n;
-			if (n == d) break;
-		}
-		// n is root and m is last second one
-		assert(n == d->n);
-		m->epoch++;
-		n->epoch = m->epoch;
-		printc("m %d ttn %d \n", m->thd_id, ttn->thd_id);
-                // if not match, an error occurs
+		while((d = d->n) && d!=root);
+		d->epoch++;
+		m->epoch = d->epoch;
+                /* if not match, an error occurs */
 		if (m->epoch != ttn->epoch) {
 			/* printc("epoch mismatch: m %d (%d) ttn %d (%d) ", m->thd_id, m->epoch, ttn->thd_id, ttn->epoch); */
 			assert(0);
 			// TODO: localize the faulty spd ...here
 		}
 
-		printc("ttc->tot_exec %llu\n", ttc->tot_exec);
-		printc("m->pi_start_t %llu (used thd %d)\n", m->pi_start_t, m->thd_id);
 		m->pi_time = ttc->tot_exec - m->pi_start_t + ttc->pi_time;
-		m->pi_start_t = 0;
 
-		printc("After PI remove: ");
-		print_deps(m);
+		/* // should all lower threads execution time be added after m is in PI? */
+		/* int i; */
+		/* struct thd_trace *tmp; */
+		/* for (i = 0; i < MAX_NUM_THREADS; i++) { */
+		/* 	tmp = &thd_trace[i]; */
+		/* 	assert(tmp); */
+		/* 	if (tmp->prio >= root->prio && tmp->tot_exec > m->pi_start_t) { */
+		/* 		printc("lower thd %d tot_exe %llu\n", tmp->thd_id, tmp->tot_exec); */
+		/* 		printc("m->pi_time %llu m->pi_start_t %llu\n", m->pi_time, m->pi_start_t); */
+		/* 		m->pi_time = m->pi_time + tmp->tot_exec - m->pi_start_t; */
+		/* 	} */
+		/* } */
+
+		/* printc("After PI remove: "); */
+		/* print_deps(m); */
 		printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time);
 		printc("\n");
 		// TODO: localize the faulty spd ...here
-		ttn->pi_time = 0;
+		m->pi_start_t = 0;
+
 		root->h = m->n;
 	}
 
@@ -477,7 +456,7 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 		}
 		
 		if (entry->evt_type == EVT_SRET) {
-			if (spdid == SCHED_SPD) printc("<<thd %d in spd %d in one invocation is %llu >>\n", ttc->thd_id, spdid, ttc->inv_spd_exec[spdid]);
+			/* if (spdid == SCHED_SPD) printc("<<thd %d in spd %d in one invocation is %llu >>\n", ttc->thd_id, spdid, ttc->inv_spd_exec[spdid]); */
 			// TODO:check WCET in spd due to invocation here
 			// ....
 			ttc->inv_spd_exec[spdid] = 0;
@@ -552,16 +531,16 @@ constraint_check(struct evt_entry *entry)
 		assert(0);
 		break;
 	}	
-	/* if (ttc->thd_id == 14)  */
+	/* if (ttc->thd_id == 14) */
 	/* 	printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec); */
 
 	/***************************/
 	/* Constraint check begins */
 	/***************************/
-	/* check_inv_spdexec(ttc, ttn, entry, up_t); */
-	/* check_interrupt(ttc, entry); */
-	/* check_invocation(ttc, entry); */
-	/* check_ordering(ttc, entry); */
+	check_inv_spdexec(ttc, ttn, entry, up_t);
+	check_interrupt(ttc, entry);
+	check_invocation(ttc, entry);
+	check_ordering(ttc, entry);
 
 	check_priority_inversion(ttc, ttn, entry);
 
