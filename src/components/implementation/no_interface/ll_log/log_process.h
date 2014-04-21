@@ -43,14 +43,13 @@ struct thd_trace {
 	unsigned int network_int; 
 
 	// how long this thread has been in PI?
-	unsigned long long pi_time, passed_process_time; 
+	unsigned long long pi_time, pi_start_t;
         // used to detect scheduling decision
 	unsigned long long epoch;
         // used to detect deadlock
 	unsigned int depth;
 	// for dependency list (next, lowest and highest)
 	struct thd_trace *n, *l, *h;
-	
 
 	// WCET in a spd due to an invocation to that spd by this thread
 	unsigned long long inv_spd_exec[MAX_NUM_SPDS];
@@ -84,8 +83,8 @@ init_thread_trace()
 		thd_trace[i].timer_int	 = 0;	// number of timer INT while thd
 		thd_trace[i].network_int = 0;	// number of network INT while thd
 		// dependency tree info
-		thd_trace[i].pi_time  = 0;	// how long a thread is in PI status
-		thd_trace[i].passed_process_time  = 0;	// how long process time since PI
+		thd_trace[i].pi_time	 = 0;	// how long a thread is in PI status
+		thd_trace[i].pi_start_t	 = 0;	// when a thread starts being in PI status
 		thd_trace[i].epoch	 = 0;	// used to detect scheduling decision
 		thd_trace[i].depth	 = 0;	// used to detect deadlock
 		thd_trace[i].n = thd_trace[i].l = thd_trace[i].h = &thd_trace[i];
@@ -111,11 +110,6 @@ update_proc(unsigned long long process_time)
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
 		ttc = &thd_trace[i];
 		assert(ttc);
-		// update PI time
-		if (ttc->pi_time > 0) {
-			ttc->pi_time = ttc->pi_time + process_time;
-			assert(ttc->pi_time > 0);
-		}
 		// update up running time for a thread
 		if (ttc->last_ts > 0) {
 			ttc->last_ts = ttc->last_ts + process_time;
@@ -247,7 +241,7 @@ done:
 /**************************/
 /*    Constraints Check   */
 /**************************/
-// debug only, print dependencies
+//debug only, print dependencies
 static void
 print_deps(struct thd_trace *root)
 {
@@ -269,6 +263,27 @@ print_deps(struct thd_trace *root)
 	return;
 }
 
+/* static void */
+/* print_deps(struct thd_trace *top) */
+/* { */
+/* 	struct thd_trace *d, *n, *m; */
+/* 	assert(top); */
+
+/* 	if (top->n == top) return; */
+	
+/* 	m = d = top; */
+/* 	while(1) { */
+/* 		n = d; */
+/* 		d = d->n; */
+/* 		if (d == n) break; */
+/* 		printc("%d-->", n->thd_id); */
+/* 	} */
+/* 	printc("%d", n->thd_id); */
+/* 	printc("\n"); */
+
+/* 	return; */
+/* } */
+
 /* If the log process starts after PI happens and before PI ends, we
  * might incorrectly account log processing time into PI
  * time. Need to subtract processing time. */
@@ -289,11 +304,11 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 		root = ttn->l;
 		assert(root);
 
-		ttc->n	     = ttn;
+		ttc->n	     = root->h;
 		ttc->l	     = root;
 		root->h	     = ttc;
-		ttc->pi_time = entry->time_stamp;  // start accounting PI time
-		ttc->passed_process_time = lpc_start;;
+		ttc->pi_start_t = ttn->tot_exec;  // start accounting PI time
+		printc("ttc->pi_start_t %llu (set thd %d)\n", ttc->pi_start_t, ttc->thd_id);
 
 		print_deps(root);
 		return 0;
@@ -302,36 +317,41 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 	if (unlikely(pi_end(&last_entry, ttc->prio, entry, ttn->prio))) {
 		root = ttc->l;
 		assert(root);
-
-		printc("Before PI remove: ");
+		printc("root %d\n", root->thd_id);
+		printc("Before PI remove: ttc %d ttn %d ", ttc->thd_id, ttn->thd_id);
 		print_deps(root);
-
 		m = d = root->h;
-		root->h = m->n;
 		while(1) {
 			n = d;
 			d = d->n;
 			if (n == d) break;
 		}
+		// n is root and m is last second one
 		assert(n == d->n);
-		n->epoch++;
-		m->epoch = n->epoch;
+		m->epoch++;
+		n->epoch = m->epoch;
+		printc("m %d ttn %d \n", m->thd_id, ttn->thd_id);
                 // if not match, an error occurs
 		if (m->epoch != ttn->epoch) {
+			/* printc("epoch mismatch: m %d (%d) ttn %d (%d) ", m->thd_id, m->epoch, ttn->thd_id, ttn->epoch); */
+			assert(0);
 			// TODO: localize the faulty spd ...here
-			return 1;
-		} else {
-			m->n = m;
 		}
 
-		ttn->pi_time = entry->time_stamp - ttn->pi_time;
-		
+		printc("ttc->tot_exec %llu\n", ttc->tot_exec);
+		printc("m->pi_start_t %llu (used thd %d)\n", m->pi_start_t, m->thd_id);
+		m->pi_time = ttc->tot_exec - m->pi_start_t + ttc->pi_time;
+		m->pi_start_t = 0;
+
 		printc("After PI remove: ");
-		print_deps(root);
-		printc("thd %d is in PI for %llu\n", ttn->thd_id, ttn->pi_time);
-		printc("\n\n");
+		print_deps(m);
+		printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time);
+		printc("\n");
+		// TODO: localize the faulty spd ...here
 		ttn->pi_time = 0;
+		root->h = m->n;
 	}
+
 	
 	return 0;
 }
@@ -532,7 +552,8 @@ constraint_check(struct evt_entry *entry)
 		assert(0);
 		break;
 	}	
-	/* printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec); */
+	/* if (ttc->thd_id == 14)  */
+	/* 	printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec); */
 
 	/***************************/
 	/* Constraint check begins */

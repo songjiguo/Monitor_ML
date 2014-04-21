@@ -59,13 +59,13 @@ int try_cs_hp(void)
 
 		timed_event_block(cos_spd_id(), 5);
 		spin2 = 0;
-		printc("thread h : %d try to take lock1\n", cos_get_thd_id());
+		printc("thread h : %d try to take lock2\n", cos_get_thd_id());
 		LOCK1_TAKE();
 
-		printc("thread h : %d has the lock1\n", cos_get_thd_id());
+		printc("thread h : %d has the lock2\n", cos_get_thd_id());
 
 		LOCK1_RELEASE();
-		printc("thread h : %d released lock1\n", cos_get_thd_id());
+		printc("thread h : %d released lock2\n", cos_get_thd_id());
 	}
 	return 0;
 }
@@ -119,7 +119,7 @@ int try_cs_lp(void)
 		spin2 = 1;
 		printc("thread l : %d after spin2\n", cos_get_thd_id());
 
-		printc("thread l : %d try to release lock1\n", cos_get_thd_id());
+ 		printc("thread l : %d try to release lock1\n", cos_get_thd_id());
 		LOCK1_RELEASE();
 	}
 	return 0;

@@ -177,7 +177,7 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3
 	evt->para	= par5;
 	evt->evt_type	= type;
 
-	/* print_evt_info(evt); */
+	print_evt_info(evt);
 
 	return;
 }
