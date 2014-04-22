@@ -49,6 +49,11 @@ CSTUB_POST
 
 CSTUB_FN_ARGS_2(int, sched_timeout, spdid_t, spdid, unsigned long, amnt)
 
+#ifdef LOG_MONITOR
+func_num = FN_SCHED_TIMEOUT;
+para     = amnt;
+#endif
+
 CSTUB_ASM_2(sched_timeout, spdid, amnt)
 
 CSTUB_POST

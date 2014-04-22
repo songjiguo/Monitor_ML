@@ -70,11 +70,11 @@ int __sg_sched_timeout(spdid_t spdid, unsigned long amnt)
 	/* printc("ser: sched_wakeup (thd %d)\n", cos_get_thd_id()); */
 	int ret;
 #ifdef LOG_MONITOR
-	evt_enqueue(cos_get_thd_id(), spdid, cos_spd_id(), 0, 0, EVT_SINV);
+	evt_enqueue(cos_get_thd_id(), spdid, cos_spd_id(), FN_SCHED_TIMEOUT, amnt, EVT_SINV);
 #endif
 	ret = sched_timeout(spdid, amnt);
 #ifdef LOG_MONITOR
-	evt_enqueue(cos_get_thd_id(), cos_spd_id(), spdid, 0, 0, EVT_SRET);
+	evt_enqueue(cos_get_thd_id(), cos_spd_id(), spdid, FN_SCHED_TIMEOUT, amnt, EVT_SRET);
 #endif
 	return ret;
 }

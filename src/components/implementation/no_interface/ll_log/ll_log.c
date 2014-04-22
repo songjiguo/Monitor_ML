@@ -8,7 +8,7 @@
 #include <log_process.h>   // check all constraints
 
 extern int logmgr_active(spdid_t spdid);
-#define LM_SYNC_PERIOD 50   // period for asynchronous processing
+#define LM_SYNC_PERIOD 30   // period for asynchronous processing
 
 void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages) 
 { return NULL; }
@@ -43,6 +43,8 @@ err:
 	return -1;
 }
 
+volatile unsigned int event_num;
+
 static void
 lmgr_action()
 {
@@ -50,22 +52,25 @@ lmgr_action()
         vaddr_t mon_ring, cli_ring;
 	struct evt_entry *evt;
 
-	printc("process log now!!!!!\n");
+	event_num = 0;
+	printc("start process log ....\n");
 
 	rdtscll(lpc_start);
 	evt = find_next_evt(NULL);
 	if (!evt) goto done;
+	
 	do {
 #ifdef MEAS_LOG_OVERHEAD		
 		rdtscll(logmeas_start);
 #endif
+		event_num++;
 		constraint_check(evt);
 #ifdef MEAS_LOG_OVERHEAD		
 		rdtscll(logmeas_end);
-		printc("single event constraint check cost %llu\n", logmeas_end - logmeas_start);
+		/* printc("single event constraint check cost %llu\n", logmeas_end - logmeas_start); */
 #endif
 	} while ((evt = find_next_evt(evt)));
-	printc("process log done!!!!!\n");
+	printc("log process done (%d evts)\n", event_num);
 done:
 	rdtscll(lpc_end);
 	lpc_last = lpc_end - lpc_start;
@@ -148,23 +153,64 @@ llog_getsyncp()
    contention happens on RB and we want to skip that event to avoid
    the recursive lock issue (e.g. contends for the lock in the
    scheduler and when the contention event (CS) needs be logged in a
-   RB, the lock is needed for that RB again) */
+   RB, the lock is needed for that RB again) 
+   For EVT_RBCONTEND, we save the followings:
+   owner, contender, contender's evt_type, contention spd
+*/
 
 int
-llog_contention(spdid_t spdid, unsigned int owner)
+llog_contention(spdid_t spdid, int par2, int par3, int par4)
 {
-        struct evt_entry cont_evt;
-        /* printc("Contention!!! spd %d owner %d contender %d\n", spdid, owner, contender); */
-	assert(spdid != cos_spd_id());
+        /* printc("Contention!\n"); */
+
+	int owner, cont_thd, cont_spd, this_spd;
+	int to_thd, func_num, para, evt_type;
+	unsigned long from_spd, to_spd;
 
         LOCK();
 
-	evt_enqueue(owner, spdid, spdid, 0, 0, EVT_RBCONTEND);
+	cont_spd = spdid;
+	cont_thd = cos_get_thd_id();
+	this_spd = cos_spd_id();
 
+	evt_type = par2>>28;
+	func_num = par2>>24 & 0x0000000F;
+	para	 = par2>>16 & 0x000000FF;
+	to_thd	 = par2>>8  & 0x000000FF;
+	owner	 = par2     & 0x000000FF;
+	from_spd = par3;
+	to_spd	 = par4;
+
+	/* printc("owner %d cont_spd %d to_thd %d func_num %d para %d evt_type %d from_spd %lu to_spd %lu\n",  */
+	/*        owner, cont_spd, to_thd, func_num, para, evt_type, from_spd, to_spd); */
+	
+	evt_enqueue(CONTENTION_FLAG | (to_thd<<16) | (cont_thd<<8) | (owner), 
+		    from_spd, to_spd, func_num, para, evt_type);	
+	
         UNLOCK();
         return 0;
 }
 
+/* Initialize thread period. This should only be called when a period
+   thread is created by periodic_wake_create
+ */
+int 
+llog_setperiod(spdid_t spdid, unsigned int thd_id, unsigned int period)
+{
+        struct logmon_info *spdmon;
+	struct thd_trace *ttl = NULL;
+
+	assert(spdid == TE_SPD && thd_id > 0);
+
+	LOCK();
+
+	ttl = &thd_trace[thd_id];
+	assert(ttl);
+	ttl->period = period;
+
+	UNLOCK();
+	return 0;
+}
 
 /* Initialize thread priority. This should only be called when a
    thread is created and the priority is used to detect the priority
@@ -188,8 +234,8 @@ llog_setprio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
 	return 0;
 }
 
-/* Initialize shared RB. Called from each spd when the first event
- * happens in that spd */
+/* Initialize shared RB. Called from each client spd when the first
+ * event happens in that spd. Not including logmgr itself. */
 vaddr_t
 llog_init(spdid_t spdid, vaddr_t addr)
 {

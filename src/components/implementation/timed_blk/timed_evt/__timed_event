@@ -28,6 +28,11 @@
 #define TAKE(spdid) 	if (sched_component_take(spdid)) return -1;
 #define RELEASE(spdid)	if (sched_component_release(spdid)) return -1;
 
+
+#ifdef LOG_MONITOR
+extern int llog_setperiod(spdid_t spdid, unsigned int thd_id, unsigned int period);
+#endif
+
 /* Monotonically increasing timer counting clicks */
 typedef unsigned long long event_time_t;
 static volatile event_time_t ticks = 0;
@@ -511,6 +516,10 @@ int periodic_wake_create(spdid_t spdinv, unsigned int period)
 	insert_pevent(te);
 	if (t > n) sched_timeout(spdid, n-ticks);
 	te->need_restart = 0;
+
+#ifdef LOG_MONITOR
+	llog_setperiod(cos_spd_id(), cos_get_thd_id(), period);
+#endif
 
 	RELEASE(spdid);
 

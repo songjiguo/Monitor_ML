@@ -6,6 +6,11 @@
 #include <log.h>
 #include <log_process.h>
 
+/* required timing data. Same as sched_timing.h */
+#define CPU_FREQUENCY  (CPU_GHZ*1000000000)
+#define TIMER_FREQ     (CPU_TIMER_FREQ)
+#define CYC_PER_TICK   (CPU_FREQUENCY/TIMER_FREQ)
+
 /* get a page from the heap */
 static inline void *
 llog_get_page()
@@ -35,7 +40,6 @@ evt_in_spd (struct evt_entry *entry)
 	case EVT_SRET:
 		logged_in_spd = entry->from_spd;
 		break;
-	case EVT_RBCONTEND:
 	case EVT_SINV:
 	case EVT_CRET:
 	case EVT_TINT:

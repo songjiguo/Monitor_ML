@@ -7,10 +7,31 @@
 #include <heap.h>
 #include <log_util.h>
 
-//#define MEAS_LOG_OVERHEAD
+#define MEAS_LOG_OVERHEAD
+
 #ifdef MEAS_LOG_OVERHEAD
 volatile unsigned long long logmeas_start, logmeas_end;
 #endif
+
+/* constraint specifications */
+enum{
+	CONS_SPDEXEC = 1,
+	CONS_INVOCNUM,
+	CONS_WCET,
+	CONS_DLMISS,
+	CONS_ORDER,
+	CONS_TIMEINT, 
+	CONS_NETINT,
+	CONS_MAX
+};
+
+#define CONTENTION_FLAG (1<<24)
+
+#define THD_EXEC        10000000  // TODO: should read this from script
+#define MAX_WCTINT	1000000
+#define MAX_WCNINT	1000000
+#define MAX_WCETSPDINV	1000000
+#define MAX_INVOCATION	1000000
 
 /* cache the dest for a cap_no */
 struct spd_cap {
@@ -35,17 +56,16 @@ struct thd_trace {
 
 	// d and c for a periodic task
 	unsigned long long period;
-	unsigned long long execution;
+	unsigned long long exec, aexec, laexec, ndeadline;
 
 	// Execution time of this thread
 	unsigned long long tot_exec;
 	// Last time stamp for this thread
 	unsigned long long last_ts;
 
-	// number of timer interrupt while this thread running
-	unsigned long long timer_int;
-	// number of network interrupt while this thread running
-	unsigned int network_int; 
+	// number of interrupts
+	unsigned long long timer_int, timer_int_ts, timer_int_wd;
+	unsigned long long network_int, network_int_ts, network_int_wd;
 
 	// how long this thread has been in PI?
 	unsigned long long pi_time, pi_start_t;
@@ -70,6 +90,9 @@ struct heap *h;  // the pointer to the max_heap
 // time of start/end log processing and the duration of last time processing
 volatile unsigned long long lpc_start, lpc_end, lpc_last;
 
+unsigned int faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int evt_type);
+unsigned int faulty_spd;
+
 static void 
 init_thread_trace()
 {
@@ -77,16 +100,21 @@ init_thread_trace()
 	memset(thd_trace, 0, sizeof(struct thd_trace) * MAX_NUM_THREADS);
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
 		thd_trace[i].thd_id    = i;
-		thd_trace[i].period    = 0;	// same as deadline d
-		thd_trace[i].execution = 0;	// same as period p
+		thd_trace[i].period    = 0;	// same as period p
+		thd_trace[i].exec      = THD_EXEC; // same as execution time c
+		thd_trace[i].aexec     = 0;	// actual exec for a thread (for check WCET)
 		
 		// timing info for a thread
 		thd_trace[i].tot_exec = 0;	// the total exec time for thd
 		thd_trace[i].last_ts  = 0;	// the last time stamp for this thd
 
 		// number of events 
-		thd_trace[i].timer_int	 = 0;	// number of timer INT while thd
-		thd_trace[i].network_int = 0;	// number of network INT while thd
+		thd_trace[i].timer_int	    = 0;	// number of timer INT while thd
+		thd_trace[i].timer_int_ts   = 0;	// when an timer int happens
+		thd_trace[i].timer_int_wd   = 0;	// time window for timer ints
+		thd_trace[i].network_int    = 0;	// number of network INT while thd
+		thd_trace[i].network_int_ts = 0;	// when an network int happens
+		
 		// dependency tree info
 		thd_trace[i].pi_time	 = 0;	// how long a thread is in PI status
 		thd_trace[i].pi_start_t	 = 0;	// when a thread starts being in PI status
@@ -121,6 +149,7 @@ update_proc(unsigned long long process_time)
 			assert(ttc->last_ts > 0);
 		}
 		// other timing here...
+		
 	}
 	return;
 }
@@ -243,9 +272,9 @@ done:
 	return ret;
 }
 
-/**************************/
-/*    Constraints Check   */
-/**************************/
+/*********************************/
+/*    Constraints Check  -- PI   */
+/*********************************/
 //debug only, print dependencies
 static void
 print_deps(struct thd_trace *root)
@@ -272,13 +301,13 @@ print_deps(struct thd_trace *root)
  * might incorrectly account log processing time into PI
  * time. Need to subtract processing time. */
 
-static int
+static void
 check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
 {
 	struct thd_trace *d, *n, *m, *root;
 
 	assert(ttc && entry);
-	if (!ttn) return 0;
+	if (!ttn) return;
 
 	if (unlikely(pi_begin(&last_entry, ttc->prio, entry, ttn->prio))) {
 		root = &thd_trace[last_entry.para];
@@ -289,7 +318,7 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 		root->h	     = ttc;
 		ttc->pi_start_t = root->tot_exec; // start accounting PI time
 		ttc->pi_time    = 0;
-		return 0;
+		return;
 	}
 	/* remove dependency ( update and check epoch )*/
 	if (unlikely(pi_end(&last_entry, ttc->prio, entry, ttn->prio))) {
@@ -323,17 +352,20 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 
 		/* printc("After PI remove: "); */
 		/* print_deps(m); */
-		printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time);
-		printc("\n");
+		/* printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time); */
+		/* printc("\n"); */
 		// TODO: localize the faulty spd ...here
 		m->pi_start_t = 0;
 
 		root->h = m->n;
 	}
 
-	
-	return 0;
+	return;
 }
+
+/*************************************/
+/*    Constraints Check  -- Ordering */
+/*************************************/
 
 static void
 check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
@@ -350,6 +382,7 @@ check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
 	case EVT_CINV:
 		if (n_type == EVT_SINV || n_type == EVT_NINT || 
 		    n_type == EVT_TINT) goto done;
+		
 		break;
 	case EVT_SINV:
 		if (n_type == EVT_CINV || n_type == EVT_SRET ||
@@ -367,7 +400,8 @@ check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
 		break;
 	case EVT_CS:
 		if (n_type == EVT_CINV || n_type == EVT_SRET || 
-		    n_type == EVT_NINT || n_type == EVT_TINT) goto done;
+		    n_type == EVT_CS || n_type == EVT_NINT || 
+		    n_type == EVT_TINT) goto done;
 		break;
 	case EVT_NINT:
 	case EVT_TINT:
@@ -379,32 +413,24 @@ check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
 		break;
 	}
 
-	// TODO: localize the faulty spd ... here
+	printc("evt_type %d order issue found \n", p_type);
+	printc("current entry :\n");
+	print_evt_info(entry);
+	printc("last entry :\n");
+	print_evt_info(&last_entry);
+	faulty_spd = faulty_spd_localizer(ttc, entry, CONS_ORDER);
+	
 done:
 	return;
 }
 
+/*************************************/
+/*    Constraints Check  -- Interrupt */
+/*************************************/
+// we check number of interrupts within a time window (e.g, period of a task)
+// interrupt activates ttn when ttc is running
 static void
-check_invocation(struct thd_trace *ttc, struct evt_entry *entry)
-{
-	assert(ttc && entry);
-	assert(entry->evt_type > 0);
-
-	switch (entry->evt_type) {
-	case EVT_SINV:
-		ttc->invocation[entry->to_spd]++;
-		break;
-	default:
-		break;
-	}
-	
-	// TODO: check number of invocation to a spd here
-	// ...
-	return;
-}
-
-static void
-check_interrupt(struct thd_trace *ttc, struct evt_entry *entry)
+check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
 {
 	assert(ttc && entry);
 	assert(entry->evt_type > 0);
@@ -413,21 +439,97 @@ check_interrupt(struct thd_trace *ttc, struct evt_entry *entry)
 	case EVT_NINT:
 		/* assert(entry->to_spd == NETIF_SPD); */
 		/* assert(entry->to_thd == NETWORK_THD); */
+		assert(entry->to_thd == NETWORK_THD);
 		ttc->network_int++;
+		if (ttc->network_int_wd == 0) {
+			ttc->network_int_ts = entry->time_stamp; 
+			ttc->network_int_wd++;
+			break;
+		}
+		ttc->network_int_wd = ttc->network_int_wd + entry->time_stamp - ttc->network_int_ts;
+		ttc->network_int_ts = entry->time_stamp;
+		/* printc("network int -- num %llu at %llu  (active thd %d when thd %d is running\n", */
+		/*        ttc->network_int, ttc->network_int_ts, ttn->thd_id, ttc->thd_id); */
+		// if number is greater than the specification in a time window for ttc task
+		if ((ttc->network_int_wd < ttc->period  && (ttc->network_int > MAX_WCTINT))) {
+			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_NETINT);
+		}
 		break;
 	case EVT_TINT:
 		/* assert(entry->to_spd == SCHED_SPD); */
 		/* assert(entry->to_thd == TIMER_THD); */
+		assert(entry->to_thd == TIMER_THD);
 		ttc->timer_int++;
+		if (ttc->timer_int_wd == 0) {
+			ttc->timer_int_ts = entry->time_stamp; 
+			ttc->timer_int_wd++;
+			break;
+		}
+		ttc->timer_int_wd = ttc->timer_int_wd + entry->time_stamp - ttc->timer_int_ts;
+		ttc->timer_int_ts = entry->time_stamp;
+		/* printc("timer int -- num %llu at %llu  (active thd %d when thd %d is running\n", */
+		       /* ttc->timer_int, ttc->timer_int_ts, ttn->thd_id, ttc->thd_id); */
+		// if number is greater than the specification in a time window for ttc task
+		if ((ttc->timer_int_wd < ttc->period  && (ttc->timer_int > MAX_WCTINT))) {
+			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_TIMEINT);
+		}
 		break;
 	default:
 		break;
 	}
-	// TODO:check number of interrupts in a time window here
-	// ...
+
 	return;
 }
 
+/****************************************/
+/*    Constraints Check  -- thread wcet */
+/****************************************/
+/* A periodic task begins if
+   1) sched_timeout (checked by timer thread)
+   2) switch to it from timer thread
+*/
+static int
+periodic_task_begin(struct evt_entry *last, struct thd_trace *ttn, struct evt_entry *entry)
+{
+	return (entry->evt_type == EVT_CS &&
+		entry->from_thd != entry->to_thd &&
+		entry->from_thd == TE_THD &&
+		last->evt_type == EVT_SINV &&
+		last->func_num == FN_SCHED_TIMEOUT &&
+		ttn->period > 0);
+}
+
+static void
+check_thd_wcet(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
+{
+	assert(ttc && entry);
+
+	// can only be switched from te thread if it is a start
+	if (ttn && ttn->period && periodic_task_begin(&last_entry, ttn, entry)) {
+		/* printc("periodic thread %d begins here\n", ttn->thd_id); */
+		ttn->aexec = 0;                                             // reset actual exec time
+		ttn->laexec = ttn->tot_exec;                                // reset total exec up to this point
+		ttn->ndeadline = ttn->tot_exec + ttn->period*CYC_PER_TICK;  // reset next deadline
+		return;
+	}
+	
+	if (ttc->period && ttc->ndeadline) {
+		ttc->aexec = ttc->aexec + ttc->tot_exec - ttc->laexec;
+		/* printc("thread %d has actually run for %llu (c is %llu) ", ttc->thd_id, ttc->aexec, ttc->exec); */
+		/* printc("next deadline is %llu (total exec %llu)\n", ttc->ndeadline, ttc->tot_exec); */
+		ttc->laexec = ttc->tot_exec;
+		if (unlikely(ttc->tot_exec > ttc->ndeadline)) {
+			faulty_spd_localizer(ttc, entry, CONS_DLMISS);  // deadline miss
+		} else if (ttc->aexec > ttc->exec) {  
+			faulty_spd_localizer(ttc, entry, CONS_WCET);  // wcet overrun
+		}
+	}
+	return;
+}
+
+/*************************************/
+/*    Constraints Check  -- spdinvexec */
+/*************************************/
 static void
 check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry, unsigned long long up_t)
 {
@@ -444,6 +546,11 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 
 	switch (entry->evt_type) {
 	case EVT_SINV:
+		ttc->invocation[entry->to_spd]++;
+		// if number is greater than the specification defined within a period
+		if (ttc->invocation[entry->to_spd] > MAX_INVOCATION) {
+			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_INVOCNUM);
+		}		
 		ttc->inv_spd_exec[entry->to_spd] = 0;
 		break;
 	case EVT_CINV:
@@ -458,7 +565,9 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 		if (entry->evt_type == EVT_SRET) {
 			/* if (spdid == SCHED_SPD) printc("<<thd %d in spd %d in one invocation is %llu >>\n", ttc->thd_id, spdid, ttc->inv_spd_exec[spdid]); */
 			// TODO:check WCET in spd due to invocation here
-			// ....
+			if (ttc->inv_spd_exec[spdid] > MAX_WCETSPDINV) {
+				faulty_spd_localizer(ttc, &last_entry, CONS_SPDEXEC);
+			}
 			ttc->inv_spd_exec[spdid] = 0;
 		}
 		break;
@@ -473,6 +582,10 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 	return;
 }
 
+
+/*************************************/
+/*    Constraints Check  -- prepare  */
+/*************************************/
 static void 
 constraint_check(struct evt_entry *entry)
 {
@@ -480,9 +593,18 @@ constraint_check(struct evt_entry *entry)
 	unsigned long long up_t;
 	int from_thd, from_spd;
 
+	int owner = 0, contender = 0;  // in case of RB contention
 	/* print_evt_info(entry); */
 
 	assert(entry && entry->evt_type > 0);
+
+	// "paste" the omitted event here
+	if (unlikely(entry->to_thd & CONTENTION_FLAG)) {
+		owner	      = entry->to_thd & 0x000000FF;
+		contender     = entry->to_thd>>8 & 0x000000FF;
+		entry->to_thd = entry->to_thd>>16 & 0x000000FF;
+		assert(contender == entry->from_thd);
+	}
 	
 	if (entry->evt_type == EVT_TINT || entry->evt_type == EVT_NINT) {
 		if (likely(last_entry.from_thd && last_entry.from_spd)) {
@@ -531,20 +653,15 @@ constraint_check(struct evt_entry *entry)
 		assert(0);
 		break;
 	}	
-	/* if (ttc->thd_id == 14) */
-	/* 	printc("thd %d total exec %llu \n", ttc->thd_id, ttc->tot_exec); */
 
 	/***************************/
 	/* Constraint check begins */
 	/***************************/
 	check_inv_spdexec(ttc, ttn, entry, up_t);
-	check_interrupt(ttc, entry);
-	check_invocation(ttc, entry);
+	check_thd_wcet(ttc, ttn, entry);  // this also includes deadline check
+	check_interrupt(ttc, ttn, entry);
 	check_ordering(ttc, entry);
-
 	check_priority_inversion(ttc, ttn, entry);
-
-	/* check_thd_wcet(ttc, ttn, entry, up_t); */
 	/***************************/
 	/* Constraint check done ! */
 	/***************************/
@@ -554,5 +671,43 @@ constraint_check(struct evt_entry *entry)
 	
 	return;
 }
+
+/* return the faulty spd id, or 0 */
+unsigned int
+faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int evt_type)
+{
+	printc("find faulty spd here\n");
+
+	switch (evt_type) {
+	case CONS_TIMEINT:
+		assert(0);
+		break;
+	case CONS_SPDEXEC:
+		assert(0);
+		break;
+	case CONS_DLMISS:
+		assert(0);
+		break;
+	case CONS_WCET:
+		assert(0);
+		break;
+	case CONS_NETINT:
+		assert(0);
+		break;
+	case CONS_INVOCNUM:
+		assert(0);
+		break;
+	case CONS_ORDER:
+		assert(0);
+		break;
+	default:
+		printc("event type error\n");
+		assert(0);
+		break;
+	}	
+
+	return 0;
+}
+
 
 #endif

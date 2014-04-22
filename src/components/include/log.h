@@ -43,7 +43,7 @@
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
 extern int llog_process();
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
-extern int llog_contention(spdid_t spdid, unsigned int owner);
+extern int llog_contention(spdid_t spdid, int par1, int par2, int par3);
 
 #include <cos_list.h>
 #include <ck_ring_cos.h>
@@ -67,10 +67,12 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define MM_SPD		4
 #define BOOTER_SPD	6
 #define LOCK_SPD        7
+#define TE_SPD          8
 #define NETIF_SPD	25
 
 // thread ID
-#define TIMER_THD	7
+#define TIMER_THD	8
+#define TE_THD	        10
 #define NETWORK_THD	20
 
 #define NUM_PRIOS    32
@@ -84,6 +86,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 enum{
 	FN_SCHED_BLOCK = 1,
 	FN_SCHED_WAKEUP,
+	FN_SCHED_TIMEOUT,
 	FN_LOCK_COMPONENT_TAKE,
 	FN_LOCK_COMPONENT_RELEASE,
 	FN_MAX
@@ -97,7 +100,6 @@ enum{
 	EVT_CS,         // context switch
 	EVT_TINT,       // timer interrupt
 	EVT_NINT,       // network interrupt
-	EVT_RBCONTEND,  // contention on a rb
 	EVT_MAX
 };
 
@@ -149,6 +151,21 @@ print_evt_info(struct evt_entry *entry)
 	return;
 }
 
+// par1: to_thd  par2: from spd  par3: to_spd  par4: func_num  par5: para
+static inline CFORCEINLINE void
+evt_omitted(int to_thd, unsigned long from_spd, unsigned long to_spd, int func_num, int para, int evt_type, int owner)
+{
+	int cont_spd = cos_spd_id();
+	
+	int par1 = (evt_type<<28) | (func_num<<24) | (para<<16) | (to_thd<<8) | (owner);
+	unsigned long par2 = from_spd;  // this can be cap_no
+	unsigned long par3 = to_spd;    // this can be cap_no
+	
+	llog_contention(cos_spd_id(), par1, par2, par3);
+
+	return;
+}
+
 static inline CFORCEINLINE int 
 evt_ring_is_full()
 {
@@ -182,7 +199,6 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3
 	return;
 }
 
-
 volatile unsigned long long log_start, log_end;
 
 static inline CFORCEINLINE void 
@@ -204,12 +220,12 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 		llog_process();
 	}
 
-#ifdef LOG_MONITOR   // due to ck library now has LOG_MONITOR
+#ifdef LOG_MONITOR   // since ck library now has LOG_MONITOR
 	int owner = CK_RING_ENQUEUE_SPSCCONT(logevt_ring, evt_ring);
 	if (unlikely(owner)) {   // contention on this RB
 		printc("<<<Contention on RB !!!!! %lu thd %d>>>\n", 
 		       cos_spd_id(), cos_get_thd_id());
-		llog_contention(cos_spd_id(), owner);
+		evt_omitted(par1, par2, par3, par4, par5, evt_type, owner);
 		return;
 	}
 

@@ -55,17 +55,16 @@ int try_cs_hp(void)
 {
 	int i;
 	while(1) {
-		printc("thread h : %d is doing something\n", cos_get_thd_id());
-
+		/* printc("thread h : %d is doing something\n", cos_get_thd_id()); */
 		timed_event_block(cos_spd_id(), 5);
 		spin2 = 0;
-		printc("thread h : %d try to take lock1\n", cos_get_thd_id());
+		/* printc("thread h : %d try to take lock1\n", cos_get_thd_id()); */
 		LOCK2_TAKE();
 
-		printc("thread h : %d has the lock1\n", cos_get_thd_id());
+		/* printc("thread h : %d has the lock1\n", cos_get_thd_id()); */
 
 		LOCK2_RELEASE();
-		printc("thread h : %d released lock1\n", cos_get_thd_id());
+		/* printc("thread h : %d released lock1\n", cos_get_thd_id()); */
 	}
 	return 0;
 }
@@ -74,23 +73,23 @@ int try_cs_mp(void)
 {
 	int i;
 	while(1) {
-		printc("thread m : %d is doing something\n", cos_get_thd_id());
+		/* printc("thread m : %d is doing something\n", cos_get_thd_id()); */
 
 		timed_event_block(cos_spd_id(), 1);
 
 		LOCK2_TAKE();
-		printc("thread m : %d has the lock2\n", cos_get_thd_id());
+		/* printc("thread m : %d has the lock2\n", cos_get_thd_id()); */
 
 		spin = 0;
-		printc("thread m : %d try to take lock1\n", cos_get_thd_id());
+		/* printc("thread m : %d try to take lock1\n", cos_get_thd_id()); */
 		LOCK1_TAKE();
-		printc("thread m : %d has the lock1\n", cos_get_thd_id());
+		/* printc("thread m : %d has the lock1\n", cos_get_thd_id()); */
 
 		LOCK1_RELEASE();
-		printc("thread m : %d released lock1\n", cos_get_thd_id());
+		/* printc("thread m : %d released lock1\n", cos_get_thd_id()); */
 
 		LOCK2_RELEASE();
-		printc("thread m : %d released lock2\n", cos_get_thd_id());
+		/* printc("thread m : %d released lock2\n", cos_get_thd_id()); */
 	}
 	return 0;
 }
@@ -100,26 +99,25 @@ int try_cs_lp(void)
 {
 	volatile int jj, kk;
 	while (1) {
-		printc("<<< thread l : %d is doing something \n", cos_get_thd_id());
-		printc("thread l : %d try to take lock1\n", cos_get_thd_id());
+		/* printc("<<< thread l : %d is doing something \n", cos_get_thd_id()); */
+		/* printc("thread l : %d try to take lock1\n", cos_get_thd_id()); */
 		LOCK1_TAKE();
-		printc("thread l : %d has the lock1\n", cos_get_thd_id());
+		/* printc("thread l : %d has the lock1\n", cos_get_thd_id()); */
 
-		printc("thread l : %d spin\n", cos_get_thd_id());
+		/* printc("thread l : %d spin\n", cos_get_thd_id()); */
 		while (spin);
 		spin = 1;
-		printc("thread l : %d after spin\n", cos_get_thd_id());
+		/* printc("thread l : %d after spin\n", cos_get_thd_id()); */
 		jj = 0;
 		kk = 0;
 		while(jj++ < 100){
 			while(kk++ < 1000);
 		}
-		printc("thread l : %d spin2\n", cos_get_thd_id());
+		/* printc("thread l : %d spin2\n", cos_get_thd_id()); */
 		while(spin2);
 		spin2 = 1;
-		printc("thread l : %d after spin2\n", cos_get_thd_id());
-
- 		printc("thread l : %d try to release lock1\n", cos_get_thd_id());
+		/* printc("thread l : %d after spin2\n", cos_get_thd_id()); */
+ 		/* printc("thread l : %d try to release lock1\n", cos_get_thd_id()); */
 		LOCK1_RELEASE();
 	}
 	return 0;
