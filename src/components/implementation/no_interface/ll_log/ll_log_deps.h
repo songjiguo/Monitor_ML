@@ -53,7 +53,13 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 /*******************************/
 #include <sched_hier.h>
 
-//int sched_init(int reboot)   { return 0; }
+extern int parent_sched_child_cntl_thd(spdid_t spdid);
+int sched_init(int reboot)   { 	
+	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
+	if (cos_sched_cntl(COS_SCHED_EVT_REGION, 0, (long)PERCPU_GET(cos_sched_notifications))) BUG();
+	return 0; 
+}
+
 extern void parent_sched_exit(void);
 void 
 sched_exit(void)   
@@ -67,8 +73,6 @@ int sched_isroot(void) { return 1; }
 int 
 sched_child_get_evt(spdid_t spdid, struct sched_child_evt *e, int idle, unsigned long wake_diff) { BUG(); return 0; }
 
-extern int parent_sched_child_cntl_thd(spdid_t spdid);
-
 int 
 sched_child_cntl_thd(spdid_t spdid) 
 { 
@@ -81,6 +85,7 @@ sched_child_cntl_thd(spdid_t spdid)
 
 int 
 sched_child_thd_crt(spdid_t spdid, spdid_t dest_spd) { BUG(); return 0; }
+
 
 #endif //LL_LOG_H
 

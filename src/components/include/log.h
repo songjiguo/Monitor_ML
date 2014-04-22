@@ -71,9 +71,9 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define NETIF_SPD	25
 
 // thread ID
-#define TIMER_THD	8
-#define TE_THD	        10
-#define NETWORK_THD	20
+#define TIMER_THD	9
+#define TE_THD	        11
+#define NETWORK_THD	21
 
 #define NUM_PRIOS    32
 #define PRIO_LOWEST  (NUM_PRIOS-1)
@@ -217,7 +217,10 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 		// contention RB better not be full before any other RB is full
 		assert(par1 != LLLOG_SPD);
 		/* printc("<<<FULL !!!!! spd %lu thd %d>>>\n", cos_spd_id(), cos_get_thd_id()); */
+		/* rdtscll(log_start); */
 		llog_process();
+		/* rdtscll(log_end); */
+		/* printc("FULL! invoke/switch/process cost %llu\n", log_end-log_start); */
 	}
 
 #ifdef LOG_MONITOR   // since ck library now has LOG_MONITOR

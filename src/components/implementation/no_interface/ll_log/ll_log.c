@@ -79,6 +79,24 @@ done:
 	return;
 }
 
+static int log_init_thd;
+static int log_loop_thd;
+static int prev_mthd;
+
+static void
+lllog_loop(void) { 
+	int tid, pmthd;
+	while(1) {
+		pmthd = prev_mthd;
+		assert(cos_get_thd_id() == log_loop_thd);
+		lmgr_action();
+		prev_mthd = 0;
+		cos_switch_thread(pmthd, 0);
+	}
+	assert(0);
+	return; 
+}
+
 /* Initialize log manager here...do this only once */
 static void
 lmgr_initialize(void)
@@ -114,20 +132,17 @@ lmgr_initialize(void)
 
 	lpc_start = lpc_end = lpc_last = 0;
 
-	return;
-}
+	log_init_thd = cos_get_thd_id();
+	assert(log_init_thd);		
 
-void 
-cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
-{
-	switch (t) {
-	case COS_UPCALL_BOOTSTRAP:
-		lmgr_initialize(); break;
-	case COS_UPCALL_LOG_PROCESS:
-		lmgr_action(); break;
-	default:
-		return;
-	}
+	sched_init(0);
+	log_loop_thd = cos_create_thread((int)lllog_loop, (int)0, 0);
+	printc("log_init_thd %d and log_loop_thd %d\n", log_init_thd, log_loop_thd);
+
+	/* cos_switch_thread(log_loop_thd, 0); */
+	/* assert(0); */
+
+	printc("done init log by thd %d\n", cos_get_thd_id());
 	return;
 }
 
@@ -139,7 +154,11 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 int
 llog_process()
 {
-	return logmgr_active(cos_spd_id());
+	/* return logmgr_active(cos_spd_id()); */
+	prev_mthd     = cos_get_thd_id();
+	while (prev_mthd == cos_get_thd_id()) cos_switch_thread(log_loop_thd, 0);
+	return 0;
+
 }
 
 /* Return the periodicity for asynchronously monitor processing  */
@@ -263,3 +282,34 @@ done:
 	return ret;
 }
 
+
+
+typedef void (*crt_thd_fn_t)(void);
+
+void 
+cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
+{
+	switch (t) {
+	case COS_UPCALL_BOOTSTRAP:
+		printc("BOOTSTRAP %d\n", cos_get_thd_id());
+		lmgr_initialize(); break;
+	case COS_UPCALL_CREATE:
+		/* printc("CREATE %d\n", cos_get_thd_id()); */
+		lllog_loop();
+		((crt_thd_fn_t)arg1)();
+		break;
+	case COS_UPCALL_DESTROY:
+		printc("DESTROY %d\n", cos_get_thd_id());
+		assert(0);
+		break;
+	case COS_UPCALL_LOG_PROCESS:
+		lmgr_action(); break;
+	case COS_UPCALL_UNHANDLED_FAULT:
+		printc("Core %ld: Fault detected by the llboot component in thread %d: "
+		       "Major system error.\n", cos_cpuid(), cos_get_thd_id());
+		break;
+	default:
+		return;
+	}
+	return;
+}

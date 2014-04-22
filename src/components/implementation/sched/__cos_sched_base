@@ -511,8 +511,9 @@ static void sched_timer_tick(void)
 	/* unsigned long long old, new; */
 	/* old = 0; */
 	while (1) {
-/* Timer interrupt logging here*/
+
 #ifdef LOG_MONITOR
+/* Timer interrupt logging here*/		
 		cos_sched_lock_take();
 		evt_enqueue(cos_get_thd_id(), cos_spd_id(), cos_spd_id(), 0, 0, EVT_TINT);
 		cos_sched_lock_release();
@@ -1836,10 +1837,9 @@ sched_init(int reboot)
 {
 //	printc("Sched init has thread %d\n", cos_get_thd_id());
 	/* assert(!(PERCPU_GET(sched_base_state)->init)); // don't re-initialize. should be removed if doing recovery test.  */
-
 	/* Promote us to a scheduler! */
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
-
+	
 	if (cos_sched_cntl(COS_SCHED_EVT_REGION, 0, (long)PERCPU_GET(cos_sched_notifications))) BUG();
 
 	/* Are we root? */

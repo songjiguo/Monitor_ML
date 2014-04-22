@@ -1461,7 +1461,16 @@ thd_ret_upcall_type(struct thread *curr, upcall_type_t t)
 	
 	tsi = scheduler_find_leaf(curr);
 	dest = tsi->scheduler;
-	
+
+/* Hack for now. The init thread returns from log_manager and should */
+/* go back to llbooter. But logmgr has been promoted to the */
+/* base_scheduler. Need fix the ->sccheduler later */
+// 1 is llbooter and 2 is lllog
+#ifdef LOG_MONITOR
+	if (unlikely(spd_get_index(dest)==2)) {
+		dest = spd_get_by_index(1);
+	}
+#endif
 	upcall_setup(curr, dest, t, 0, 0, 0);
 	upcall_execute_compat(curr, NULL, cspd);
 	

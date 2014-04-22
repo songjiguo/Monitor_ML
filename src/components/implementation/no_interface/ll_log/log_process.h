@@ -7,7 +7,7 @@
 #include <heap.h>
 #include <log_util.h>
 
-#define MEAS_LOG_OVERHEAD
+//#define MEAS_LOG_OVERHEAD
 
 #ifdef MEAS_LOG_OVERHEAD
 volatile unsigned long long logmeas_start, logmeas_end;
