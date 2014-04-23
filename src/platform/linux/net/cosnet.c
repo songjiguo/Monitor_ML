@@ -179,31 +179,32 @@ static void cosnet_init_queues(struct tun_struct *ts)
 	}
 }
 
-static void cosnet_purge_queues(struct tun_struct *ts)
-{
-	int i;
+// The following two function are not used anywhere. Jiguo
+/* static void cosnet_purge_queues(struct tun_struct *ts) */
+/* { */
+/* 	int i; */
 
-	for (i = 0 ; i < COSNET_NUM_CHANNELS ; i++) {
-		if (ts->cosnet[i].packet_queue) {
-			skb_queue_purge(ts->cosnet[i].packet_queue);
-		}
-	}
-}
+/* 	for (i = 0 ; i < COSNET_NUM_CHANNELS ; i++) { */
+/* 		if (ts->cosnet[i].packet_queue) { */
+/* 			skb_queue_purge(ts->cosnet[i].packet_queue); */
+/* 		} */
+/* 	} */
+/* } */
 
-/* be more aggressive here????? */
-static int cosnet_queues_full(struct tun_struct *ts) 
-{
-	int i;
+/* /\* be more aggressive here????? *\/ */
+/* static int cosnet_queues_full(struct tun_struct *ts)  */
+/* { */
+/* 	int i; */
 
-	for (i = 0 ; i < COSNET_NUM_CHANNELS ; i++) {
-		if (ts->cosnet[i].packet_queue &&
-		    skb_queue_len(ts->cosnet[i].packet_queue) < COSNET_QUEUE_LEN) {
-			return 0;
-		}
-	}
+/* 	for (i = 0 ; i < COSNET_NUM_CHANNELS ; i++) { */
+/* 		if (ts->cosnet[i].packet_queue && */
+/* 		    skb_queue_len(ts->cosnet[i].packet_queue) < COSNET_QUEUE_LEN) { */
+/* 			return 0; */
+/* 		} */
+/* 	} */
 	
-	return 1;
-}
+/* 	return 1; */
+/* } */
 
 struct tun_struct *local_ts = NULL;
 
@@ -344,14 +345,15 @@ extern void host_start_syscall(void);
 extern void host_end_syscall(void);
 extern asmlinkage void do_softirq(void);
 
-static unsigned long long start, end, total_n = 0;
-static unsigned int nuc = 0;
+// this is used for the network performance test only
+/* static unsigned long long start, end, total_n = 0; */
+/* static unsigned int nuc = 0; */
 
 static int cosnet_xmit_packet(void *headers, int hlen, struct gather_item *gi, 
 			      int gi_len, int tot_gi_len)
 {
 	
-	rdtscll(start);
+	/* rdtscll(start); */
 	/* printk("cosnet xmit 1\n"); */
 	struct sk_buff *skb;
 	int totlen = hlen + tot_gi_len, i;
@@ -610,11 +612,12 @@ drop:
 	return 0;
 }
 
-static struct net_device_stats *tun_net_stats(struct net_device *dev)
-{
-	struct tun_struct *tun = netdev_priv(dev);
-	return &tun->stats;
-}
+// Not used anywhere. Comment out now by Jiguo
+/* static struct net_device_stats *tun_net_stats(struct net_device *dev) */
+/* { */
+/* 	struct tun_struct *tun = netdev_priv(dev); */
+/* 	return &tun->stats; */
+/* } */
 
 #define MIN_MTU 68
 #define MAX_MTU 65535

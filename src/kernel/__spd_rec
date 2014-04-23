@@ -510,9 +510,8 @@ int spd_cap_get_dest(struct spd *spd, int cap)
 	assert(spd);
 
 	if (cap > spd->ncaps) {
-		printd("cos: Capability out of range (valid [0,%d), cap # %d).\n",
-		       spd->ncaps, cap);
-		return NULL;
+		printd("cos: Capability out of range (valid [0,%d), cap # %d).\n", spd->ncaps, cap);
+		return 0;
 	}
 	c = &spd->caps[cap];
 	if (!c) return -1;

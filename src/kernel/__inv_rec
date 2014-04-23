@@ -20,8 +20,8 @@
 #include "include/fpu.h"
 #include "include/recovery.h"
 
-#ifdef LOAD_MONITOR
-#define LOGMGR_THD     3
+#ifdef LOG_MONITOR
+#define LLBOOT_INIT_THD     3
 #endif
 
 /* 
@@ -511,8 +511,13 @@ void initialize_sched_info(struct thread *t, struct spd *curr_sched)
 
 		tsi->scheduler = sched;
 		tsi->thread_notifications = NULL;
-
+		
 		sched = sched->parent_sched;
+
+		/* printk("child %d -- sched_depth %d\n", spd_get_index(child), child->sched_depth); */
+		/* printk("parent %d -- sched_depth %d\n",  */
+		/*        spd_get_index(child->parent_sched), child->parent_sched->sched_depth); */
+		
 	}
 
 	return;
@@ -561,7 +566,7 @@ COS_SYSCALL int
 cos_syscall_create_thread(int spd_id, int a, int b, int c)
 {
 	struct thread *thd, *curr;
-	struct spd *curr_spd, *spd;
+	struct spd *curr_spd;
 
 	/* can we use c as a parameter to build the thread creation
 	 * chain of default threads? */
@@ -626,7 +631,7 @@ cos_syscall_create_thread(int spd_id, int a, int b, int c)
 	/* for now, just save all threads for simplicity (Jiguo) */
 	thd->sched_info[curr_spd->sched_depth].thread_fn = (void *)a;
 	thd->sched_info[curr_spd->sched_depth].thread_dest = (void *)b;
-done:	
+
 	/* printk("thread is created %d\n", thd_get_id(thd)); */
 	return thd_get_id(thd);
 }
@@ -954,27 +959,7 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 		goto ret_err;
 	}
 	
-	/* struct thread *test_thd; */
 	/* assert(spd_is_scheduler(curr_spd)); */
-	/* test_thd = sched_thread_lookup(curr_spd, tid); */
-
-	/* if (test_thd) { */
-	/* 	printk("*********** Before update: thd %d ***********\n", thd_get_id(test_thd)); */
-	/* 	printk("test_thd->stack_ptr %x\n",test_thd->stack_ptr); */
-	/* 	printk("test_thd->stack_base[0].spd %d\n",spd_get_index(test_thd->stack_base[0].spd)); */
-
-	/* 	printk("test_thd->regs.cx %lu\n",test_thd->regs.cx); */
-	/* 	printk("test_thd->regs.dx %lu\n",test_thd->regs.dx); */
-	/* 	printk("test_thd->regs.bx %lu\n",test_thd->regs.bx); */
-	/* 	printk("test_thd->regs.di %lu\n",test_thd->regs.di); */
-	/* 	printk("test_thd->regs.si %lu\n",test_thd->regs.si); */
-	/* 	printk("test_thd->regs.ax %lu\n",test_thd->regs.ax); */
-
-	/* 	printk("test_thd->flags %x\n",test_thd->flags); */
-
-	/* 	printk("**********************\n"); */
-	/* } */
-
 	/* if (thd_get_id(curr) == 2 && thd_get_id(thd) == 7) { */
 	/* 	printk("update thread 7 registers\n"); */
 	/* 	thd->stack_ptr = 0; */
@@ -1016,23 +1001,6 @@ switch_thread_get_target(unsigned short int tid, struct thread *curr,
 	/* 	initialize_sched_info(thd, curr_spd); */
 	/* } */
 
-	/* if (test_thd) { */
-	/* 	printk("*********** After update: thd %d ***********\n", thd_get_id(test_thd)); */
-	/* 	printk("test_thd->stack_ptr %x\n",test_thd->stack_ptr); */
-	/* 	printk("test_thd->stack_base[0].spd %d\n",spd_get_index(test_thd->stack_base[0].spd)); */
-
-	/* 	printk("test_thd->regs.cx %lu\n",test_thd->regs.cx); */
-	/* 	printk("test_thd->regs.dx %lu\n",test_thd->regs.dx); */
-	/* 	printk("test_thd->regs.bx %lu\n",test_thd->regs.bx); */
-	/* 	printk("test_thd->regs.di %lu\n",test_thd->regs.di); */
-	/* 	printk("test_thd->regs.si %lu\n",test_thd->regs.si); */
-	/* 	printk("test_thd->regs.ax %lu\n",test_thd->regs.ax); */
-
-	/* 	printk("test_thd->flags %x\n",test_thd->flags); */
-
-	/* 	printk("**********************\n"); */
-	/* } */
-	
 	/* we cannot schedule to run an upcall thread that is not running */
 	if (unlikely(thd->flags & THD_STATE_READY_UPCALL)) {
 		/* printk("READY_UPCALL thd %d\n", thd_get_id(curr)); */
@@ -1459,18 +1427,21 @@ thd_ret_upcall_type(struct thread *curr, upcall_type_t t)
 	assert(cspd);
 	spd_mpd_ipc_release(cspd);
 	
+#ifdef LOG_MONITOR
+        /* JiguoHack for now. The init thread returns from log_manager and should */
+        /* go back to llbooter. Need fix this later */
+        /* thread 3 is for init thread and its base scheduler is llbooter */
+	if (curr->thread_id == LLBOOT_INIT_THD) {
+		tsi = thd_get_sched_info(curr, 0);
+	} else {
+		tsi = scheduler_find_leaf(curr);
+	}
+	dest = tsi->scheduler;
+#else
 	tsi = scheduler_find_leaf(curr);
 	dest = tsi->scheduler;
-
-/* Hack for now. The init thread returns from log_manager and should */
-/* go back to llbooter. But logmgr has been promoted to the */
-/* base_scheduler. Need fix the ->sccheduler later */
-// 1 is llbooter and 2 is lllog
-#ifdef LOG_MONITOR
-	if (unlikely(spd_get_index(dest)==2)) {
-		dest = spd_get_by_index(1);
-	}
 #endif
+
 	upcall_setup(curr, dest, t, 0, 0, 0);
 	upcall_execute_compat(curr, NULL, cspd);
 	
@@ -1498,7 +1469,6 @@ sched_tailcall_pending_upcall_thd(struct thread *uc, struct composite_spd *curr)
 {
 	struct thread *brand = uc->thread_brand;
 	struct composite_spd *cspd;
-	unsigned long long saved_t, curr_t;
 
 	assert(brand && brand->pending_upcall_requests > 0);
 	assert(uc->flags & THD_STATE_ACTIVE_UPCALL && 
@@ -1514,6 +1484,7 @@ sched_tailcall_pending_upcall_thd(struct thread *uc, struct composite_spd *curr)
 	pending_upcall_cntt = brand->pending_upcall_requests;
 	/* ////////////////////////// */
 	/* // Jiguo: For tracking on tailcall_pending type */
+	/* unsigned long long saved_t, curr_t; */
 	/* ring_buff_track_t *rb_track; */
 	/* struct rb_buff_track_t rbb; */
 	/* unsigned int tail; */
@@ -1642,7 +1613,6 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 	 * If so, upcall into the root scheduler and ask it what to
 	 * do.
 	 */
-	unsigned long long saved_t, curr_t;
 	prev = curr->interrupted_thread;
 
 	if (NULL == prev) {
@@ -1677,6 +1647,8 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 
 		//////////////////////////
 		/* // Jiguo: For tracking on upcall scheduler */
+		/* unsigned long long saved_t; */
+		/* unsigned long long curr_t; */
 		/* ring_buff_track_t *rb_track; */
 		/* struct rb_buff_track_t rbb; */
 		/* unsigned int tail; */
@@ -1967,6 +1939,7 @@ cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 			tsi = thd_get_sched_info(new_thd, i);
 			if (clear == 1) {
 				tsi->scheduler = NULL;
+				printk("5\n");
 				tsi->thread_notifications = NULL;
 				continue;
 			}
@@ -2599,11 +2572,7 @@ cos_syscall_upcall_cont(int this_spd_id, int op_spd, int arg, struct pt_regs **r
 	spd_mpd_ipc_release((struct composite_spd *)thd_get_thd_spdpoly(thd));//curr_spd->composite_spd);
 	//spd_mpd_ipc_take((struct composite_spd *)dest->composite_spd);
 
-#ifdef LOG_MONITOR
-	upcall_setup(thd, dest, op, arg, 0, 0);
-#else
 	upcall_setup(thd, dest, COS_UPCALL_BOOTSTRAP, 0, 0, 0);
-#endif
 	*regs = &thd->regs;
 
 	cos_meas_event(COS_MEAS_UPCALLS);
@@ -2832,13 +2801,14 @@ brand_higher_urgency(struct thread *upcall, struct thread *prev)
 	if (unlikely(!thd_get_sched_info(prev, d)->thread_notifications)) {
 		if (!thd_get_sched_info(upcall, d)->thread_notifications) {
 			/* printk("upcall thd %d -- prev thd %d\n", thd_get_id(upcall), thd_get_id(prev)); */
-			/* printk("cos: skimping on brand metadata maintenance, and returning.\n"); */
-			// Jiguo: unset ACTIVE in order to notify timer
-			//        thread after monitor thread. Similar for recovery thread
-#ifdef LOG_MONITOR			
-			upcall->flags &= ~THD_STATE_ACTIVE_UPCALL;
-			upcall->flags |= THD_STATE_READY_UPCALL;
-#endif
+			printk("cos: skimping on brand metadata maintenance, and returning.\n");
+
+/* 			// Jiguo: unset ACTIVE in order to notify timer */
+/* 			//        thread after recovery thread */
+/* #ifdef LOG_MONITOR  -- this might change for recovery only		 */
+/* 			upcall->flags &= ~THD_STATE_ACTIVE_UPCALL; */
+/* 			upcall->flags |= THD_STATE_READY_UPCALL; */
+/* #endif */
 			return 0;
 		} else {
 			/* upcall has the proper structure, prev doesn't! */
@@ -3102,9 +3072,120 @@ brand_next_thread(struct thread *brand, struct thread *preempted, int preempt)
 }
 
 /************** end functions for parsing async set urgencies ************/
-extern struct thread* sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums, int type);
-/* currently, only scheduler can make this syscall */
 
+#ifdef RECOVERY_ENABLE
+
+/* type indicates it is HRT(0) or BEST(1) */
+
+/*---------Threads that created by scheduler--------*/
+static struct thread*
+sched_thread_lookup(struct spd *spd, int thd_id, int thd_nums, int type)
+{
+	struct thread *thd;
+	int i, cnt;;
+
+	if (!type) {
+		if (!(thd = spd->scheduler_hrt_threads)) return NULL;
+		cnt = spd->scheduler_hrt_threads->thd_cnts;
+	} else {
+		if (!(thd = spd->scheduler_bes_threads)) return NULL;
+		cnt = spd->scheduler_bes_threads->thd_cnts;
+	}
+
+	/* printk("cos: lookup thread %d in spd %d list (cnt %d)\n", thd_id, spd_get_index(spd), cnt); */
+	i = cnt - thd_nums;
+	
+	if (thd_id > 0) {
+		while(cnt) {
+			/* if (thd->thread_id == thd_id) return find_thd(spd, thd); */
+			if (thd->thread_id == thd_id) return thd;
+			/* printk("thd id on thread list %d\n", thd->thread_id); */
+			thd = thd->sched_prev;
+			cnt--;
+		}
+		/* printk("Can not find an existing thread id %d!!\n", thd_id); */
+		return NULL;
+	} else {
+		while(i--) thd = thd->sched_prev;
+		/* thd = find_thd(spd, thd); */
+		/* printk("<<< thd %d >>>\n", thd->thread_id); */
+		return thd;
+	}
+}
+
+static int
+sched_thread_add(struct spd *spd, int thd_id, int type)
+{
+	struct thread *thd;
+	struct thd_sched_info *tsi;
+		
+	thd = thd_get_by_id(thd_id);
+	if (!thd) {
+		printk("cos: thd id %d invalid (when record dest)\n", (unsigned int)thd_id);
+		return -1;
+	}
+		
+	tsi = thd_get_sched_info(thd, spd->sched_depth);
+	if (tsi->scheduler != spd) {
+		printk("cos: spd %d not the scheduler of %d\n",
+		       spd_get_index(spd), (unsigned int)thd_id);
+		return -1;
+	}
+
+	if (spd_is_scheduler(spd) && !spd_is_root_sched(spd)){
+		/* printk("cos: add thread %d onto spd %d list (type %d)\n", thd_id, spd_get_index(spd), type); */
+		if (type == 0) { /* hard real time tasks */
+			if (!spd->scheduler_hrt_threads) {
+				/* initialize the list head */
+				spd->scheduler_hrt_threads = thd;
+				spd->scheduler_hrt_threads->sched_next = thd;
+				spd->scheduler_hrt_threads->sched_prev = thd;
+			} else {
+				thd->sched_next = spd->scheduler_hrt_threads->sched_next;
+				thd->sched_prev = spd->scheduler_hrt_threads;
+				spd->scheduler_hrt_threads->sched_next = thd;
+				thd->sched_next->sched_prev = thd;
+			}
+			spd->scheduler_hrt_threads->thd_cnts++;
+			/* printk("HRT thread number %d\n", spd->scheduler_hrt_threads->thd_cnts); */
+		} else {	/* best effort tasks */
+			if (!spd->scheduler_bes_threads) {
+				/* initialize the list head */
+				spd->scheduler_bes_threads = thd;
+				spd->scheduler_bes_threads->sched_next = thd;
+				spd->scheduler_bes_threads->sched_prev = thd;
+			} else {
+				thd->sched_next = spd->scheduler_bes_threads->sched_next;
+				thd->sched_prev = spd->scheduler_bes_threads;
+				spd->scheduler_bes_threads->sched_next = thd;
+				thd->sched_next->sched_prev = thd;
+			}
+			spd->scheduler_bes_threads->thd_cnts++;
+			/* printk("BEST thread number %d\n", spd->scheduler_bes_threads->thd_cnts); */
+		}
+	}
+	
+	return 0;
+}
+
+static int
+sched_thread_cnts(struct spd *spd, int type)
+{
+	int ret = 0;
+	if (type == 0) {
+		if (!spd->scheduler_hrt_threads) goto done;
+		ret = spd->scheduler_hrt_threads->thd_cnts;
+	}
+	else {
+		if (!spd->scheduler_bes_threads) goto done;
+		ret = spd->scheduler_bes_threads->thd_cnts;
+	}
+done:
+	/* printk("return the recorded thread number ret %d\n", ret); */
+	return ret;
+}
+
+/* currently, only scheduler can make this syscall */
 COS_SYSCALL int 
 cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 {
@@ -3244,6 +3325,13 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 
 	return ret;
 }
+#else
+COS_SYSCALL int 
+cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
+{
+	return 0;
+}
+#endif
 
 COS_SYSCALL int 
 cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
@@ -3367,6 +3455,9 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 		}
 		child->parent_sched = spd;
 		child->sched_depth = sched_lvl;
+		
+		printk("After Promote: child_spd %d -- sched_depth %d -- parent_sched %d\n", 
+		       spd_get_index(child), child->sched_depth,  spd_get_index(child->parent_sched));
 		break;
 	}
 	case COS_SCHED_PROMOTE_ROOT:
@@ -3407,6 +3498,7 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 			}
 
 			child_tsi->scheduler = NULL;
+			printk("4\n");
 		}
 		/*
 		 * revoke all schedulers that are decendents of the
@@ -3415,8 +3507,11 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 		for (i = child->sched_depth+1 ; i < MAX_SCHED_HIER_DEPTH ; i++) {
 			child_tsi = thd_get_sched_info(target_thd, i);
 			child_tsi->scheduler = NULL;
+			/* printk("6 for target thd %d\n", target_thd->thread_id); */
 		}
+		
 	}
+#ifdef RECOVERY_ENABLE
 	case COS_SCHED_RECORD_PRIO:
 	{
 		struct thread *thd;
@@ -3474,6 +3569,7 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 		sched_thread_add(spd, thd_id, 1); /* 1 for best effort threads */
 		break;
 	}
+#endif
 	case COS_SCHED_BREAK_PREEMPTION_CHAIN:
 	{
 		event_record("breaking preemption chain", thd_get_id(thd), 0);
@@ -4059,10 +4155,11 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 
 		if (!spd) return -EINVAL;
 
-		//if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) {
-			///* printk("cos: try find phy frame -- no page table entry found.\n"); */
-			//return -EINVAL;
-		//}
+		/* // Jiguo: forget what this does. Need look back later. */
+		/* if(!(phy_addr = __pgtbl_lookup_address(spd->spd_info.pg_tbl, daddr))) { */
+		/* 	printk("cos: try find phy frame -- no page table entry found.\n"); */
+		/* 	return -EINVAL; */
+		/* } */
 		frame_num = cos_paddr_to_cap(phy_addr) - this_spd->pfn_base;
 		/* printk("to intro: pfn base %d\n", this_spd->pfn_base); */
 		/* printk("to intro: frame_num %d daddr %x phyaddr %x\n", frame_num, daddr, phy_addr); */
@@ -4197,8 +4294,6 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 
 	if (option == COS_CAP_GET_SER_SPD) {   //Jiguo: for monitor
 		capid = arg2 >> 20;
-		/* printk("cos: (log) call from %d and capid %d\n",  */
-		/*        arg1, capid); */
 		sspd = spd_get_by_index(arg1);
 		if (!sspd) return -1;
 	} else {
@@ -4221,10 +4316,9 @@ cos_syscall_cap_cntl(int spdid, int option, u32_t arg1, long arg2)
 		
 		ret = spd_read_reset_invocation_cnt(cspd, sspd);
 		break;
-	case COS_CAP_GET_SER_SPD:   // Jiguo: use cap to find dest spd
 #ifdef LOG_MONITOR
+	case COS_CAP_GET_SER_SPD:
 		ret = spd_cap_get_dest(sspd, capid);
-		/* printk("cos: dest spd %d\n", ret); */
 #endif
 		break;
 	case COS_CAP_SET_FAULT:

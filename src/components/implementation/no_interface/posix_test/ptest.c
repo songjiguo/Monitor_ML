@@ -1,7 +1,7 @@
 #include <cos_component.h>
 #include <print.h>
-#include "../../../lib/libccv/ccv.h"
 #include <stdio.h>
+#include "../../../lib/libccv/ccv.h"
 
 void face_detect(void);
 

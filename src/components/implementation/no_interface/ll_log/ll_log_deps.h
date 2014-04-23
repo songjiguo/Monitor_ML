@@ -53,6 +53,9 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 /*******************************/
 #include <sched_hier.h>
 
+extern int parent_sched_init(int par);
+
+// promote logmgr to be a schedler so that it can create/switch threads
 extern int parent_sched_child_cntl_thd(spdid_t spdid);
 int sched_init(int reboot)   { 	
 	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
@@ -62,13 +65,10 @@ int sched_init(int reboot)   {
 
 extern void parent_sched_exit(void);
 void 
-sched_exit(void)   
-{
-	printc("thread is %d is exiting\n", cos_get_thd_id());
-	parent_sched_exit();
-}
+sched_exit(void) { parent_sched_exit(); }
 
-int sched_isroot(void) { return 1; }
+int 
+sched_isroot(void) { return 1; }
 
 int 
 sched_child_get_evt(spdid_t spdid, struct sched_child_evt *e, int idle, unsigned long wake_diff) { BUG(); return 0; }
@@ -76,7 +76,6 @@ sched_child_get_evt(spdid_t spdid, struct sched_child_evt *e, int idle, unsigned
 int 
 sched_child_cntl_thd(spdid_t spdid) 
 { 
-	if (parent_sched_child_cntl_thd(cos_spd_id())) BUG();
 	if (cos_sched_cntl(COS_SCHED_PROMOTE_CHLD, 0, spdid)) BUG();
 	if (cos_sched_cntl(COS_SCHED_GRANT_SCHED, cos_get_thd_id(), spdid)) BUG();
 

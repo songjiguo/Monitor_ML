@@ -4,11 +4,15 @@
 #include <ll_log_deps.h>
 #include <ll_log.h>
 
-#include <log_report.h>      // for log report/ print
+#define DETECTION_MODE
+
+#define LM_SYNC_PERIOD 30   // period for asynchronous processing
+
 #include <log_process.h>   // check all constraints
 
-extern int logmgr_active(spdid_t spdid);
-#define LM_SYNC_PERIOD 30   // period for asynchronous processing
+static int LOG_INIT_THD;
+static int LOG_LOOP_THD;
+static int LOG_PREV_THD;
 
 void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages) 
 { return NULL; }
@@ -79,20 +83,17 @@ done:
 	return;
 }
 
-static int log_init_thd;
-static int log_loop_thd;
-static int prev_mthd;
-
 static void
 lllog_loop(void) { 
-	int tid, pmthd;
+	int tid, pthd;
 	while(1) {
-		pmthd = prev_mthd;
-		assert(cos_get_thd_id() == log_loop_thd);
+		pthd = LOG_PREV_THD;
+		assert(cos_get_thd_id() == LOG_LOOP_THD);
 		lmgr_action();
-		prev_mthd = 0;
-		cos_switch_thread(pmthd, 0);
+		LOG_PREV_THD = 0;
+		cos_switch_thread(pthd, 0);
 	}
+	// logmgr thread never ends itself
 	assert(0);
 	return; 
 }
@@ -132,17 +133,12 @@ lmgr_initialize(void)
 
 	lpc_start = lpc_end = lpc_last = 0;
 
-	log_init_thd = cos_get_thd_id();
-	assert(log_init_thd);		
-
+	LOG_INIT_THD = cos_get_thd_id();
 	sched_init(0);
-	log_loop_thd = cos_create_thread((int)lllog_loop, (int)0, 0);
-	printc("log_init_thd %d and log_loop_thd %d\n", log_init_thd, log_loop_thd);
+	LOG_LOOP_THD = cos_create_thread((int)lllog_loop, (int)0, 0);
 
-	/* cos_switch_thread(log_loop_thd, 0); */
-	/* assert(0); */
+	printc("log_loop_thd %d is created here by thd %d\n", LOG_LOOP_THD, cos_get_thd_id());
 
-	printc("done init log by thd %d\n", cos_get_thd_id());
 	return;
 }
 
@@ -154,9 +150,13 @@ lmgr_initialize(void)
 int
 llog_process()
 {
-	/* return logmgr_active(cos_spd_id()); */
-	prev_mthd     = cos_get_thd_id();
-	while (prev_mthd == cos_get_thd_id()) cos_switch_thread(log_loop_thd, 0);
+	LOCK();
+	
+	LOG_PREV_THD     = cos_get_thd_id();
+	while (LOG_PREV_THD == cos_get_thd_id()) cos_switch_thread(LOG_LOOP_THD, 0);
+
+	UNLOCK();
+
 	return 0;
 
 }
@@ -180,8 +180,6 @@ llog_getsyncp()
 int
 llog_contention(spdid_t spdid, int par2, int par3, int par4)
 {
-        /* printc("Contention!\n"); */
-
 	int owner, cont_thd, cont_spd, this_spd;
 	int to_thd, func_num, para, evt_type;
 	unsigned long from_spd, to_spd;
@@ -261,7 +259,6 @@ llog_init(spdid_t spdid, vaddr_t addr)
 	vaddr_t ret = 0;
         struct logmon_info *spdmon;
 
-	printc("llog_init thd %d (passed spd %d for RB)\n", cos_get_thd_id(), spdid);
 	assert(spdid);
 	spdmon = &logmon_info[spdid];
 	assert(spdmon);
@@ -269,7 +266,6 @@ llog_init(spdid_t spdid, vaddr_t addr)
 	assert(!spdmon->mon_ring && !spdmon->cli_ring);
 
 	LOCK();
-	/* printc("llog_init...(thd %d spd %d)\n", cos_get_thd_id(), spdid); */
 	if (lmgr_setuprb(spdid, addr)) {
 		printc("failed to setup shared rings\n");
 		goto done;
@@ -282,8 +278,6 @@ done:
 	return ret;
 }
 
-
-
 typedef void (*crt_thd_fn_t)(void);
 
 void 
@@ -291,23 +285,14 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
 	switch (t) {
 	case COS_UPCALL_BOOTSTRAP:
-		printc("BOOTSTRAP %d\n", cos_get_thd_id());
 		lmgr_initialize(); break;
 	case COS_UPCALL_CREATE:
-		/* printc("CREATE %d\n", cos_get_thd_id()); */
 		lllog_loop();
 		((crt_thd_fn_t)arg1)();
 		break;
 	case COS_UPCALL_DESTROY:
-		printc("DESTROY %d\n", cos_get_thd_id());
-		assert(0);
-		break;
-	case COS_UPCALL_LOG_PROCESS:
-		lmgr_action(); break;
-	case COS_UPCALL_UNHANDLED_FAULT:
-		printc("Core %ld: Fault detected by the llboot component in thread %d: "
-		       "Major system error.\n", cos_cpuid(), cos_get_thd_id());
-		break;
+		printc("DESTROY thd %d\n", cos_get_thd_id());
+		assert(0); break;
 	default:
 		return;
 	}

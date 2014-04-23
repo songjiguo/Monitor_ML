@@ -1005,6 +1005,7 @@ cos_handle_page_fault(struct thread *thd, vaddr_t fault_addr,
 extern void
 fault_int_notif(struct thread *thd, struct spd *spd, unsigned int cap_num, struct pt_regs *regs, int fault_num);
 
+#ifdef RECOVERY_ENABLE
 /* the composite specific page fault handler */
 static int 
 cos_fault_int_notif(struct thread *thd, struct spd *spd,
@@ -1015,6 +1016,7 @@ cos_fault_int_notif(struct thread *thd, struct spd *spd,
 		
 	return 0;
 }
+#endif
 
 //#define FAULT_DEBUG
 /*
@@ -1393,6 +1395,7 @@ host_idle_wakeup(void)
 	}
 }
 
+#ifdef RECOVERY_ENABLE
 static void
 thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 {
@@ -1401,7 +1404,6 @@ thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 	struct invocation_cap *flt_notif_cap_entry;
 	struct spd *notif_spd;
 
-#if (RECOVERY_ENABLE == 1)
 	thd_frame = thd_invstk_top(thd);
 
 	fltnotif_cap = thd_frame->spd->fault_handler[COS_FLT_FLT_NOTIF];
@@ -1415,18 +1417,20 @@ thd_interrupt_fault_notif(struct thread *thd, struct pt_regs *regs)
 		printk("handler is not defined !!!\n");
 	}
 	cos_fault_int_notif(thd, notif_spd, fltnotif_cap, regs);
-#endif
 
 	return;
 }
+#endif
 
 int chal_attempt_brand(struct thread *brand)
 {
 	struct pt_regs *regs = NULL;
 	unsigned long flags;
 
+#ifdef RECOVERY_ENABLE
 	/* Recovery use */
 	struct thd_invocation_frame *thd_frame;
+#endif
 
 	/* printk("\n\n((0)).... brand %d\n", thd_get_id(brand)); */
 	local_irq_save(flags);
@@ -1489,7 +1493,7 @@ int chal_attempt_brand(struct thread *brand)
 			if (next != cos_current) {
 				/* update the fault counter (recovery) */
 //				thd_frame = thd_invstk_top(cos_current);
-#if (RECOVERY_ENABLE == 1)
+#ifdef RECOVERY_ENABLE
 //				thd_frame->curr_fault.cnt = thd_frame->spd->fault.cnt;
 #endif
 				assert(core_get_curr_thd() == next);

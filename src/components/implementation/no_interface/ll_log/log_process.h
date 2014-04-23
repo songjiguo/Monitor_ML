@@ -1,17 +1,17 @@
 #ifndef   	LOG_PROCESS_H
 #define   	LOG_PROCESS_H
 
-/* Data structure for tracking information in log_manager */
+/* Data structure for tracking information in log_manager
+   Currently, we are only tracking periodic tasks. */
 
 #include <ll_log.h>
 #include <heap.h>
 #include <log_util.h>
 
-//#define MEAS_LOG_OVERHEAD
+/* #include <log_report.h> */
 
-#ifdef MEAS_LOG_OVERHEAD
+// for measurement only
 volatile unsigned long long logmeas_start, logmeas_end;
-#endif
 
 /* constraint specifications */
 enum{
@@ -64,11 +64,11 @@ struct thd_trace {
 	unsigned long long last_ts;
 
 	// number of interrupts
-	unsigned long long timer_int, timer_int_ts, timer_int_wd;
-	unsigned long long network_int, network_int_ts, network_int_wd;
+	unsigned long long timer_int, timer_int_max, timer_int_ts, timer_int_wd;
+	unsigned long long network_int, network_int_max, network_int_ts, network_int_wd;
 
 	// how long this thread has been in PI?
-	unsigned long long pi_time, pi_start_t;
+	unsigned long long pi_time, pi_time_max, pi_start_t;
         // used to detect scheduling decision
 	unsigned long long epoch;
         // used to detect deadlock
@@ -78,8 +78,10 @@ struct thd_trace {
 
 	// WCET in a spd due to an invocation to that spd by this thread
 	unsigned long long inv_spd_exec[MAX_NUM_SPDS];
+	unsigned long long inv_spd_exec_max[MAX_NUM_SPDS];
 	// number of invocations made to a component by this thread
 	unsigned int invocation[MAX_NUM_SPDS];
+	unsigned int invocation_max[MAX_NUM_SPDS];
 };
 
 struct logmon_info logmon_info[MAX_NUM_SPDS];
@@ -108,24 +110,29 @@ init_thread_trace()
 		thd_trace[i].tot_exec = 0;	// the total exec time for thd
 		thd_trace[i].last_ts  = 0;	// the last time stamp for this thd
 
-		// number of events 
+		// interrupt events 
 		thd_trace[i].timer_int	    = 0;	// number of timer INT while thd
+		thd_trace[i].timer_int_max  = 0;
 		thd_trace[i].timer_int_ts   = 0;	// when an timer int happens
 		thd_trace[i].timer_int_wd   = 0;	// time window for timer ints
 		thd_trace[i].network_int    = 0;	// number of network INT while thd
+		thd_trace[i].network_int_max= 0;
 		thd_trace[i].network_int_ts = 0;	// when an network int happens
 		
-		// dependency tree info
+		// priority inversion
 		thd_trace[i].pi_time	 = 0;	// how long a thread is in PI status
+		thd_trace[i].pi_time_max = 0;
 		thd_trace[i].pi_start_t	 = 0;	// when a thread starts being in PI status
 		thd_trace[i].epoch	 = 0;	// used to detect scheduling decision
 		thd_trace[i].depth	 = 0;	// used to detect deadlock
 		thd_trace[i].n = thd_trace[i].l = thd_trace[i].h = &thd_trace[i];
 		
-		// spd related (number of events and timing)
+		// number of invocations and execution time in spd due to the invocation
 		for (j = 0; j < MAX_NUM_SPDS; j++) {
-			thd_trace[i].inv_spd_exec[j] = 0;
-			thd_trace[i].invocation[j]   = 0;
+			thd_trace[i].inv_spd_exec[j]	 = 0;
+			thd_trace[i].invocation[j]	 = 0;
+			thd_trace[i].inv_spd_exec_max[j] = 0;
+			thd_trace[i].invocation_max[j]   = 0;
 		}
 	}
 	return;
@@ -418,7 +425,9 @@ check_ordering(struct thd_trace *ttc, struct evt_entry *entry)
 	print_evt_info(entry);
 	printc("last entry :\n");
 	print_evt_info(&last_entry);
+#ifdef DETECTION_MODE
 	faulty_spd = faulty_spd_localizer(ttc, entry, CONS_ORDER);
+#endif
 	
 done:
 	return;
@@ -451,9 +460,11 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 		/* printc("network int -- num %llu at %llu  (active thd %d when thd %d is running\n", */
 		/*        ttc->network_int, ttc->network_int_ts, ttn->thd_id, ttc->thd_id); */
 		// if number is greater than the specification in a time window for ttc task
+#ifdef DETECTION_MODE
 		if ((ttc->network_int_wd < ttc->period  && (ttc->network_int > MAX_WCTINT))) {
 			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_NETINT);
 		}
+#endif
 		break;
 	case EVT_TINT:
 		/* assert(entry->to_spd == SCHED_SPD); */
@@ -470,9 +481,11 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 		/* printc("timer int -- num %llu at %llu  (active thd %d when thd %d is running\n", */
 		       /* ttc->timer_int, ttc->timer_int_ts, ttn->thd_id, ttc->thd_id); */
 		// if number is greater than the specification in a time window for ttc task
+#ifdef DETECTION_MODE
 		if ((ttc->timer_int_wd < ttc->period  && (ttc->timer_int > MAX_WCTINT))) {
 			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_TIMEINT);
 		}
+#endif
 		break;
 	default:
 		break;
@@ -518,11 +531,13 @@ check_thd_wcet(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *e
 		/* printc("thread %d has actually run for %llu (c is %llu) ", ttc->thd_id, ttc->aexec, ttc->exec); */
 		/* printc("next deadline is %llu (total exec %llu)\n", ttc->ndeadline, ttc->tot_exec); */
 		ttc->laexec = ttc->tot_exec;
+#ifdef DETECTION_MODE
 		if (unlikely(ttc->tot_exec > ttc->ndeadline)) {
 			faulty_spd_localizer(ttc, entry, CONS_DLMISS);  // deadline miss
 		} else if (ttc->aexec > ttc->exec) {  
 			faulty_spd_localizer(ttc, entry, CONS_WCET);  // wcet overrun
 		}
+#endif
 	}
 	return;
 }
@@ -548,9 +563,11 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 	case EVT_SINV:
 		ttc->invocation[entry->to_spd]++;
 		// if number is greater than the specification defined within a period
+#ifdef DETECTION_MODE
 		if (ttc->invocation[entry->to_spd] > MAX_INVOCATION) {
 			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_INVOCNUM);
-		}		
+		}
+#endif		
 		ttc->inv_spd_exec[entry->to_spd] = 0;
 		break;
 	case EVT_CINV:
@@ -564,10 +581,11 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 		
 		if (entry->evt_type == EVT_SRET) {
 			/* if (spdid == SCHED_SPD) printc("<<thd %d in spd %d in one invocation is %llu >>\n", ttc->thd_id, spdid, ttc->inv_spd_exec[spdid]); */
-			// TODO:check WCET in spd due to invocation here
+#ifdef DETECTION_MODE
 			if (ttc->inv_spd_exec[spdid] > MAX_WCETSPDINV) {
 				faulty_spd_localizer(ttc, &last_entry, CONS_SPDEXEC);
 			}
+#endif
 			ttc->inv_spd_exec[spdid] = 0;
 		}
 		break;
@@ -584,7 +602,7 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 
 
 /*************************************/
-/*    Constraints Check  -- prepare  */
+/*    Constraints Check  -- main  */
 /*************************************/
 static void 
 constraint_check(struct evt_entry *entry)
@@ -665,8 +683,7 @@ constraint_check(struct evt_entry *entry)
 	/***************************/
 	/* Constraint check done ! */
 	/***************************/
-	
-        // save info for the last event
+
 	last_evt_update(&last_entry, entry);
 	
 	return;
@@ -708,6 +725,5 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int evt_typ
 
 	return 0;
 }
-
 
 #endif

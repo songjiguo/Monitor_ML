@@ -6,7 +6,7 @@
 #ifndef GUARD_ccv_h
 #define GUARD_ccv_h
 
-#include <unistd.h>
+//#include <unistd.h>  //Jiguo:Do not know why this will cause warning when compile ptest.c. Comment this now.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

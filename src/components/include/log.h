@@ -71,9 +71,9 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define NETIF_SPD	25
 
 // thread ID
-#define TIMER_THD	9
-#define TE_THD	        11
-#define NETWORK_THD	21
+#define TIMER_THD	8
+#define TE_THD	        10
+#define NETWORK_THD	20
 
 #define NUM_PRIOS    32
 #define PRIO_LOWEST  (NUM_PRIOS-1)
