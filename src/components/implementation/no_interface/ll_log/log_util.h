@@ -11,6 +11,11 @@
 #define TIMER_FREQ     (CPU_TIMER_FREQ)
 #define CYC_PER_TICK   (CPU_FREQUENCY/TIMER_FREQ)
 
+static void
+updatemax_llu(unsigned long long *p, unsigned long long val) { if (val > *p) *p = val;;return;}
+static void
+updatemax_int(unsigned int *p, unsigned int val) { if (val > *p) *p = val; return; }
+
 /* get a page from the heap */
 static inline void *
 llog_get_page()
@@ -52,57 +57,6 @@ evt_in_spd (struct evt_entry *entry)
 	}
 	
 	return logged_in_spd;
-}
-
-static void
-last_evt_update(struct evt_entry *last, struct evt_entry *src)
-{
-	assert(last && src);
-	
-	last->from_thd = src->to_thd;
-	last->from_spd = src->to_spd; 
-	last->evt_type = src->evt_type;
-	last->para     = src->para;
-	last->func_num = src->func_num;
-
-	return;
-}
-
-
-
-/*************************/
-/* PI related functions  */
-/*************************/
-/* PI begin condition:
-   1) The dependency from high to low (sched_block(spdid, low))
-   2) A context switch from high thd to low thd
-*/
-static int
-pi_begin(struct evt_entry *pe, int p_prio, 
-	   struct evt_entry *ce, int c_prio)
-{
-	return (ce->evt_type == EVT_CS &&
-		ce->from_thd != ce->to_thd &&
-		p_prio < c_prio &&
-		pe->evt_type == EVT_SINV && 
-		pe->func_num == FN_SCHED_BLOCK &&
-		pe->para > 0);
-}
-
-/* PI end condition:
-   1) Low thd wakes up high thd (sched_wakeup(spdid, high)); 
-   2) A context switch from low to high
-*/
-static int
-pi_end(struct evt_entry *pe, int p_prio, 
-	   struct evt_entry *ce, int c_prio)
-{
-	return (ce->evt_type == EVT_CS &&
-		ce->from_thd != ce->to_thd &&
-		p_prio > c_prio &&
-		pe->evt_type == EVT_SINV && 
-		pe->func_num == FN_SCHED_WAKEUP &&
-		pe->para > 0);
 }
 
 /*************************/

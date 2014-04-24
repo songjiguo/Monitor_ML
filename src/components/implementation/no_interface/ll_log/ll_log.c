@@ -4,9 +4,10 @@
 #include <ll_log_deps.h>
 #include <ll_log.h>
 
-#define DETECTION_MODE
+//#define DETECTION_MODE
+#define LOGEVENTS_MODE
 
-#define LM_SYNC_PERIOD 30   // period for asynchronous processing
+#define LM_SYNC_PERIOD 10   // period for asynchronous processing
 
 #include <log_process.h>   // check all constraints
 
@@ -120,7 +121,7 @@ lmgr_initialize(void)
 		es[i].spdid = i;
 	}
 		
-	init_thread_trace();
+	init_log();
 
         // alloc a page for heap operation (assume a page for now)
 	h = log_heap_alloc(MAX_NUM_SPDS, evtcmp, evtupdate);
@@ -201,13 +202,15 @@ llog_contention(spdid_t spdid, int par2, int par3, int par4)
 	/* printc("owner %d cont_spd %d to_thd %d func_num %d para %d evt_type %d from_spd %lu to_spd %lu\n",  */
 	/*        owner, cont_spd, to_thd, func_num, para, evt_type, from_spd, to_spd); */
 	
-	evt_enqueue(CONTENTION_FLAG | (to_thd<<16) | (cont_thd<<8) | (owner), 
+	evt_enqueue(CONT_FLAG | (to_thd<<16) | (cont_thd<<8) | (owner), 
 		    from_spd, to_spd, func_num, para, evt_type);	
 	
         UNLOCK();
         return 0;
 }
 
+
+// really do not need this since we need read c from somewhere anyway!!!
 /* Initialize thread period. This should only be called when a period
    thread is created by periodic_wake_create
  */
@@ -223,8 +226,12 @@ llog_setperiod(spdid_t spdid, unsigned int thd_id, unsigned int period)
 
 	ttl = &thd_trace[thd_id];
 	assert(ttl);
-	ttl->period = period;
-
+	ttl->p = period;
+	
+	// set time_window to be the minimum period of all task for interrupts log
+	if (period*CYC_PER_TICK < window_sz) window_sz = period*CYC_PER_TICK;
+	/* window_sz = 2*CYC_PER_TICK; */  // test only. Remove later
+	
 	UNLOCK();
 	return 0;
 }
