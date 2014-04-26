@@ -12,9 +12,61 @@
 #define CYC_PER_TICK   (CPU_FREQUENCY/TIMER_FREQ)
 
 static void
-updatemax_llu(unsigned long long *p, unsigned long long val) { if (val > *p) *p = val;;return;}
+updatemax_llu(unsigned long long *p, unsigned long long val) { if (val > *p) *p = val; return;}
 static void
 updatemax_int(unsigned int *p, unsigned int val) { if (val > *p) *p = val; return; }
+
+
+/* casual ordering constraint macros */
+#define CINV_ORDER()						\
+	if (p_entry->to_thd != c_entry->from_thd ||	        \
+	    p_entry->to_spd != c_entry->from_spd ) {		\
+		flt_type = CONS_BZFLT;				\
+		goto fault;					\
+	}							\
+	
+#define SINV_ORDER()						\
+	if (p_entry->to_thd != c_entry->from_thd ||             \
+	    p_entry->from_spd != c_entry->from_spd ||		\
+	    p_entry->to_spd != c_entry->to_spd ) {		\
+		flt_type = CONS_BZFLT;				\
+		goto fault;					\
+	}							\
+
+#define SRET_ORDER()                                            \
+	CINV_ORDER()						\
+
+#define CRET_ORDER()						\
+	if (p_entry->to_thd != c_entry->from_thd ||		\
+	    p_entry->from_spd != c_entry->from_spd ||		\
+	    p_entry->to_spd != c_entry->to_spd ) {		\
+		flt_type = CONS_BZFLT;				\
+		goto fault;					\
+	}							\
+
+#define CS_ORDER()                                              \
+	if (p_entry->to_thd != c_entry->from_thd ||		\
+	    c_entry->to_thd == c_entry->from_thd ||		\
+	    p_entry->to_spd != c_entry->from_spd ||		\
+	    c_entry->from_spd != SCHED_SPD) {			\
+		flt_type = CONS_CS_TYPE;			\
+		goto fault;					\
+	}							\
+	
+#define NINT_ORDER()						\
+	if (c_entry->to_thd != NETWORK_THD ||			\
+	    c_entry->to_spd != NETIF_SPD ) {			\
+		flt_type = CONS_NINT_TYPE;			\
+		goto fault;					\
+	}							\
+	
+#define TINT_ORDER()						\
+	if (c_entry->to_thd != TIMER_THD ||			\
+	    c_entry->to_spd != SCHED_SPD ) {			\
+		flt_type = CONS_TINT_TYPE;			\
+		goto fault;					\
+	}							\
+
 
 /* get a page from the heap */
 static inline void *
@@ -50,6 +102,7 @@ evt_in_spd (struct evt_entry *entry)
 	case EVT_TINT:
 	case EVT_NINT:
 	case EVT_CS:
+	case EVT_LOG_PROCESS:
 		logged_in_spd = entry->to_spd;
 		break;
 	default:

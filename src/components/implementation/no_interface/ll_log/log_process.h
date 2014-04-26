@@ -16,16 +16,15 @@
 
 // measurement only
 volatile unsigned long long logmeas_start, logmeas_end;
-// time of start/end log processing
-volatile unsigned long long lpc_start, lpc_end, lpc_last;
 
 #define MONITOR(ttc)	(ttc->p > 0)  // if a thread is a periodic task
 #define CONT_FLAG	(1<<24)       // contention flag on rb
 
 /* constraint violation type */
 enum{
-	CONS_SPDEXEC = 1,
-	CONS_INVOCNUM,
+	CONS_ONEINV_SPD_EXEC = 1,
+	CONS_ALLINV_SPD_EXEC,
+	CONS_INVOKNUM,
 	CONS_WCET,
 	CONS_DLMISS,
 	CONS_SCHEDULING,
@@ -43,56 +42,6 @@ enum{
 	CONS_TINT_TYPE,  // this should indicate the faulty spd is shceduler
 	CONS_MAX
 };
-
-/* casual ordering constraint macros */
-#define CINV_ORDER()						\
-	if (p_entry->to_thd != c_entry->from_thd ||	        \
-	    p_entry->to_spd != c_entry->from_spd ) {		\
-		flt_type = CONS_BZFLT;				\
-		goto fault;					\
-	}							\
-	
-#define SINV_ORDER()						\
-	if (p_entry->to_thd != c_entry->from_thd ||             \
-	    p_entry->from_spd != c_entry->from_spd ||		\
-	    p_entry->to_spd != c_entry->to_spd ) {		\
-		flt_type = CONS_BZFLT;				\
-		goto fault;					\
-	}							\
-
-#define SRET_ORDER()                                            \
-	CINV_ORDER()						\
-
-#define CRET_ORDER()						\
-	if (p_entry->to_thd != c_entry->from_thd ||		\
-	    p_entry->from_spd != c_entry->from_spd ||		\
-	    p_entry->to_spd != c_entry->to_spd ) {		\
-		flt_type = CONS_BZFLT;				\
-		goto fault;					\
-	}							\
-
-#define CS_ORDER()                                              \
-	if (p_entry->to_thd != c_entry->from_thd ||		\
-	    c_entry->to_thd == c_entry->from_thd ||		\
-	    p_entry->to_spd != c_entry->from_spd ||		\
-	    c_entry->from_spd != SCHED_SPD) {			\
-		flt_type = CONS_CS_TYPE;			\
-		goto fault;					\
-	}							\
-	
-#define NINT_ORDER()						\
-	if (c_entry->to_thd != NETWORK_THD ||			\
-	    c_entry->to_spd != NETIF_SPD ) {			\
-		flt_type = CONS_NINT_TYPE;			\
-		goto fault;					\
-	}							\
-	
-#define TINT_ORDER()						\
-	if (c_entry->to_thd != TIMER_THD ||			\
-	    c_entry->to_spd != SCHED_SPD ) {			\
-		flt_type = CONS_TINT_TYPE;			\
-		goto fault;					\
-	}							\
 
 /* cache the dest for a cap_no */
 struct spd_cap {
@@ -138,21 +87,29 @@ struct thd_trace {
 
 	// number of invocations made to a component by this thread
 	unsigned int invocation[MAX_NUM_SPDS];
-	// WCET in a spd due to an invocation to that spd by this thread
-	unsigned long long inv_spd_exec[MAX_NUM_SPDS];
+	// WCET including all lower spds between invoke and return
+	unsigned long long exec_oneinv_allspd[MAX_NUM_SPDS];
+	// WCET in a spd due to an invocation
+	unsigned long long exec_oneinv_in_spd[MAX_NUM_SPDS];
+	// WCET spent in a spd
+	unsigned long long exec_allinv_in_spd[MAX_NUM_SPDS];
+	// track how long any higher thd's execution time while this thd in PI
+	unsigned long long tot_exec_at_pi[MAX_NUM_THREADS];
 };
 
 unsigned int timer_interrupts, network_interrupts;
 
-/* get these value per thread from LOGEVENTS_MODE and set in DETECTION_MODE*/
+/* specs from LOGEVENTS_MODE and used in DETECTION_MODE*/
 unsigned long long window_sz = LLONG_MAX, window_start;
-unsigned int timer_int_max;     // # of interrupts in time_window
+unsigned int timer_int_max;     // max # of interrupts in time_window
 unsigned int network_int_max;
 struct thd_specs {
 	unsigned long long exec_max;
 	unsigned long long pi_time_max;
 	unsigned int invocation_max[MAX_NUM_SPDS];
-	unsigned long long inv_spd_exec_max[MAX_NUM_SPDS];
+	unsigned long long exec_oneinv_allspd_max[MAX_NUM_SPDS];
+	unsigned long long exec_oneinv_in_spd_max[MAX_NUM_SPDS];
+	unsigned long long exec_allinv_in_spd_max[MAX_NUM_SPDS];
 } thd_specs[MAX_NUM_THREADS];
 
 struct logmon_info logmon_info[MAX_NUM_SPDS];
@@ -160,7 +117,8 @@ struct thd_trace thd_trace[MAX_NUM_THREADS];
 struct evt_entry last_entry;
 struct heap *h;  // the pointer to the max_heap
 
-unsigned int faulty_spd;
+// time of start/end log processing
+volatile unsigned long long lpc_start, lpc_end, lpc_last;
 unsigned int faulty_spd_localizer(struct thd_trace *ttc, 
 				  struct evt_entry *entry, int evt_type);
 
@@ -197,16 +155,22 @@ init_log()
 
 		// number of invocations and execution time in spd due to the invocation
 		for (j = 0; j < MAX_NUM_SPDS; j++) {
-			thd_trace[i].inv_spd_exec[j]	 = 0;
-			thd_trace[i].invocation[j]	 = 0;
+			thd_trace[i].exec_oneinv_allspd[j]   = 0;
+			thd_trace[i].exec_oneinv_in_spd[j] = 0;
+			thd_trace[i].invocation[j]     = 0;
+		}
+
+		for (j = 0; j < MAX_NUM_THREADS; j++) {
+			thd_trace[i].tot_exec_at_pi[j] = 0;
 		}
 		
 		/* init thread specs (set in LOGEVENTS_MODE, use in
 		 * DETECTION_MODE) */
 		thd_specs[i].exec_max = 0;	// max exec before deadline
 		for (j = 0; j < MAX_NUM_SPDS; j++) {
-			thd_specs[i].inv_spd_exec_max[j] = 0;
-			thd_specs[i].invocation_max[j]   = 0;
+			thd_specs[i].exec_oneinv_allspd_max[j] = 0;
+			thd_specs[i].exec_oneinv_in_spd_max[j] = 0;
+			thd_specs[i].invocation_max[j]	       = 0;
 		}
 	}
 	return;
@@ -216,7 +180,7 @@ init_log()
    (sched_block(spdid, low)) 2) A context switch from high thd to low
    thd */
 static int
-pi_begin(struct evt_entry *pe, int p_prio, 
+pi_on(struct evt_entry *pe, int p_prio, 
 	   struct evt_entry *ce, int c_prio)
 {
 	return (ce->evt_type == EVT_CS &&
@@ -227,10 +191,14 @@ pi_begin(struct evt_entry *pe, int p_prio,
 		pe->para > 0);
 }
 
+/* A thread could be in PI before process starts (no events since then) */
+static int
+pi_in(struct thd_trace *ttc) { return (ttc->pi_start_t > 0);}
+
 /* PI end condition: 1) Low thd wakes up high thd (sched_wakeup(spdid,
    high)); 2) A context switch from low to high */
 static int
-pi_end(struct evt_entry *pe, int p_prio, 
+pi_off(struct evt_entry *pe, int p_prio, 
 	   struct evt_entry *ce, int c_prio)
 {
 	return (ce->evt_type == EVT_CS &&
@@ -347,7 +315,7 @@ done:
 	return ret;
 }
 
-// convert cap to destination spd id
+// cache cap to destination spd id
 static void
 cap_to_dest(struct evt_entry *entry)
 {
@@ -526,6 +494,8 @@ check_ordering(struct thd_trace *ttc, struct evt_entry *c_entry)
 		default: flt_type = CONS_SINV_TYPE; goto fault;
 		}
 		break;
+	case EVT_LOG_PROCESS:
+		break;
 	default:
 		break;
 	}
@@ -540,7 +510,7 @@ done:
 fault:
 #ifdef DETECTIOC_MODE
 	printc("event type and ordering issue :\n");
-	faulty_spd = faulty_spd_localizer(ttc, c_entry, flt_type);
+	faulty_spd_localizer(ttc, c_entry, flt_type);
 #endif
 	goto done;
 }
@@ -549,14 +519,55 @@ fault:
 /*    Constraints Check  -- PI   */
 /*********************************/
 static void
+log_or_det_pit(struct thd_trace *l, struct thd_trace *h, 
+	       struct evt_entry *entry, unsigned long long pit)
+{
+	assert(l && h && entry);
+
+	struct thd_specs *h_spec = &thd_specs[h->thd_id];
+	assert(h_spec);
+#ifdef LOGEVENTS_MODE
+	updatemax_llu(&h_spec->pi_time_max, pit);
+	/* printc("thd %d max pi_time %llu \n", h->thd_id, h_spec->pi_time_max); */
+#endif
+#ifdef DETECTION_MODE
+	if (pit > h_spec->pi_time_max) {
+		faulty_spd_localizer(l, entry, CONS_PI);
+	}
+#endif
+	return;
+}
+
+static unsigned long long
+higher_exec(struct thd_trace *ttc, int t)
+{
+	int i;
+	struct thd_trace *h;
+	unsigned long long ret = 0;
+	assert(ttc);
+	
+	for (i = 0; i < MAX_NUM_THREADS; i++) {
+		h = &thd_trace[i];
+		if (h && MONITOR(h) && h->prio < ttc->prio) {
+			(t == 0) ? (ttc->tot_exec_at_pi[h->thd_id] = h->tot_exec):
+				(ret += h->tot_exec - ttc->tot_exec_at_pi[h->thd_id]);
+		}
+	}
+	
+	return ret;
+}
+
+static void
 check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
 {
+	int i;
 	struct thd_trace *d, *n, *m, *root;
 
 	assert(ttc && entry);
 	if (!ttn) return;
 
-	if (unlikely(pi_begin(&last_entry, ttc->prio, entry, ttn->prio))) {
+	/* add dependency */
+	if (unlikely(pi_on(&last_entry, ttc->prio, entry, ttn->prio))) {
 		root = &thd_trace[last_entry.para];
 		assert(root);
 
@@ -565,10 +576,11 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 		root->h	     = ttc;
 		ttc->pi_start_t = root->tot_exec; // start accounting PI time
 		ttc->pi_time    = 0;
+		higher_exec(ttc, 0);
 		return;
 	}
 	/* remove dependency ( update and check epoch )*/
-	if (unlikely(pi_end(&last_entry, ttc->prio, entry, ttn->prio))) {
+	if (unlikely(pi_off(&last_entry, ttc->prio, entry, ttn->prio))) {
 		root = ttc;
 		assert(root);
 		m = d = root->h;
@@ -580,42 +592,40 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 			/* printc("epoch mismatch: m %d (%d) ttn %d (%d) ", m->thd_id, m->epoch, ttn->thd_id, ttn->epoch); */
 			assert(0);
 #ifdef DETECTION_MODE
-			faulty_spd = faulty_spd_localizer(root, entry, CONS_SCHEDULING);
+			faulty_spd_localizer(root, entry, CONS_SCHEDULING);
 #endif
 		}
 		
-		m->pi_time = ttc->tot_exec - m->pi_start_t + ttc->pi_time;
-		struct thd_specs *m_spec = &thd_specs[m->thd_id];
-		assert(m_spec);
-#ifdef LOGEVENTS_MODE
-		updatemax_llu(&m_spec->pi_time_max, m->pi_time);
-#endif
-#ifdef DETECTION_MODE
-		if (m->pi_time > m_spec->pi_time_max) {
-			// m is root->h still?
-			faulty_spd = faulty_spd_localizer(root, entry, CONS_PI);
-		}
-#endif
+		m->pi_time = ttc->tot_exec - m->pi_start_t - higher_exec(m, 1);
+		/* printc("thd %d pi_time %llu tot_exec %llu pi_start_t %llu track_all %llu\n",  */
+		/*        m->thd_id, m->pi_time, ttc->tot_exec,  */
+		/*        m->pi_start_t, higher_exec(m,1)); */
+		
+		log_or_det_pit(root, m, entry, m->pi_time);
 		/* printc("After PI remove: "); */
 		/* print_deps(m); */
 		/* printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time); */
 		m->pi_start_t = 0;
 		root->h = m->n;
 		
-		/* /\* // should all lower threads execution time be added after m is in PI? *\/ */
-		/* /\* int i; *\/ */
-		/* /\* struct thd_trace *tmp; *\/ */
-		/* /\* for (i = 0; i < MAX_NUM_THREADS; i++) { *\/ */
-		/* /\* 	tmp = &thd_trace[i]; *\/ */
-		/* /\* 	assert(tmp); *\/ */
-		/* /\* 	if (tmp->prio >= root->prio && tmp->tot_exec > m->pi_start_t) { *\/ */
-		/* /\* 		printc("lower thd %d tot_exe %llu\n", tmp->thd_id, tmp->tot_exec); *\/ */
-		/* /\* 		printc("m->pi_time %llu m->pi_start_t %llu\n", m->pi_time, m->pi_start_t); *\/ */
-		/* /\* 		m->pi_time = m->pi_time + tmp->tot_exec - m->pi_start_t; *\/ */
-		/* /\* 	} *\/ */
-		/* /\* } *\/ */
+		return;
 	}
-
+	
+	// some threads could still be in PI
+	if (unlikely(entry->evt_type == EVT_LOG_PROCESS)) {
+		for (i = 0; i < MAX_NUM_THREADS; i++) {
+			struct thd_trace *l, *h;
+			unsigned long long h_pitime;
+			h = &thd_trace[i];
+			if (unlikely(pi_in(h))) {
+				/* printc("thd %d still in PI\n", h->thd_id); */
+				l = h->l;
+				h_pitime = l->tot_exec - h->pi_start_t - higher_exec(h, 1);
+				log_or_det_pit(l, h, entry, h_pitime);
+			}
+		}
+	}
+	
 	return;
 }
 
@@ -647,7 +657,7 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 #endif
 #ifdef DETECTION_MODE
 		if (network_interrupts > network_int_max) {
-			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_NETINT);
+			faulty_spd_localizer(ttc, entry, CONS_NETINT);
 		}
 #endif		
 		break;
@@ -662,7 +672,7 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 #endif
 #ifdef DETECTION_MODE
 		if (timer_interrupts > timer_int_max) {
-			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_NETINT);
+			faulty_spd_localizer(ttc, entry, CONS_TIMERINT);
 		}
 #endif		
 		break;
@@ -694,31 +704,56 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 	case EVT_SINV: // invocation number
 		spdid = entry->to_spd;
 		ttc->invocation[spdid]++;
-		ttc->inv_spd_exec[spdid] = ttc->tot_exec; // start invocation here
+		ttc->exec_oneinv_allspd[spdid] = ttc->tot_exec; // start invocation here
+		ttc->exec_oneinv_in_spd[spdid] = 0;
 #ifdef LOGEVENTS_MODE
 		updatemax_int(&ttc_spec->invocation_max[spdid], ttc->invocation[spdid]);
 		/* printc("thd %d max inv_num %d by dl to spd %d\n", ttc->thd_id, ttc_spec->invocation_max[spdid], spdid); */
 #endif
 #ifdef DETECTION_MODE
 		if (ttc->invocation[spdid] > ttc_spec->invocation_max[spdid]) {
-			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_INVOCNUM);
+			faulty_spd_localizer(ttc, entry, CONS_INVOKNUM);
 		}
 #endif		
 		break;
 	case EVT_SRET: // invocation spd exec
 		spdid = entry->from_spd;
-		ttc->inv_spd_exec[spdid] = ttc->tot_exec - ttc->inv_spd_exec[spdid];
-		unsigned long long spd_exec = ttc->inv_spd_exec[spdid];
-		ttc->inv_spd_exec[spdid] = 0;
+		ttc->exec_oneinv_allspd[spdid] = ttc->tot_exec - ttc->exec_oneinv_allspd[spdid];
+		ttc->exec_oneinv_in_spd[spdid] += up_t;
+		ttc->exec_allinv_in_spd[spdid] += up_t;
 #ifdef LOGEVENTS_MODE
-		updatemax_llu(&ttc_spec->inv_spd_exec_max[spdid], spd_exec);
-		/* printc("thd %d max inv_exec %llu to spd %d\n", ttc->thd_id, ttc_spec->inv_spd_exec_max[spdid], spdid); */
+		updatemax_llu(&ttc_spec->exec_oneinv_allspd_max[spdid], 
+			      ttc->exec_oneinv_allspd[spdid]);
+		updatemax_llu(&ttc_spec->exec_oneinv_in_spd_max[spdid], 
+			      ttc->exec_oneinv_in_spd[spdid]);
+		updatemax_llu(&ttc_spec->exec_allinv_in_spd_max[spdid], 
+			      ttc->exec_allinv_in_spd[spdid]);
+
+		/* printc("thd %d max exec_oneinv_allspd %llu to spd %d\n",  */
+		/*        ttc->thd_id, ttc_spec->exec_oneinv_allspd_max[spdid], spdid); */
+		/* printc("thd %d max exec_oneinv_in_spd %llu in spd %d\n",  */
+		/*        ttc->thd_id, ttc_spec->exec_oneinv_in_spd_max[spdid], spdid); */
+		/* printc("thd %d max exec_allinv_in_spd %llu in spd %d\n", */
+		/*        ttc->thd_id, ttc_spec->exec_allinv_in_spd_max[spdid], spdid); */
 #endif
 #ifdef DETECTION_MODE
-		if (spd_exec > ttc_spec->inv_spd_exec_max[spdid]) {
-			faulty_spd = faulty_spd_localizer(ttc, entry, CONS_SPDEXEC);
+		if (ttc->exec_oneinv_in_spd[spdid] > 
+		    ttc_spec->exec_oneinv_in_spd_max[spdid]) {
+			faulty_spd_localizer(ttc, entry, CONS_ONEINV_SPD_EXEC);
+		}
+		if (ttc->exec_allinv_in_spd[spdid] > 
+		    ttc_spec->exec_allinv_in_spd_max[spdid]) {
+			faulty_spd_localizer(ttc, entry, CONS_ALLINV_SPD_EXEC);
 		}
 #endif	
+		break;
+	case EVT_CINV:
+	case EVT_NINT:
+	case EVT_TINT:
+	case EVT_CS:
+		spdid = entry->from_spd;
+		ttc->exec_oneinv_in_spd[spdid] += up_t;
+		ttc->exec_allinv_in_spd[spdid] += up_t;
 		break;
 	default:
 		break;
@@ -753,6 +788,7 @@ check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry 
 		ttn->dl_e = ttn->dl_s + ttn->p*CYC_PER_TICK;
 		for (i = 0; i < MAX_NUM_SPDS; i++) {
 			ttn->invocation[i] = 0;
+			ttn->exec_allinv_in_spd[i] = 0;
 		}
 		return;
 	}
@@ -764,14 +800,14 @@ check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry 
 		struct thd_specs *ttc_spec;
 		ttc_spec = &thd_specs[ttc->thd_id];
 		assert(ttc_spec);
-		updatemax_llu(&ttc_spec->exec_max, ttc->exec);
+		updatemax_llu(&ttc_spec->exec_max, ttc->exec); // no use for localization
 		/* printc("thd %d max exec by dl is %llu\n", ttc->thd_id, ttc_spec->exec_max); */
 #endif
 #ifdef DETECTION_MODE
 		if (unlikely(entry->time_stamp > ttc->dl_e)) {
 			faulty_spd_localizer(ttc, entry, CONS_DLMISS);  // deadline miss
 		} else if (ttc->exec > ttc->c) {  
-			faulty_spd_localizer(ttc, entry, CONS_WCET);  // more than wcet
+			faulty_spd_localizer(ttc, entry, CONS_WCET);  // wcet overrun
 		}
 #endif
 		/* printc("thd %d tot_exec %llu exec by dl %llu (next dl %llu) entry ts %llu\n",  */
@@ -784,6 +820,21 @@ check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry 
 /*    Constraints Check  -- main  */
 /*************************************/
 
+// sliding time window for interrupt number detection
+// window size is set to the min period for now
+static void
+slide_twindow(struct evt_entry *entry)
+{
+	assert(entry);
+	if (last_entry.time_stamp && 
+	    (window_start + window_sz) < entry->time_stamp) {
+		window_start = last_entry.time_stamp;
+		network_interrupts = 0;
+		timer_interrupts = 0;
+	}
+	return;
+}
+
 static void 
 constraint_check(struct evt_entry *entry)
 {
@@ -791,17 +842,11 @@ constraint_check(struct evt_entry *entry)
 	unsigned long long up_t;
 	int from_thd, from_spd;
 	int owner = 0, contender = 0;  // for RB contention
-	/* print_evt_info(entry); */
 
 	assert(entry && entry->evt_type > 0);
 	
-	// sliding time window here
-	if (last_entry.time_stamp && 
-	    (window_start + window_sz) < entry->time_stamp) {
-		window_start = last_entry.time_stamp;
-		network_interrupts = 0;
-		timer_interrupts = 0;
-	}
+	slide_twindow(entry);
+
 	// "paste" the omitted event here
 	if (unlikely(entry->to_thd & CONT_FLAG)) {
 		owner	      = entry->to_thd & 0x000000FF;
@@ -809,20 +854,6 @@ constraint_check(struct evt_entry *entry)
 		entry->to_thd = entry->to_thd>>16 & 0x000000FF;
 		assert(contender == entry->from_thd);
 	}
-
-	/* // after this, interrupt event knows the previous thread and its spd */
-	/* if (entry->evt_type == EVT_TINT || entry->evt_type == EVT_NINT) { */
-	/* 	if (likely(last_entry.from_thd && last_entry.from_spd)) { */
-	/* 		from_thd = last_entry.from_thd; */
-	/* 		from_spd = last_entry.from_spd; */
-	/* 	} else { */
-	/* 		from_thd = entry->from_thd; */
-	/* 		from_spd = entry->from_spd; */
-	/* 	} */
-	/* } else { */
-	/* 	from_thd = entry->from_thd; */
-	/* 	from_spd = entry->from_spd; */
-	/* } */
 
 	if (entry->evt_type == EVT_TINT || entry->evt_type == EVT_NINT) {
 		if (likely(last_entry.from_thd && last_entry.from_spd)) {
@@ -837,15 +868,13 @@ constraint_check(struct evt_entry *entry)
 	// ttc tracks thread that runs up to this point (not the next)
 	ttc = &thd_trace[from_thd];
 	assert(ttc);
-	// first event for a thread here
-	if (unlikely(!ttc->last_ts)) {
-		ttc->last_ts = entry->time_stamp;
-	}
+	if (unlikely(!ttc->last_ts)) ttc->last_ts = entry->time_stamp;
 	
-	switch (entry->evt_type) {
+	int type = entry->evt_type;
+	switch (type) {
 	case EVT_CINV:
 	case EVT_CRET:
-		cap_to_dest(entry); // convert cap_no to spdid (cache for later lookup)
+		cap_to_dest(entry);
 	case EVT_SINV:
 	case EVT_SRET:
 		assert(entry->to_thd == entry->from_thd);
@@ -854,7 +883,7 @@ constraint_check(struct evt_entry *entry)
 		assert(!ttn);
 		break;
 	case EVT_CS:
-		assert(entry->from_spd == SCHED_SPD);  
+		assert(entry->to_spd == SCHED_SPD);  
 		assert(entry->from_thd != entry->to_thd);
 	case EVT_TINT:
 	case EVT_NINT:
@@ -862,6 +891,13 @@ constraint_check(struct evt_entry *entry)
 		ttn = &thd_trace[entry->to_thd];
 		assert(ttn);
 		ttn->last_ts = entry->time_stamp;
+		break;
+	case EVT_LOG_PROCESS:  // log this for detecting PI
+		assert(entry->to_spd == LLLOG_SPD);
+		assert(entry->to_thd == MONITOR_THD);
+		assert(entry->from_thd != entry->to_thd);
+		ttn = &thd_trace[entry->to_thd];
+		assert(ttn);
 		break;
 	default:
 		printc("event type error\n");
@@ -875,13 +911,15 @@ constraint_check(struct evt_entry *entry)
 	check_thd_timing(ttc, ttn, entry, up_t);
 	check_inv_spdexec(ttc, ttn, entry, up_t);
 	check_interrupt(ttc, ttn, entry);
-	/* check_priority_inversion(ttc, ttn, entry); */
+	check_priority_inversion(ttc, ttn, entry);
 	check_ordering(ttc, entry);
 
 	/* Constraint check done ! */
 	/***************************/
 
-	last_evt_update(&last_entry, entry);
+	if (likely(type != EVT_LOG_PROCESS)) {
+		last_evt_update(&last_entry, entry);
+	}
 	
 	return;
 }
@@ -890,64 +928,84 @@ constraint_check(struct evt_entry *entry)
 /***********************/
 /*    Fault Localizer  */
 /***********************/
-
 /* return the faulty spd id, or 0 */
 unsigned int
 faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int evt_type)
 {
 	printc("find faulty spd here\n");
-
+	unsigned int faulty_spd;
+	
+	assert(ttc && entry);
+	
 	switch (evt_type) {
-	case CONS_SPDEXEC:
+	case CONS_ONEINV_SPD_EXEC:
+		faulty_spd = entry->from_spd;
 		assert(0);
 		break;
-	case CONS_INVOCNUM:
+	case CONS_ALLINV_SPD_EXEC:
+		faulty_spd = entry->from_spd; // not sure....
 		assert(0);
 		break;
-	case CONS_WCET:
+	case CONS_INVNUM:
+		faulty_spd = entry->to_spd; // not sure....
 		assert(0);
 		break;
-	case CONS_DLMISS:
+	case CONS_WCET:   // this is not useful for localization ...
 		assert(0);
 		break;
-	case CONS_SCHEDULING:
+	case CONS_DLMISS: // this is not useful for localization ...
+		assert(0);
+		break;
+	case CONS_SCHEDULING: // 
+		faulty_spd = SCHED_SPD;
 		assert(0);
 		break;
 	case CONS_PI:
+		// dependency runs too long? where?
 		assert(0);
 		break;
 	case CONS_TIMEINT:
+		faulty_spd = SCHED_SPD;
 		assert(0);
 		break;
 	case CONS_NETINT:
+		faulty_spd = NETIF_SPD;
 		assert(0);
 		break;
 	case CONS_BZFLT:
+		// Alg 1 and Alg 2
 		assert(0);
 		break;
 	case CONS_CINV_TYPE:
+		// from Appendix?
 		assert(0);
 		break;
 	case CONS_SINV_TYPE:
+		// from Appendix?
 		assert(0);
 		break;
 	case CONS_CRET_TYPE:
+		// from Appendix?
 		assert(0);
 		break;
 	case CONS_SRET_TYPE:
+		// from Appendix?
 		assert(0);
 		break;
 	case CONS_CS_TYPE:
+		// from Appendix?
 		assert(0);
 		break;
 	case CONS_NINT_TYPE:
+		// from Appendix?
 		assert(0);
 		break;
 	case CONS_TINT_TYPE:
+		// from Appendix?
 		assert(0);
 		break;
 	default:
-		printc("event type error\n");
+		printc("constraint violation type invalid \n");
 		assert(0);
 		break;
 	}	

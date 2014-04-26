@@ -11,7 +11,6 @@
 #include <cos_component.h>
 #include <res_spec.h>
 
-#define MONITOR_THD 3
 static int     frame_frontier    = 0;
 
 #include "../../sched/cos_sched_sync.h"

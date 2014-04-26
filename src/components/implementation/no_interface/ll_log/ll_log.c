@@ -7,13 +7,14 @@
 //#define DETECTION_MODE
 #define LOGEVENTS_MODE
 
-#define LM_SYNC_PERIOD 10   // period for asynchronous processing
+#define LM_SYNC_PERIOD 50   // period for asynchronous processing
 
 #include <log_process.h>   // check all constraints
 
 static int LOG_INIT_THD;
 static int LOG_LOOP_THD;
 static int LOG_PREV_THD;
+static int LOG_PREV_SPD;
 
 void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages) 
 { return NULL; }
@@ -48,6 +49,8 @@ err:
 	return -1;
 }
 
+static int test_num = 0;
+
 volatile unsigned int event_num;
 
 static void
@@ -72,9 +75,11 @@ lmgr_action()
 		constraint_check(evt);
 #ifdef MEAS_LOG_OVERHEAD		
 		rdtscll(logmeas_end);
-		/* printc("single event constraint check cost %llu\n", logmeas_end - logmeas_start); */
+		printc("per evt check cost %llu\n", logmeas_end - logmeas_start);
 #endif
 	} while ((evt = find_next_evt(evt)));
+
+	/* assert(test_num++ < 2);  // remove this later */
 	printc("log process done (%d evts)\n", event_num);
 done:
 	rdtscll(lpc_end);
@@ -92,9 +97,10 @@ lllog_loop(void) {
 		assert(cos_get_thd_id() == LOG_LOOP_THD);
 		lmgr_action();
 		LOG_PREV_THD = 0;
+		LOG_PREV_SPD = 0;
 		cos_switch_thread(pthd, 0);
 	}
-	// logmgr thread never ends itself
+	// logmgr thread should not reach here
 	assert(0);
 	return; 
 }
@@ -130,15 +136,19 @@ lmgr_initialize(void)
         // local RB for contention only
 	evt_ring = (CK_RING_INSTANCE(logevt_ring) *)llog_get_page();
 	assert(evt_ring);
-	logmon_info[cos_spd_id()].mon_ring = (vaddr_t)evt_ring;
 
+	logmon_info[cos_spd_id()].mon_ring = (vaddr_t)evt_ring;
+	// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))	
+	CK_RING_INIT(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring), NULL,
+		     get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_logevt_ring))/sizeof(struct evt_entry)));
+	
 	lpc_start = lpc_end = lpc_last = 0;
 
 	LOG_INIT_THD = cos_get_thd_id();
 	sched_init(0);
 	LOG_LOOP_THD = cos_create_thread((int)lllog_loop, (int)0, 0);
 
-	printc("log_loop_thd %d is created here by thd %d\n", LOG_LOOP_THD, cos_get_thd_id());
+	printc("log_loop_thd %d is created by thd %d\n", LOG_LOOP_THD, cos_get_thd_id());
 
 	return;
 }
@@ -149,11 +159,19 @@ lmgr_initialize(void)
 
 /* activate to process log */
 int
-llog_process()
+llog_process(spdid_t spdid)
 {
 	LOCK();
-	
+
+	LOG_PREV_SPD     = spdid;
 	LOG_PREV_THD     = cos_get_thd_id();
+
+	/*  Log this event for the case that any thread that is still
+	    in PI state before process starts
+	*/
+	evt_enqueue(LOG_LOOP_THD, LOG_PREV_SPD, cos_spd_id(),
+		    0, 0, EVT_LOG_PROCESS);
+
 	while (LOG_PREV_THD == cos_get_thd_id()) cos_switch_thread(LOG_LOOP_THD, 0);
 
 	UNLOCK();

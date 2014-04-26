@@ -517,6 +517,7 @@ int periodic_wake_create(spdid_t spdinv, unsigned int period)
 	if (t > n) sched_timeout(spdid, n-ticks);
 	te->need_restart = 0;
 
+// Jiguo: better read this from the script maybe?
 #ifdef LOG_MONITOR
 	llog_setperiod(cos_spd_id(), cos_get_thd_id(), period);
 #endif

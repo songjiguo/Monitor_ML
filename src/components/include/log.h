@@ -41,7 +41,7 @@
 #define LOGGER_H
 
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
-extern int llog_process();
+extern int llog_process(spdid_t spdid);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 extern int llog_contention(spdid_t spdid, int par1, int par2, int par3);
 
@@ -71,6 +71,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define NETIF_SPD	25
 
 // thread ID
+#define MONITOR_THD     4
 #define TIMER_THD	8
 #define TE_THD	        10
 #define NETWORK_THD	20
@@ -93,13 +94,14 @@ enum{
 };
 // event type
 enum{
-	EVT_CINV = 1,   // inv in client
-	EVT_SINV,       // inv in server
-	EVT_SRET,       // ret in server
-	EVT_CRET,       // ret in client 
-	EVT_CS,         // context switch
-	EVT_TINT,       // timer interrupt
-	EVT_NINT,       // network interrupt
+	EVT_CINV = 1,    // inv in client
+	EVT_SINV,        // inv in server
+	EVT_SRET,        // ret in server
+	EVT_CRET,        // ret in client 
+	EVT_CS,          // context switch
+	EVT_TINT,        // timer interrupt
+	EVT_NINT,        // network interrupt
+	EVT_LOG_PROCESS, // log process starts
 	EVT_MAX
 };
 
@@ -205,22 +207,12 @@ static inline CFORCEINLINE void
 evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
 	/* rdtscll(log_start); */
+
 	// create shared RB
 	if (unlikely(!evt_ring)) {
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
 		assert(cli_addr);
 		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
-	}
-
-	// process log if any RB is full
-	if (unlikely(evt_ring_is_full())) {
-		// contention RB better not be full before any other RB is full
-		assert(par1 != LLLOG_SPD);
-		/* printc("<<<FULL !!!!! spd %lu thd %d>>>\n", cos_spd_id(), cos_get_thd_id()); */
-		/* rdtscll(log_start); */
-		llog_process();
-		/* rdtscll(log_end); */
-		/* printc("FULL! invoke/switch/process cost %llu\n", log_end-log_start); */
 	}
 
 #ifdef LOG_MONITOR   // since ck library now has LOG_MONITOR
@@ -234,9 +226,20 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 
 	// log the event (take slot first, then record)
 	struct evt_entry *evt;
-
 	while(!(evt = (struct evt_entry *)CK_RING_ENQUEUE_SPSCPRE(logevt_ring, evt_ring)));
 	evt_conf(evt, par1, par2, par3, par4, par5, evt_type);
+
+	// process log if any RB is full
+	if (unlikely(evt_ring_is_full())) {
+		// contention RB better not be full before any other RB is full
+		assert(par1 != LLLOG_SPD);
+		/* printc("<<<FULL !!!!! spd %lu thd %d>>>\n", cos_spd_id(), cos_get_thd_id()); */
+		/* rdtscll(log_start); */
+		llog_process(cos_spd_id());
+		/* rdtscll(log_end); */
+		/* printc("FULL! invoke/switch/process cost %llu\n", log_end-log_start); */
+	}
+	
 	/* rdtscll(log_end); */
 	/* printc("evt_enqueue cost %llu\n", log_end-log_start); */
 #endif	

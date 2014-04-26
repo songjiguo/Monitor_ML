@@ -63,7 +63,7 @@ void cos_init(void)
 				periodic_wake_wait(cos_spd_id());
 				printc("periodic process log....(thd %d)\n", cos_get_thd_id());
 				/* rdtscll(log_start); */
-				llog_process();
+				llog_process(cos_spd_id());
 				/* rdtscll(log_end); */
 				/* printc("Periodic invoke/switch/process cost %llu\n", log_end-log_start); */
 			}
