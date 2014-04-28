@@ -4,12 +4,16 @@
 #include <ll_log_deps.h>
 #include <ll_log.h>
 
+#include <log_process.h>   // check all constraints
+
 //#define DETECTION_MODE
 #define LOGEVENTS_MODE
 
-#define LM_SYNC_PERIOD 50   // period for asynchronous processing
+//#define MEAS_LOG_CHECKING      /* per event processing time */
+//#define MEAS_LOG_ASYNCACTIVATION  /* cost of async acti from periodic processing */
+int test_aysncthd;
 
-#include <log_process.h>   // check all constraints
+#define LM_SYNC_PERIOD 10  // period for asynchronous processing
 
 static int LOG_INIT_THD;
 static int LOG_LOOP_THD;
@@ -49,7 +53,15 @@ err:
 	return -1;
 }
 
-static int test_num = 0;
+
+// control how many time the thread can be activated before processed
+#if defined(MEAS_LOG_SYNCACTIVATION) || defined(MEAS_LOG_ASYNCACTIVATION)
+static int test_num;
+#endif
+
+#ifdef MEAS_LOG_CHECKING
+volatile unsigned long long logmeas_start, logmeas_end;
+#endif
 
 volatile unsigned int event_num;
 
@@ -60,27 +72,39 @@ lmgr_action()
         vaddr_t mon_ring, cli_ring;
 	struct evt_entry *evt;
 
+#ifdef MEAS_LOG_SYNCACTIVATION
+	if (test_num++ < 20) {
+		printc("sync return here\n");
+		return;
+	}
+#endif
+#ifdef MEAS_LOG_ASYNCACTIVATION
+	/* printc("test_num %d\n", test_num); */
+	/* printc("thd %d\n", test_aysncthd); */
+	if (test_aysncthd == 11 && test_num++ < 5) return;
+#endif
+
 	event_num = 0;
-	printc("start process log ....\n");
+	/* printc("start process log ....\n"); */
 
 	rdtscll(lpc_start);
 	evt = find_next_evt(NULL);
 	if (!evt) goto done;
 	
 	do {
-#ifdef MEAS_LOG_OVERHEAD		
+#ifdef MEAS_LOG_CHECKING		
 		rdtscll(logmeas_start);
 #endif
 		event_num++;
 		constraint_check(evt);
-#ifdef MEAS_LOG_OVERHEAD		
+#ifdef MEAS_LOG_CHECKING		
 		rdtscll(logmeas_end);
 		printc("per evt check cost %llu\n", logmeas_end - logmeas_start);
 #endif
 	} while ((evt = find_next_evt(evt)));
 
 	/* assert(test_num++ < 2);  // remove this later */
-	printc("log process done (%d evts)\n", event_num);
+	/* printc("log process done (%d evts)\n", event_num); */
 done:
 	rdtscll(lpc_end);
 	lpc_last = lpc_end - lpc_start;
@@ -94,6 +118,7 @@ lllog_loop(void) {
 	int tid, pthd;
 	while(1) {
 		pthd = LOG_PREV_THD;
+		test_aysncthd = pthd;  // test asyn cost only
 		assert(cos_get_thd_id() == LOG_LOOP_THD);
 		lmgr_action();
 		LOG_PREV_THD = 0;
@@ -112,9 +137,10 @@ lmgr_initialize(void)
 	memset(logmon_info, 0, sizeof(struct logmon_info) * MAX_NUM_SPDS);
 	int i, j;
 	for (i = 0; i < MAX_NUM_SPDS; i++) {
-		logmon_info[i].spdid	= i;
-		logmon_info[i].mon_ring = 0;
-		logmon_info[i].cli_ring = 0;
+		logmon_info[i].spdid	   = i;
+		logmon_info[i].mon_ring	   = 0;
+		logmon_info[i].cli_ring	   = 0;
+		logmon_info[i].spd_last_ts = 0;
 		
 		for (j = 0; j < MAX_STATIC_CAP; j++) {
 			logmon_info[i].capdest[j].dest  = 0;

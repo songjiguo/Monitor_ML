@@ -2801,14 +2801,18 @@ brand_higher_urgency(struct thread *upcall, struct thread *prev)
 	if (unlikely(!thd_get_sched_info(prev, d)->thread_notifications)) {
 		if (!thd_get_sched_info(upcall, d)->thread_notifications) {
 			/* printk("upcall thd %d -- prev thd %d\n", thd_get_id(upcall), thd_get_id(prev)); */
+#ifdef LOG_MONITOR  
+#else
 			printk("cos: skimping on brand metadata maintenance, and returning.\n");
+#endif
 
-/* 			// Jiguo: unset ACTIVE in order to notify timer */
-/* 			//        thread after recovery thread */
-/* #ifdef LOG_MONITOR  -- this might change for recovery only		 */
-/* 			upcall->flags &= ~THD_STATE_ACTIVE_UPCALL; */
-/* 			upcall->flags |= THD_STATE_READY_UPCALL; */
-/* #endif */
+/* Jiguo: unset ACTIVE in order to notify timer thread after recovery
+ * thread. This might change for recovery only. Also when the event
+ * rate are high. Do not know why??? */
+#ifdef LOG_MONITOR  
+			upcall->flags &= ~THD_STATE_ACTIVE_UPCALL;
+			upcall->flags |= THD_STATE_READY_UPCALL;
+#endif
 			return 0;
 		} else {
 			/* upcall has the proper structure, prev doesn't! */

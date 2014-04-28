@@ -15,7 +15,7 @@ int warm;
 
 #define ITER 5
 
-#ifdef MEAS_OVERHEAD
+#ifdef MEAS_LOG_OVERHEAD
 #define RUN 100
 #define RUNITER 10000
 #endif
@@ -49,8 +49,8 @@ cos_init(void)
 		low = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 
 	} else {
-#ifdef MEAS_OVERHEAD  // only 1 cli and 1 ser
-		if (cos_get_thd_id() == high) {
+#ifdef MEAS_LOG_OVERHEAD  // only 1 cli and 1 ser
+		if (cos_get_thd_id() == warm) {
 			timed_event_block(cos_spd_id(), 2);
 			unsigned long long start, end;
 			printc("<<< SIMPLE PPONG TEST BEGIN! >>>\n");
@@ -60,14 +60,13 @@ cos_init(void)
 					rdtscll(start);
 					lmon_ser1_test();
 					rdtscll(end);
-					/* printc("invocation cost: %llu\n", (end-start)); */
+					printc("invocation cost: %llu\n", (end-start));
 
 				}
 			}
 			printc("\n<<< PPONG TEST END! >>>\n");
 		}
-#endif
-#ifdef EXAMINE_PI   // 1 cli and 1 ser, also depends on lock, scheduler (maybe period if we need periodic task)
+#elif defined EXAMINE_PI   // 1 cli and 1 ser, also depends on lock, scheduler (maybe period if we need periodic task)
 		if (cos_get_thd_id() == high) {
 			printc("<<<high thd %d>>>\n", cos_get_thd_id());
 			periodic_wake_create(cos_spd_id(), 13);
@@ -87,8 +86,7 @@ cos_init(void)
 			periodic_wake_create(cos_spd_id(), 37);
 			try_cs_lp();
 		}
-#endif
-#ifdef EXAMINE_DEADLINE   //  periodic task
+#elif defined EXAMINE_DEADLINE   //  periodic task
 		if (cos_get_thd_id() == high) {
 			printc("<<<high thd %d 10>>>\n", cos_get_thd_id());
 			int this_ticks = 10;
@@ -111,8 +109,7 @@ cos_init(void)
 			periodic_wake_create(cos_spd_id(), this_ticks);     // c/t = 12/56 (21%)
 			lmon_ser1_test();
 		}
-#endif
-#ifdef NORM  // first example, 2 clients and 1 ser1 and 1 ser2
+#elif defined NORM  // first example, 2 clients and 1 ser1 and 1 ser2
 		if (cos_get_thd_id() == high) {
 			timed_event_block(cos_spd_id(), 50);
 			j = 0;
@@ -124,13 +121,13 @@ cos_init(void)
 			j = 0;
 			while(j++ < ITER) lmon_ser1_test();
 		}
-#endif
+
 		if (cos_get_thd_id() == warm) {
 			printc("<<<warm thd %d>>>\n", cos_get_thd_id());
 			i = 0;
 			while(i++ < ITER) lmon_ser1_test();
 		}
-		
+#endif		
 	}
 
 	return;

@@ -35,16 +35,28 @@ vaddr_t lmon_ser1_test(void)
 	lmon_ser2_test();
 	return 0;
 }
-#endif
+#elif defined MEAS_LOG_OVERHEAD
 
-#ifdef MEAS_OVERHEAD
+int try_cs_hp(void)
+{
+	return 0;
+}
+
+int try_cs_mp(void)
+{
+	return 0;
+}
+
+int try_cs_lp(void)
+{
+	return 0;
+}
+
 vaddr_t lmon_ser1_test(void)
 {
 	return 0;
 }
-#endif
-
-#ifdef EXAMINE_PI
+#elif defined EXAMINE_PI
 
 volatile int spin = 1;
 volatile int spin2 = 1;
@@ -124,9 +136,7 @@ vaddr_t lmon_ser1_test(void)
 {
 	return 0;
 }
-#endif
-
-#ifdef EXAMINE_DEADLINE
+#elif defined EXAMINE_DEADLINE
 
 volatile int spin = 1;
 unsigned long long start, end, sum;

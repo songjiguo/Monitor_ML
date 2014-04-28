@@ -11,6 +11,42 @@
 #define TIMER_FREQ     (CPU_TIMER_FREQ)
 #define CYC_PER_TICK   (CPU_FREQUENCY/TIMER_FREQ)
 
+//#define LOGMGR_DEBUG_PI
+//#define LOGMGR_DEBUG_SPDEXEC
+//#define LOGMGR_DEBUG_THD_TIMING
+//#define LOGMGR_DEBUG_INTNUM
+//#define LOGMGR_DEBUG_ORDER
+
+#ifdef LOGMGR_DEBUG_PI
+#define PRINTD_PI(s, args...) printc(s, args);
+#else
+#define PRINTD_PI(s, args...) 
+#endif
+
+#ifdef LOGMGR_DEBUG_SPDEXEC
+#define PRINTD_SPDEXEC(s, args...) printc(s, args);
+#else
+#define PRINTD_SPDEXEC(s, args...) 
+#endif
+
+#ifdef LOGMGR_DEBUG_THD_TIMING
+#define PRINTD_THD_TIMING(s, args...) printc(s, args);
+#else
+#define PRINTD_THD_TIMING(s, args...) 
+#endif
+
+#ifdef LOGMGR_DEBUG_INTNUM
+#define PRINTD_INTNUM(s, args...) printc(s, args);
+#else
+#define PRINTD_INTNUM(s, args...) 
+#endif
+
+#ifdef LOGMGR_DEBUG_ORDER
+#define PRINTD_ORDER(s, args...) printc(s, args);
+#else
+#define PRINTD_ORDER(s, args...) 
+#endif
+
 static void
 updatemax_llu(unsigned long long *p, unsigned long long val) { if (val > *p) *p = val; return;}
 static void
@@ -21,7 +57,7 @@ updatemax_int(unsigned int *p, unsigned int val) { if (val > *p) *p = val; retur
 #define CINV_ORDER()						\
 	if (p_entry->to_thd != c_entry->from_thd ||	        \
 	    p_entry->to_spd != c_entry->from_spd ) {		\
-		flt_type = CONS_BZFLT;				\
+		flt_type = CONS_ALTERID;			\
 		goto fault;					\
 	}							\
 	
@@ -29,18 +65,18 @@ updatemax_int(unsigned int *p, unsigned int val) { if (val > *p) *p = val; retur
 	if (p_entry->to_thd != c_entry->from_thd ||             \
 	    p_entry->from_spd != c_entry->from_spd ||		\
 	    p_entry->to_spd != c_entry->to_spd ) {		\
-		flt_type = CONS_BZFLT;				\
+		flt_type = CONS_ALTERID;			\
 		goto fault;					\
 	}							\
 
 #define SRET_ORDER()                                            \
 	CINV_ORDER()						\
-
+	
 #define CRET_ORDER()						\
 	if (p_entry->to_thd != c_entry->from_thd ||		\
 	    p_entry->from_spd != c_entry->from_spd ||		\
 	    p_entry->to_spd != c_entry->to_spd ) {		\
-		flt_type = CONS_BZFLT;				\
+		flt_type = CONS_ALTERID;			\
 		goto fault;					\
 	}							\
 
@@ -55,8 +91,12 @@ updatemax_int(unsigned int *p, unsigned int val) { if (val > *p) *p = val; retur
 	
 #define NINT_ORDER()						\
 	if (c_entry->to_thd != NETWORK_THD ||			\
-	    c_entry->to_spd != NETIF_SPD ) {			\
+	    c_entry->to_spd != NETIF_SPD) {			\
 		flt_type = CONS_NINT_TYPE;			\
+		goto fault;					\
+	}							\
+	if (c_entry->from_thd != p_entry->to_thd ) {		\
+		flt_type = CONS_ALTERID;			\
 		goto fault;					\
 	}							\
 	
@@ -66,6 +106,11 @@ updatemax_int(unsigned int *p, unsigned int val) { if (val > *p) *p = val; retur
 		flt_type = CONS_TINT_TYPE;			\
 		goto fault;					\
 	}							\
+	if (c_entry->from_thd != p_entry->to_thd ) {		\
+		flt_type = CONS_ALTERID;			\
+		goto fault;					\
+	}							\
+	
 
 
 /* get a page from the heap */

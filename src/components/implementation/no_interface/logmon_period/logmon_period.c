@@ -9,6 +9,9 @@
 
 #include <ll_log.h>
 
+// also set this in log.c
+//#define MEAS_LOG_ASYNCACTIVATION  /* cost of async processing activation overhead*/
+
 /* extern int llog_contention(spdid_t spdid, int par1, int par2, int par3); */
 
 /* void test_logcontention() */
@@ -38,7 +41,9 @@
 
 
 int high;
+#ifdef MEAS_LOG_ASYNCACTIVATION
 volatile unsigned long long log_start, log_end;
+#endif
 
 void cos_init(void)
 {
@@ -62,10 +67,14 @@ void cos_init(void)
 			while(1){
 				periodic_wake_wait(cos_spd_id());
 				printc("periodic process log....(thd %d)\n", cos_get_thd_id());
-				/* rdtscll(log_start); */
+#ifdef MEAS_LOG_ASYNCACTIVATION				
+				rdtscll(log_start);
+#endif
 				llog_process(cos_spd_id());
-				/* rdtscll(log_end); */
-				/* printc("Periodic invoke/switch/process cost %llu\n", log_end-log_start); */
+#ifdef MEAS_LOG_ASYNCACTIVATION				
+				rdtscll(log_end);
+				printc("Periodic invoke/switch/process cost %llu\n", log_end-log_start);
+#endif
 			}
 		}
 	}

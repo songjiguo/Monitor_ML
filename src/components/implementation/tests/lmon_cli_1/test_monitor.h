@@ -2,7 +2,7 @@
 #define TEST_M
 
 //#define NORM
-//#define MEAS_OVERHEAD
+//#define MEAS_LOG_OVERHEAD      /* infrastructure overhead over the interface */
 #define EXAMINE_PI
 //#define EXAMINE_DEADLINE
 

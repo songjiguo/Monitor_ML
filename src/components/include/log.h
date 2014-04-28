@@ -55,8 +55,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define CFORCEINLINE __attribute__((always_inline))
 #endif
 
-#define MEAS_WITH_LOG
-//#define MEAS_WITHOUT_LOG
+//#define MEAS_LOG_SYNCACTIVATION    /* invocation + cs when RB is full. Now measure 1000 times */
 
 /********************************/
 /*  Hard code spd and thread ID */
@@ -201,13 +200,13 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3
 	return;
 }
 
-volatile unsigned long long log_start, log_end;
+#ifdef MEAS_LOG_SYNCACTIVATION
+volatile unsigned long long log_acti_start, log_acti_end;
+#endif
 
 static inline CFORCEINLINE void 
 evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
-	/* rdtscll(log_start); */
-
 	// create shared RB
 	if (unlikely(!evt_ring)) {
 		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
@@ -218,8 +217,8 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 #ifdef LOG_MONITOR   // since ck library now has LOG_MONITOR
 	int owner = CK_RING_ENQUEUE_SPSCCONT(logevt_ring, evt_ring);
 	if (unlikely(owner)) {   // contention on this RB
-		printc("<<<Contention on RB !!!!! %lu thd %d>>>\n", 
-		       cos_spd_id(), cos_get_thd_id());
+		printc("<<<Contention on RB !!!!! %lu thd %d (owner %d)>>>\n", 
+		       cos_spd_id(), cos_get_thd_id(), owner);
 		evt_omitted(par1, par2, par3, par4, par5, evt_type, owner);
 		return;
 	}
@@ -230,18 +229,23 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 	evt_conf(evt, par1, par2, par3, par4, par5, evt_type);
 
 	// process log if any RB is full
+#ifdef MEAS_LOG_SYNCACTIVATION  
+	while (unlikely(evt_ring_is_full())) {
+		assert(par1 != LLLOG_SPD);
+		rdtscll(log_acti_start);
+		// immediately return from the log_mgr (pretend all processed)
+		llog_process(cos_spd_id());
+		rdtscll(log_acti_end);
+		/* printc("FULL! invoke/switch/process cost %llu\n", log_acti_end-log_acti_start); */
+	}
+#else
 	if (unlikely(evt_ring_is_full())) {
 		// contention RB better not be full before any other RB is full
 		assert(par1 != LLLOG_SPD);
 		/* printc("<<<FULL !!!!! spd %lu thd %d>>>\n", cos_spd_id(), cos_get_thd_id()); */
-		/* rdtscll(log_start); */
 		llog_process(cos_spd_id());
-		/* rdtscll(log_end); */
-		/* printc("FULL! invoke/switch/process cost %llu\n", log_end-log_start); */
 	}
-	
-	/* rdtscll(log_end); */
-	/* printc("evt_enqueue cost %llu\n", log_end-log_start); */
+#endif	
 #endif	
 	return;
 }
