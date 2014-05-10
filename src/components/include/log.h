@@ -109,10 +109,10 @@ struct evt_entry {
 	int from_thd, to_thd;
 	unsigned long from_spd, to_spd; // can be cap_no
 	unsigned long long time_stamp;
-	int evt_type;
-
+	int evt_type;    
 	int func_num;   // hard code which function call FIXME:naming space
 	int para;   // record passed parameter (e.g. dep_thd)
+	int commited;  // a flag to indicate if the event is committed
 };
 
 #ifndef CK_RING_CONTINUOUS
@@ -182,10 +182,7 @@ evt_ring_is_full()
 static inline CFORCEINLINE void 
 evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3, int par4, int par5, int type)
 {
-	unsigned long long ts;
 	assert(evt);
-
-	rdtscll(evt->time_stamp);
 
 	evt->from_thd	= cos_get_thd_id();
 	evt->to_thd	= par1;
@@ -194,6 +191,9 @@ evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3
 	evt->func_num	= par4;
 	evt->para	= par5;
 	evt->evt_type	= type;
+	rdtscll(evt->time_stamp);
+
+	// do the introspection and set bit here
 
 	/* print_evt_info(evt); */
 

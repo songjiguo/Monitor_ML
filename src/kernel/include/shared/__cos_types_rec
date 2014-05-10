@@ -495,7 +495,8 @@ enum {
 	COS_SCHED_BES_THD_FN,
 	COS_SCHED_BES_THD_DEST,
 	COS_SCHED_BES_THD_PARA,
-	COS_SCHED_BES_THD_PRIO
+	COS_SCHED_BES_THD_PRIO,
+	COS_SCHED_THD_IP_LFT   // this is for latent fault only under RB contention
 };
 
 

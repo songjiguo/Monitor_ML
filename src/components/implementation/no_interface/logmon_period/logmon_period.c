@@ -59,7 +59,7 @@ void cos_init(void)
 	} else {
 		if (cos_get_thd_id() == high) {
 
-			/* test_logcontention(); */
+			return;
 
 			int lm_sync_period;
 			lm_sync_period = llog_getsyncp(cos_spd_id());

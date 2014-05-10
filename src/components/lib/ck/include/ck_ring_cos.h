@@ -114,13 +114,41 @@
 		return true;							\
 	}									\
 	CK_CC_INLINE static void *       				        \
-	ck_ring_enqueue_spscpre_##name(struct ck_ring_##name *ring)	        \
+	ck_ring_gettail_##name(struct ck_ring_##name *ring)	                \
 	{									\
-		unsigned int consumer, producer, delta;				\
-		unsigned int mask = ring->mask;					\
+		unsigned int consumer, producer, delta;			        \
+		unsigned int mask = ring->mask;				        \
+		void *addr;                                                     \
+									        \
+		consumer = ck_pr_load_uint(&ring->c_head);		        \
+		producer = ck_pr_load_uint(&ring->p_tail);		        \
+		delta = producer + 1;					        \
+									        \
+		if ((delta & mask) == (consumer & mask))		        \
+			return NULL;					        \
+									        \
+		addr = (void *)&ring->ring[producer & mask];		        \
+		return addr;						        \
+	}								        \
+	CK_CC_INLINE static void					        \
+	ck_ring_inctail_##name(struct ck_ring_##name *ring)      		\
+	{								        \
+		unsigned int producer, delta;				        \
+									        \
+		producer = ck_pr_load_uint(&ring->p_tail);		        \
+		delta = producer + 1;					        \
+									        \
+		ck_pr_fence_store();					        \
+		ck_pr_store_uint(&ring->p_tail, delta);			        \
+	}								        \
+	CK_CC_INLINE static void *					        \
+	ck_ring_enqueue_spscpre_##name(struct ck_ring_##name *ring)	        \
+	{								        \
+		unsigned int consumer, producer, delta;			        \
+		unsigned int mask = ring->mask;				        \
 		void *addr;						        \
-										\
-                consumer = ck_pr_load_uint(&ring->c_head);	        	\
+									        \
+                consumer = ck_pr_load_uint(&ring->c_head);		        \
 		producer = ring->p_tail;					\
 		delta = producer + 1;						\
 										\
@@ -435,6 +463,11 @@
 	ck_ring_enqueue_spscpre_##name(object)
 #define CK_RING_ENQUEUE_SPSCCONT(name, object)           	\
 	ck_ring_enqueue_spsccont_##name(object)
+#define CK_RING_GETTAIL(name, object)		                \
+	ck_ring_gettail_##name(object)
+#define CK_RING_INCTAIL(name, object)		                \
+	ck_ring_inctail_##name(object)
+
 
 struct ck_ring {
 	unsigned int c_head;
@@ -476,6 +509,42 @@ ck_ring_capacity(struct ck_ring *ring)
 
 	return ring->size;
 }
+
+#ifdef LOG_MONITOR
+CK_CC_INLINE static void *
+ck_ring_gettail(struct ck_ring *ring)
+{
+	unsigned int consumer, producer, delta;
+	unsigned int mask = ring->mask;
+	void *addr;
+
+	consumer = ck_pr_load_uint(&ring->c_head);
+	producer = ck_pr_load_uint(&ring->p_tail);;
+	delta = producer + 1;
+
+	if ((delta & mask) == (consumer & mask))
+		return NULL;
+
+	addr = (void *)&ring->ring[producer & mask];
+	return addr;
+}
+
+// before this, already check if RB is full in gettail
+CK_CC_INLINE static void
+ck_ring_inctail(struct ck_ring *ring)
+{
+	unsigned int producer, delta;
+
+	producer = ck_pr_load_uint(&ring->p_tail);;
+	delta = producer + 1;
+	
+	ck_pr_fence_store();
+	ck_pr_store_uint(&ring->p_tail, delta);
+	
+	return;
+}
+
+#endif
 
 /*
  * Atomically enqueues the specified entry. Returns true on success, returns
@@ -536,7 +605,6 @@ ck_ring_enqueue_spscpre(struct ck_ring *ring)
 
 	ck_pr_fence_store();
 	ck_pr_store_uint(&ring->p_tail, delta);
-	/* ck_pr_fence_store(); */
 	ck_pr_store_uint(&ring->owner, 0);  // clear the owner
 
 	return addr;

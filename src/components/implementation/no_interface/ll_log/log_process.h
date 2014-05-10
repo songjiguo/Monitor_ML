@@ -919,7 +919,10 @@ constraint_check(struct evt_entry *entry)
 		assert(ttn);
 		ttn->last_ts = entry->time_stamp;
 		break;
-	case EVT_LOG_PROCESS:  // log this for detecting PI
+        /* log this for detecting PI. No need for infinite loop since
+	 * there is always event (either timer
+	 * interrupt/sched_timeout) or an event make the RB full*/
+	case EVT_LOG_PROCESS:  
 		assert(entry->to_spd == LLLOG_SPD);
 		assert(entry->to_thd == MONITOR_THD);
 		assert(entry->from_thd != entry->to_thd);
