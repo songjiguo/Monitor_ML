@@ -10,7 +10,7 @@
 #include <heap.h>
 #include <log_util.h>
 
-//#define MEAS_LOG_LOCALIZATION  /* cost of localization */
+//#define MEAS_LOG_LOCALIZATION  /* cost of localization */  override log.c #define
 
 #ifdef MEAS_LOG_LOCALIZATION
 #define  DETECTION_MODE
@@ -358,12 +358,31 @@ cap_to_dest(struct evt_entry *entry)
 	return;
 }
 
+static void
+get_event(struct evt_entry *entry, CK_RING_INSTANCE(logevt_ring) *evtring, int indx)
+{
+	assert(entry && evtring);
+
+	while((CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, entry))) {
+		if (!entry->committed) {
+			printc("set thd %d 's eip (find next)\n", entry->owner);
+			assert(cos_thd_cntl(COS_THD_IP_LFT, entry->owner, 0, 0) != -1);
+			continue;
+		} else {		
+			es[indx].ts = LLONG_MAX - entry->time_stamp;
+			assert(!heap_add(h, &es[indx]));
+			break;
+		}
+	}
+	return;
+}
+
 /* Add the earliest event from each spd onto the heap. Do this once */
 static void
 populate_evts()
 {
 	int i;
-        struct logmon_info *ret = NULL, *spdmon;
+        struct logmon_info *spdmon;
 	unsigned long long ts = LLONG_MAX;
 	CK_RING_INSTANCE(logevt_ring) *evtring;
 
@@ -371,18 +390,12 @@ populate_evts()
 	for (i = 1; i < MAX_NUM_SPDS; i++) {
 		spdmon = &logmon_info[i];
 		assert(spdmon);
-
 		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
 		if (!evtring) continue;
 		entry = &spdmon->first_entry;
 		assert(entry);
-		if (!CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, entry)) {
-			continue;
-		}
-		// if there is no event in a spd now, there should be
-		// no event until the log manger finish the processing
-		es[i].ts = LLONG_MAX - entry->time_stamp;			
-		assert(!heap_add(h, &es[i]));
+
+		get_event(entry, evtring, i);
 	}	
 	/* validate_heap_entries(h, MAX_NUM_SPDS); */
 	
@@ -409,10 +422,8 @@ find_next_evt(struct evt_entry *evt)
 		assert(spdmon);
 		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
 		assert(evtring);
-		if (CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, evt)) {
-			es[spdid].ts = LLONG_MAX - evt->time_stamp;
-			heap_add(h, &es[spdid]);
-		}
+
+		get_event(evt, evtring, spdid);
 	}
 
 	next = heap_highest(h);
@@ -870,8 +881,7 @@ constraint_check(struct evt_entry *entry)
 	int from_thd, from_spd;
 	int owner = 0, contender = 0;  // for RB contention
 
-	assert(entry && entry->evt_type > 0);
-	
+	assert(entry && entry->evt_type > 0);	
 	slide_twindow(entry);
 
 	// "paste" the omitted event here

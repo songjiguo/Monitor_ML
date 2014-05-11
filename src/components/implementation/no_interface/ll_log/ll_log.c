@@ -4,10 +4,10 @@
 #include <ll_log_deps.h>
 #include <ll_log.h>
 
-#include <log_process.h>   // check all constraints
-
 //#define DETECTION_MODE
 #define LOGEVENTS_MODE
+
+#include <log_process.h>   // check all constraints
 
 //#define MEAS_LOG_CHECKING      /* per event processing time */
 //#define MEAS_LOG_ASYNCACTIVATION  /* cost of async acti from periodic processing */
@@ -85,7 +85,7 @@ lmgr_action()
 #endif
 
 	event_num = 0;
-	/* printc("start process log ....\n"); */
+	printc("start process log ....\n");
 
 	rdtscll(lpc_start);
 	evt = find_next_evt(NULL);
@@ -104,12 +104,41 @@ lmgr_action()
 	} while ((evt = find_next_evt(evt)));
 
 	/* assert(test_num++ < 2);  // remove this later */
-	/* printc("log process done (%d evts)\n", event_num); */
+	printc("log process done (%d evts)\n", event_num);
 done:
 	rdtscll(lpc_end);
 	lpc_last = lpc_end - lpc_start;
 	update_proc(lpc_last);
 
+	return;
+}
+
+static void
+clear_owner_commit()
+{
+	int i, j;
+	CK_RING_INSTANCE(logevt_ring) *evtring;
+        struct logmon_info *spdmon;
+
+	for (i = 0; i < MAX_NUM_SPDS; i++) {
+		spdmon = &logmon_info[i];
+		assert(spdmon);
+		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
+		if (!evtring) continue;
+
+		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
+
+		struct evt_entry *tmp;
+		for (j = 0; j < capacity; j++) {
+			tmp = (struct evt_entry *) CK_RING_GETTAIL(logevt_ring, evtring);
+			if (tmp) {
+				tmp->owner     = 0;
+				tmp->committed = 0;
+			}
+			evtring->p_tail++;
+			evtring->c_head++;
+		}
+	}
 	return;
 }
 
@@ -121,11 +150,11 @@ lllog_loop(void) {
 		test_aysncthd = pthd;  // test asyn cost only
 		assert(cos_get_thd_id() == LOG_LOOP_THD);
 		lmgr_action();
+		clear_owner_commit();
 		LOG_PREV_THD = 0;
 		LOG_PREV_SPD = 0;
 		cos_switch_thread(pthd, 0);
 	}
-	// logmgr thread should not reach here
 	assert(0);
 	return; 
 }
@@ -192,8 +221,8 @@ llog_process(spdid_t spdid)
 	LOG_PREV_SPD     = spdid;
 	LOG_PREV_THD     = cos_get_thd_id();
 
-	/*  Log this event for the case that any thread that is still
-	    in PI state before process starts
+	/*  Log the processing as an event for that any thread that is
+	    still in PI state before process starts
 	*/
 	evt_enqueue(LOG_LOOP_THD, LOG_PREV_SPD, cos_spd_id(),
 		    0, 0, EVT_LOG_PROCESS);

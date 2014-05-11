@@ -22,14 +22,12 @@ int warm;
 
 #define US_PER_TICK 10000
 
+//#define CAS_TEST
+
 void test_iploop()
 {
-	vaddr_t ip;
-	
 	printc("set eip back testing....\n");
-
-	ip = cos_sched_introspect(COS_SCHED_THD_IP_LFT, cos_spd_id(), med);
-	assert(ip);
+	assert(cos_thd_cntl(COS_THD_IP_LFT, med, 0, 0) != -1);
 	timed_event_block(cos_spd_id(), 5);
 	return;
 }
@@ -82,12 +80,14 @@ cos_init(void)
 		if (cos_get_thd_id() == high) {
 			timed_event_block(cos_spd_id(), 6);
 			printc("<<<high thd %d>>>\n", cos_get_thd_id());
+#ifdef CAS_TEST
 			test_iploop();
 			return;
-
+#else
 			printc("<<<high thd %d>>>\n", cos_get_thd_id());
 			periodic_wake_create(cos_spd_id(), 13);
 			try_cs_hp();
+#endif
 		}
 		
 		if (cos_get_thd_id() == med) {
@@ -98,7 +98,6 @@ cos_init(void)
 		}
 
 		if (cos_get_thd_id() == low) {
-			return;
 			printc("<<<low thd %d>>>\n", cos_get_thd_id());
 			periodic_wake_create(cos_spd_id(), 37);
 			try_cs_lp();

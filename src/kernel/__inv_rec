@@ -669,6 +669,23 @@ cos_syscall_thd_cntl(int spd_id, int op_thdid, long arg1, long arg2)
 */
 	
 	switch (op) {
+#ifdef LOG_MONITOR
+	int ret = 0;
+	case COS_THD_IP_LFT:   // latent fault: get current ip in the frame of a task
+	{
+		if ((thd = thd_get_by_id(thdid))) {
+			/* printk("cos: thd %d\n", thdid); */
+			ret = thd_get_frame_ip(thd, 0);
+			ret = ret - ret%512;   // change this number in log.h as well
+			thd_set_frame_ip(thd, 0, ret);
+			return ret;
+		} else {
+			printk("cos: error -- can not find thread\n");
+			return -1;
+		}
+		break;
+	}
+#endif
 	case COS_THD_INV_FRAME:
 	{
 		struct spd *i_spd;
@@ -3329,40 +3346,42 @@ cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 
 	return ret;
 }
-#else //LOG_MONITOR   // this is for RB contention
-COS_SYSCALL int 
+/* #else //LOG_MONITOR   // this is for RB contention */
+/* COS_SYSCALL int  */
+/* cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id) */
+/* { */
+/* 	struct thread *thd, *ret_thd; */
+/* 	struct spd *spd; */
+/* 	int ret = 0; */
+/* 	int id; */
+
+/* 	thd = core_get_curr_thd(); */
+/* 	spd = thd_validate_get_current_spd(thd, spd_id); */
+/* 	assert(spd); */
+
+/* 	switch(operation) { */
+/* 	case COS_SCHED_THD_IP_LFT:   // latent fault: get current ip of a task */
+/* 	{ */
+/* 		if ((thd = thd_get_by_id(thd_id))) { */
+/* 			ret = thd_get_frame_ip(thd, 0); */
+/* 			ret = ret - ret%512; */
+/* 			thd_set_frame_ip(thd, 0, ret); */
+/* 		} */
+/* 		else printk("cos: error -- can not find thread\n"); */
+/* 		break; */
+/* 	} */
+/* 	default: */
+/* 		break; */
+/* 	} */
+
+/* 	return ret; */
+
+/* } */
+#else
+COS_SYSCALL int
 cos_syscall_sched_introspect(int spd_id, int operation, int arg, int thd_id)
 {
-	struct thread *thd, *ret_thd;
-	struct spd *spd;
-	int ret = 0;
-	int id;
-
-	thd = core_get_curr_thd();
-	spd = thd_validate_get_current_spd(thd, spd_id);
-	assert(spd);
-
-	switch(operation) {
-	case COS_SCHED_THD_IP_LFT:   // latent fault: get current ip of a task
-	{
-		if ((thd = thd_get_by_id(thd_id))) {
-			ret = thd_get_frame_ip(thd, 0);
-			/* printk("cos: getting the thread %d\n", thd_id); */
-			/* printk("cos: get_ip ip %x\n", (int)thd_get_ip(thd)); */
-			/* printk("cos: regs ip %x\n", thd->regs.ip); */
-			ret = ret - ret%1024;
-			/* printk("cos: regs ip rounded to %x\n", ret); */
-			thd_set_frame_ip(thd, 0, ret);
-		}
-		else printk("cos: error -- can not find thread\n");
-		break;
-	}
-	default:
-		break;
-	}
-
-	return ret;
-
+	return 0;
 }
 #endif
 

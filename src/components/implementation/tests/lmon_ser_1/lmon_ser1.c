@@ -13,6 +13,11 @@ static int low = 14;
 static int mid = 13;
 static int hig = 12;
 
+
+volatile int spin = 1;
+volatile int spin2 = 1;
+unsigned long long start, end, sum;
+
 #include <../lmon_cli_1/test_monitor.h>
 
 #include <cos_synchronization.h>
@@ -61,6 +66,10 @@ vaddr_t lmon_ser1_test(void)
 #elif defined EXAMINE_PI
 
 
+
+//#define CAS_TEST
+
+#ifdef CAS_TEST
 /* compute the highest power of 2 less or equal than 32-bit v */
 static unsigned int get_powerOf2(unsigned int orig) {
         unsigned int v = orig - 1;
@@ -93,28 +102,6 @@ done:
 	return addr;
 }
 
-volatile int spin = 1;
-volatile int spin2 = 1;
-unsigned long long start, end, sum;
-
-int try_cs_hp(void)
-{
-	int i;
-	while(1) {
-		/* periodic_wake_wait(cos_spd_id()); */
-		/* printc("thread h : %d is doing something\n", cos_get_thd_id()); */
-		timed_event_block(cos_spd_id(), 5);
-		spin2 = 0;
-		printc("thread h : %d try to take lock2\n", cos_get_thd_id());
-		LOCK2_TAKE();
-		printc("thread h : %d has the lock2\n", cos_get_thd_id());
-		LOCK2_RELEASE();
-		printc("thread h : %d released lock2\n", cos_get_thd_id());
-	}
-	return 0;
-}
-
-
 #include <ck_ring_cos.h>
 
 struct test_evt_entry {
@@ -143,9 +130,15 @@ CK_RING_INSTANCE(test_logevt_ring) *test_evt_ring;
 #define FUNALIGN __attribute__((aligned(32)))
 #endif
 
-void test_loop(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
+#ifndef CFORCEINLINE
+#define CFORCEINLINE __attribute__((always_inline))
+#endif
+
+
+static inline CFORCEINLINE void 
+test_loop(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
-	__asm__ volatile(".balign 1024");
+	__asm__ volatile(".balign 512");
 
 	struct test_evt_entry *evt;
 	int old, new;
@@ -196,53 +189,55 @@ void test_loop(int par1, unsigned long par2, unsigned long par3, int par4, int p
 	return;
 }
 
-
-
 int try_cs_mp(void)
 {
-	int i;
-	int j;
-
+	int i, j;
 	test_evt_ring = (CK_RING_INSTANCE(test_logevt_ring) *)test_get_page();
 	assert(test_evt_ring);
 
 	CK_RING_INIT(test_logevt_ring, (CK_RING_INSTANCE(test_logevt_ring) *)((void *)test_evt_ring), NULL, get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_test_logevt_ring))/sizeof(struct test_evt_entry)));
 
-	/* struct test_evt_entry *evt; */
-	/* while(!(evt = (struct test_evt_entry *)CK_RING_ENQUEUE_SPSCPRE(test_logevt_ring, test_evt_ring))); */
-
-	/* evt = &tmp_entry; */
 	test_loop(55, 2, 3, 4, 5, 6);
+	return;
+}
+#else
 
-	
-	/* for (i = 0; i < 10; i++) { */
-	/* 	test_loop(&simple_rb[i],1,2,3,4,5,6); */
-	/* } */
+int try_cs_mp(void) 
+{
+	while(1) {
+		periodic_wake_wait(cos_spd_id());
+		printc("thread m : %d is doing something\n", cos_get_thd_id());
+		timed_event_block(cos_spd_id(), 1);
 
-	/* asm("pushl %esp"); */
-	/* asm("subl $16, %esp"); */
-	/* asm("andl $-0x10, %esp"); */
-	/* test_loop(evt,1,2,3,4,5,6); */
-	/* asm("popl, %esp"); */
+		LOCK2_TAKE();
+		printc("thread m : %d has the lock2\n", cos_get_thd_id());
+		spin = 0;
+		/* printc("thread m : %d try to take lock1\n", cos_get_thd_id()); */
+		LOCK1_TAKE();
+		/* printc("thread m : %d has the lock1\n", cos_get_thd_id()); */
+		LOCK1_RELEASE();
+		/* printc("thread m : %d released lock1\n", cos_get_thd_id()); */
+		LOCK2_RELEASE();
+		/* printc("thread m : %d released lock2\n", cos_get_thd_id()); */
+	}
+	return 0;
+}
+#endif
 
-
-
-	/* while(1) { */
+int try_cs_hp(void)
+{
+	int i;
+	while(1) {
 		/* periodic_wake_wait(cos_spd_id()); */
-		/* printc("thread m : %d is doing something\n", cos_get_thd_id()); */
-		/* timed_event_block(cos_spd_id(), 1); */
-
-		/* LOCK2_TAKE(); */
-		/* printc("thread m : %d has the lock2\n", cos_get_thd_id()); */
-		/* spin = 0; */
-		/* /\* printc("thread m : %d try to take lock1\n", cos_get_thd_id()); *\/ */
-		/* LOCK1_TAKE(); */
-		/* /\* printc("thread m : %d has the lock1\n", cos_get_thd_id()); *\/ */
-		/* LOCK1_RELEASE(); */
-		/* /\* printc("thread m : %d released lock1\n", cos_get_thd_id()); *\/ */
-		/* LOCK2_RELEASE(); */
-		/* /\* printc("thread m : %d released lock2\n", cos_get_thd_id()); *\/ */
-	/* } */
+		/* printc("thread h : %d is doing something\n", cos_get_thd_id()); */
+		timed_event_block(cos_spd_id(), 5);
+		spin2 = 0;
+		printc("thread h : %d try to take lock2\n", cos_get_thd_id());
+		LOCK2_TAKE();
+		printc("thread h : %d has the lock2\n", cos_get_thd_id());
+		LOCK2_RELEASE();
+		printc("thread h : %d released lock2\n", cos_get_thd_id());
+	}
 	return 0;
 }
 
