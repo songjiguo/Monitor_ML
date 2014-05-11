@@ -75,7 +75,7 @@ static inline int cos_sched_lock_take(void)
 	
 	/* Recursively taking the lock: not good */
 
-	if (l->c.owner_thd == curr_thd) printc("curr_thd %d\n", curr_thd);
+	/* if (l->c.owner_thd == curr_thd) printc("curr_thd %d\n", curr_thd); */
 	assert(l->c.owner_thd != curr_thd);
 	do {
 		union cos_synchronization_atom p, n; /* previous and new */

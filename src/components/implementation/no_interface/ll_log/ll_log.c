@@ -3,14 +3,10 @@
 
 #include <ll_log_deps.h>
 #include <ll_log.h>
-
-//#define DETECTION_MODE
-#define LOGEVENTS_MODE
+#include <log.h>
 
 #include <log_process.h>   // check all constraints
 
-//#define MEAS_LOG_CHECKING      /* per event processing time */
-//#define MEAS_LOG_ASYNCACTIVATION  /* cost of async acti from periodic processing */
 int test_aysncthd;
 
 #define LM_SYNC_PERIOD 10  // period for asynchronous processing
@@ -53,36 +49,17 @@ err:
 	return -1;
 }
 
-
-// control how many time the thread can be activated before processed
-#if defined(MEAS_LOG_SYNCACTIVATION) || defined(MEAS_LOG_ASYNCACTIVATION)
-static int test_num;
-#endif
-
 #ifdef MEAS_LOG_CHECKING
 volatile unsigned long long logmeas_start, logmeas_end;
 #endif
 
-volatile unsigned int event_num;
-
+volatile unsigned int event_num;   // how many evts processed
 static void
 lmgr_action()
 {
         struct logmon_info *spdmon;
         vaddr_t mon_ring, cli_ring;
 	struct evt_entry *evt;
-
-#ifdef MEAS_LOG_SYNCACTIVATION
-	if (test_num++ < 20) {
-		printc("sync return here\n");
-		return;
-	}
-#endif
-#ifdef MEAS_LOG_ASYNCACTIVATION
-	/* printc("test_num %d\n", test_num); */
-	/* printc("thd %d\n", test_aysncthd); */
-	if (test_aysncthd == 11 && test_num++ < 5) return;
-#endif
 
 	event_num = 0;
 	printc("start process log ....\n");
@@ -92,12 +69,12 @@ lmgr_action()
 	if (!evt) goto done;
 	
 	do {
-#ifdef MEAS_LOG_CHECKING		
+#if defined(MEAS_LOG_CHECKING) && defined(DETECTION_MODE)
 		rdtscll(logmeas_start);
 #endif
 		event_num++;
 		constraint_check(evt);
-#ifdef MEAS_LOG_CHECKING		
+#if defined(MEAS_LOG_CHECKING) && defined(DETECTION_MODE)
 		rdtscll(logmeas_end);
 		printc("per evt check cost %llu\n", logmeas_end - logmeas_start);
 #endif
@@ -149,8 +126,10 @@ lllog_loop(void) {
 		pthd = LOG_PREV_THD;
 		test_aysncthd = pthd;  // test asyn cost only
 		assert(cos_get_thd_id() == LOG_LOOP_THD);
+#if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION)
 		lmgr_action();
 		clear_owner_commit();
+#endif
 		LOG_PREV_THD = 0;
 		LOG_PREV_SPD = 0;
 		cos_switch_thread(pthd, 0);
@@ -224,8 +203,10 @@ llog_process(spdid_t spdid)
 	/*  Log the processing as an event for that any thread that is
 	    still in PI state before process starts
 	*/
+#if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION)
 	evt_enqueue(LOG_LOOP_THD, LOG_PREV_SPD, cos_spd_id(),
 		    0, 0, EVT_LOG_PROCESS);
+#endif
 
 	while (LOG_PREV_THD == cos_get_thd_id()) cos_switch_thread(LOG_LOOP_THD, 0);
 

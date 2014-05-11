@@ -40,6 +40,23 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+/*****  Work mode *********/
+//#define DETECTION_MODE
+#define LOGEVENTS_MODE
+/**************************/
+
+/*****  Measure mode *******/
+//#define MEAS_LOG_SYNCACTIVATION 
+//#define MEAS_LOG_ASYNCACTIVATION
+//#define MEAS_LOG_CASEIP      // cost of event_enqueue()
+//#define MEAS_LOG_CHECKING      // per event processing time (with detection mode only)
+/**************************/
+
+#ifdef MEAS_LOG_CHECKING
+#define DETECTION_MODE
+#undef  LOGEVENTS_MODE
+#endif
+
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
 extern int llog_process(spdid_t spdid);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
@@ -153,60 +170,10 @@ print_evt_info(struct evt_entry *entry)
 	return;
 }
 
-/* // par1: to_thd  par2: from spd  par3: to_spd  par4: func_num  par5: para */
-/* static inline CFORCEINLINE void */
-/* evt_omitted(int to_thd, unsigned long from_spd, unsigned long to_spd, int func_num, int para, int evt_type, int owner) */
-/* { */
-/* 	int cont_spd = cos_spd_id(); */
-	
-/* 	int par1 = (evt_type<<28) | (func_num<<24) | (para<<16) | (to_thd<<8) | (owner); */
-/* 	unsigned long par2 = from_spd;  // this can be cap_no */
-/* 	unsigned long par3 = to_spd;    // this can be cap_no */
-	
-/* 	llog_contention(cos_spd_id(), par1, par2, par3); */
-	
-/* 	return; */
-/* } */
-
-/* static inline CFORCEINLINE int  */
-/* evt_ring_is_full() */
-/* { */
-/* 	int capacity, size; */
-
-/* 	assert(evt_ring); */
-/* 	capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring)); */
-/* 	size = CK_RING_SIZE(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring)); */
-/* 	if (unlikely(capacity == size + 1)) return 1; */
-/* 	else return 0; */
-/* } */
-
-/* static inline CFORCEINLINE void  */
-/* evt_conf(struct evt_entry *evt, int par1, unsigned long par2, unsigned long par3, int par4, int par5, int type) */
-/* { */
-/* 	assert(evt); */
-
-/* 	evt->from_thd	= cos_get_thd_id(); */
-/* 	evt->to_thd	= par1; */
-/* 	evt->from_spd	= par2; */
-/* 	evt->to_spd	= par3; */
-/* 	evt->func_num	= par4; */
-/* 	evt->para	= par5; */
-/* 	evt->evt_type	= type; */
-/* 	rdtscll(evt->time_stamp); */
-
-/* 	// do the introspection and set bit here */
-
-/* 	/\* print_evt_info(evt); *\/ */
-
-/* 	return; */
-/* } */
-
-//#define MEAS_LOG_SYNCACTIVATION 
 #ifdef MEAS_LOG_SYNCACTIVATION
 volatile unsigned long long log_acti_start, log_acti_end;
 #endif
 
-//#define MEAS_LOG_CASEIP
 #ifdef MEAS_LOG_CASEIP
 volatile unsigned long long log_caseip_start, log_caseip_end;
 #endif
@@ -228,6 +195,18 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 		printc("created RB with capacity %d\n", capacity);
 
 	}
+
+#ifdef MEAS_LOG_SYNCACTIVATION  // why this does not end itself? (many measurements)
+	rdtscll(log_acti_start);
+	llog_process(cos_spd_id());
+	rdtscll(log_acti_end);
+	printc("sync activation cost -- %llu\n", log_acti_end - log_acti_start);
+	return;
+#endif
+
+#ifdef MEAS_LOG_ASYNCACTIVATION  // this is fine
+	return;
+#endif
 
 	struct evt_entry *evt;
 	int old, new;
@@ -269,45 +248,6 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 
 	return;
 }
-
-	/* int size; */
-	/* size = CK_RING_SIZE(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring)); */
-
-/* #ifdef LOG_MONITOR   // since ck library now has LOG_MONITOR */
-/* 	int owner = CK_RING_ENQUEUE_SPSCCONT(logevt_ring, evt_ring); */
-/* 	if (unlikely(owner)) {   // contention on this RB */
-/* 		printc("<<<Contention on RB !!!!! %lu thd %d (owner %d)>>>\n",  */
-/* 		       cos_spd_id(), cos_get_thd_id(), owner); */
-/* 		evt_omitted(par1, par2, par3, par4, par5, evt_type, owner); */
-/* 		return; */
-/* 	} */
-
-/* 	// log the event (take slot first, then record) */
-/* 	struct evt_entry *evt; */
-/* 	while(!(evt = (struct evt_entry *)CK_RING_ENQUEUE_SPSCPRE(logevt_ring, evt_ring))); */
-/* 	evt_conf(evt, par1, par2, par3, par4, par5, evt_type); */
-
-/* 	// process log if any RB is full */
-/* #ifdef MEAS_LOG_SYNCACTIVATION   */
-/* 	while (unlikely(evt_ring_is_full())) { */
-/* 		assert(par1 != LLLOG_SPD); */
-/* 		rdtscll(log_acti_start); */
-/* 		// immediately return from the log_mgr (pretend all processed) */
-/* 		llog_process(cos_spd_id()); */
-/* 		rdtscll(log_acti_end); */
-/* 		/\* printc("FULL! invoke/switch/process cost %llu\n", log_acti_end-log_acti_start); *\/ */
-/* 	} */
-/* #else */
-/* 	if (unlikely(evt_ring_is_full())) { */
-/* 		// contention RB better not be full before any other RB is full */
-/* 		assert(par1 != LLLOG_SPD); */
-/* 		/\* printc("<<<FULL !!!!! spd %lu thd %d>>>\n", cos_spd_id(), cos_get_thd_id()); *\/ */
-/* 		llog_process(cos_spd_id()); */
-/* 	} */
-/* #endif	 */
-/* #endif	 */
-/* 	return; */
-/* } */
 
 #endif /* LOGGER_H */
 

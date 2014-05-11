@@ -7,10 +7,8 @@
 #include <periodic_wake.h>
 #include <timed_blk.h>
 
+#include <log.h>
 #include <ll_log.h>
-
-// also set this in log.c
-//#define MEAS_LOG_ASYNCACTIVATION  /* cost of async processing activation overhead*/
 
 /* extern int llog_contention(spdid_t spdid, int par1, int par2, int par3); */
 
@@ -58,9 +56,6 @@ void cos_init(void)
 
 	} else {
 		if (cos_get_thd_id() == high) {
-
-			return;
-
 			int lm_sync_period;
 			lm_sync_period = llog_getsyncp(cos_spd_id());
 			periodic_wake_create(cos_spd_id(), lm_sync_period);
