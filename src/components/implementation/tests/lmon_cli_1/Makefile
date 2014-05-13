@@ -2,7 +2,7 @@ C_OBJS=logmon_cli1.o
 ASM_OBJS=
 COMPONENT=lmoncli1.o
 INTERFACES=
-DEPENDENCIES=periodic_wake sched printc lock  mem_mgr lmon_ser1 timed_blk ll_log  valloc_local
+DEPENDENCIES=periodic_wake sched printc lock  mem_mgr lmon_ser1 timed_blk ll_log  
 IF_LIB=
 
 include ../../Makefile.subsubdir

@@ -2,7 +2,7 @@ C_OBJS=port_mgr.o
 ASM_OBJS=
 COMPONENT=port.o
 INTERFACES=net_portns
-DEPENDENCIES=lock sched printc ll_log  valloc_local
+DEPENDENCIES=lock sched printc ll_log  
 IF_LIB=
 
 include ../../Makefile.subsubdir

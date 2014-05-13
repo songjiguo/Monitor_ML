@@ -2,7 +2,7 @@ C_OBJS=deferrable.o
 ASM_OBJS=
 COMPONENT=ds.o
 INTERFACES=sched sched_hier
-DEPENDENCIES=printc sched_hier recovery_upcall mem_mgr ll_log  valloc_local
+DEPENDENCIES=printc sched_hier recovery_upcall mem_mgr ll_log  
 IF_LIB=../complib.o
 FN_PREPEND=parent_
 

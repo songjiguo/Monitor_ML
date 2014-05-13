@@ -3,16 +3,13 @@
 #include <sched.h>
 #include <mem_mgr.h>
 
-#include <valloc.h>
-
 #include <periodic_wake.h>
 #include <timed_blk.h>
 #include <lmon_ser2.h>
 
-static int low = 14;
-static int mid = 13;
-static int hig = 12;
-
+int low;
+int mid;
+int hig;
 
 volatile int spin = 1;
 volatile int spin2 = 1;
@@ -30,46 +27,232 @@ cos_lock_t lock1, lock2;
 #define LOCK2_INIT()    lock_static_init(&lock2)
 
 
-#ifndef EXAMINE_PI
-int try_cs_hp(void) { return 0;}
-int try_cs_mp(void) { return 0;}
-int try_cs_lp(void) { return 0;}
-#endif
+static void local_spin()
+{
+	int i = 0;
+	while(i++ < 1000);
+	
+	return;
+}
 
+/*******************************/
 #ifdef NORMAL
 vaddr_t lmon_ser1_test(void)
 {
 	lmon_ser2_test();
 	return 0;
 }
-#elif defined MEAS_LOG_OVERHEAD
-
-int try_cs_hp(void)
+/*******************************/
+#elif defined EXAMINE_PI
+int try_cs_mp(void) 
 {
+	while(1) {
+		periodic_wake_wait(cos_spd_id());
+		/* printc("thread m : %d is doing something\n", cos_get_thd_id()); */
+		timed_event_block(cos_spd_id(), 1);
+
+		LOCK2_TAKE();
+		/* printc("thread m : %d has the lock2\n", cos_get_thd_id()); */
+		spin = 0;
+		/* printc("thread m : %d try to take lock1\n", cos_get_thd_id()); */
+		LOCK1_TAKE();
+		/* printc("thread m : %d has the lock1\n", cos_get_thd_id()); */
+		LOCK1_RELEASE();
+		/* printc("thread m : %d released lock1\n", cos_get_thd_id()); */
+		LOCK2_RELEASE();
+		/* printc("thread m : %d released lock2\n", cos_get_thd_id()); */
+	}
 	return 0;
 }
 
-int try_cs_mp(void)
+int try_cs_hp(void)
 {
+	int i;
+	while(1) {
+		/* periodic_wake_wait(cos_spd_id()); */
+		/* printc("thread h : %d is doing something\n", cos_get_thd_id()); */
+		timed_event_block(cos_spd_id(), 5);
+		spin2 = 0;
+		/* printc("thread h : %d try to take lock2\n", cos_get_thd_id()); */
+		LOCK2_TAKE();
+		/* printc("thread h : %d has the lock2\n", cos_get_thd_id()); */
+		LOCK2_RELEASE();
+		/* printc("thread h : %d released lock2\n", cos_get_thd_id()); */
+	}
+	return 0;
+}
+
+
+int try_cs_lp(void)
+{
+	volatile int jj, kk;
+	while (1) {
+		/* periodic_wake_wait(cos_spd_id()); */
+		/* printc("<<< thread l : %d is doing something \n", cos_get_thd_id()); */
+		/* printc("thread l : %d try to take lock1\n", cos_get_thd_id()); */
+		LOCK1_TAKE();
+		/* printc("thread l : %d has the lock1\n", cos_get_thd_id()); */
+		/* printc("thread l : %d spin\n", cos_get_thd_id()); */
+		spin = 1;
+		while (spin);
+		spin = 1;
+		/* printc("thread l : %d after spin\n", cos_get_thd_id()); */
+		jj = 0;
+		kk = 0;
+		while(jj++ < 10000){
+			while(kk++ < 100000);
+		}
+		/* printc("thread l : %d spin2\n", cos_get_thd_id()); */
+		spin2 = 1;
+		while(spin2);
+		spin2 = 1;
+		/* printc("thread l : %d after spin2\n", cos_get_thd_id()); */
+ 		/* printc("thread l : %d release lock1\n", cos_get_thd_id()); */
+		LOCK1_RELEASE();
+	}
+	return 0;
+}
+
+/**************************/
+#elif defined EXAMINE_SCHED
+unsigned long long kevin, andy;
+
+int try_cs_hp(void)
+{
+	if (hig == 0) {
+		hig = cos_get_thd_id();
+		printc("<<<high thd %d -- SCHED test>>>\n", hig);
+	}
+	kevin = 0;
+	while(kevin++ < 1000) {
+		sched_block(cos_spd_id(), 0);
+		local_spin();
+	}
+
 	return 0;
 }
 
 int try_cs_lp(void)
 {
+	if (low == 0) {
+		low = cos_get_thd_id();
+		printc("<<<low thd %d>>>\n", low);
+	}
+	andy = 0;
+	while(andy++ < 1000) {
+		sched_wakeup(cos_spd_id(), hig);
+		local_spin();
+	}
+
 	return 0;
 }
 
-vaddr_t lmon_ser1_test(void)
+int try_cs_mp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
+
+/******************************/
+#elif defined EXAMINE_MM
+unsigned long long kevin, andy;
+
+#define PAGE_NUM 10
+vaddr_t s_addr[PAGE_NUM];
+vaddr_t d_addr[PAGE_NUM];
+
+int try_cs_hp(void)
 {
+	int i;
+	if (hig == 0) {
+		hig = cos_get_thd_id();
+		printc("<<<high thd %d -- MM test>>>\n", hig);
+	}
+
+	kevin = 0;
+	while(kevin++ < 10) {
+		for (i = 0; i<PAGE_NUM; i++) {
+			s_addr[i] = (vaddr_t)cos_get_vas_page();
+			d_addr[i] = lmon_ser2_test();
+			
+			/* printc("s address -- %x\n", s_addr[i]); */
+			/* printc("d address -- %x\n", d_addr[i]); */
+		}
+
+		// start testing here........
+		i = 0;
+		for (i = 0; i<PAGE_NUM; i++) {
+			mman_get_page(cos_spd_id(), s_addr[i], 0);
+
+			mman_alias_page(cos_spd_id(), s_addr[i], cos_spd_id()+1, d_addr[i]);
+			mman_revoke_page(cos_spd_id(), s_addr[i], 0);
+			/* rdtscll(end); */
+			/* printc("grant-alias-revoke cost %llu\n", end - start); */
+			/* mman_release_page(cos_spd_id(), s_addr[i], 0); */
+		}
+
+		local_spin();
+	}
+
 	return 0;
 }
-#elif defined EXAMINE_PI
 
+int try_cs_lp(void) { return 0; }
+int try_cs_mp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
 
+/**************************/
+#elif defined EXAMINE_FS
+/* #include <rtorrent.h> */
+/* #include <cbuf.h> */
 
-//#define CAS_TEST
+char buffer[1024];
 
-#ifdef CAS_TEST
+unsigned long long kevin, andy;
+int try_cs_hp(void)
+{
+	if (hig == 0) {
+		hig = cos_get_thd_id();
+		printc("<<<high thd %d>>>\n", hig);
+	}
+	/* kevin = 0; */
+	/* while(kevin++ < 1) { */
+	/* 	td_t t1; */
+	/* 	long evt1; */
+	/* 	char *params1 = "foo/"; */
+	/* 	char *params2 = "bar"; */
+	/* 	char *params3 = "foo/bar"; */
+	/* 	char *data1 = "1234567890", *data2 = "asdf;lkj"; */
+	/* 	unsigned int ret1; */
+
+	/* 	evt1 = evt_create(cos_spd_id()); */
+	/* 	assert(evt1 > 0); */
+	/* 	printc("1\n"); */
+	/* 	t1 = tsplit(cos_spd_id(), td_root, params1, strlen(params1), TOR_ALL, evt1); */
+	/* 	if (t1 < 1) { */
+	/* 		printc("UNIT TEST FAILED: tsplit failed %d\n", t1); return -1; */
+	/* 	} */
+
+	/* 	printc("2\n"); */
+	/* 	ret1 = twrite_pack(cos_spd_id(), t1, data1, strlen(data1)); */
+	/* 	printc("write %d , ret %d\n", strlen(data1), ret1); */
+
+	/* 	ret1 = tread_pack(cos_spd_id(), t1, buffer, 1023); */
+	/* 	if (ret1 > 0) buffer[ret1] = '\0'; */
+	/* 	printc("read %d (%d): %s (%s)\n", ret1, strlen(data1), buffer, data1); */
+	/* 	assert(!strcmp(buffer, data1)); */
+	/* 	assert(ret1 == strlen(data1)); */
+	/* 	buffer[0] = '\0'; */
+
+	/* 	trelease(cos_spd_id(), t1); */
+	/* } */
+
+	return 0;
+}
+
+int try_cs_mp(void) { return 0;}
+int try_cs_lp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
+
+/************************************/
+#elif defined CAS_TEST
 /* compute the highest power of 2 less or equal than 32-bit v */
 static unsigned int get_powerOf2(unsigned int orig) {
         unsigned int v = orig - 1;
@@ -200,143 +383,14 @@ int try_cs_mp(void)
 	test_loop(55, 2, 3, 4, 5, 6);
 	return;
 }
-#else
-
-int try_cs_mp(void) 
-{
-	while(1) {
-		periodic_wake_wait(cos_spd_id());
-		/* printc("thread m : %d is doing something\n", cos_get_thd_id()); */
-		timed_event_block(cos_spd_id(), 1);
-
-		LOCK2_TAKE();
-		/* printc("thread m : %d has the lock2\n", cos_get_thd_id()); */
-		spin = 0;
-		/* printc("thread m : %d try to take lock1\n", cos_get_thd_id()); */
-		LOCK1_TAKE();
-		/* printc("thread m : %d has the lock1\n", cos_get_thd_id()); */
-		LOCK1_RELEASE();
-		/* printc("thread m : %d released lock1\n", cos_get_thd_id()); */
-		LOCK2_RELEASE();
-		/* printc("thread m : %d released lock2\n", cos_get_thd_id()); */
-	}
-	return 0;
-}
+#else 
+int try_cs_hp(void) { return 0;}
+int try_cs_mp(void) { return 0;}
+int try_cs_lp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
 #endif
 
-int try_cs_hp(void)
-{
-	int i;
-	while(1) {
-		/* periodic_wake_wait(cos_spd_id()); */
-		/* printc("thread h : %d is doing something\n", cos_get_thd_id()); */
-		timed_event_block(cos_spd_id(), 5);
-		spin2 = 0;
-		/* printc("thread h : %d try to take lock2\n", cos_get_thd_id()); */
-		LOCK2_TAKE();
-		/* printc("thread h : %d has the lock2\n", cos_get_thd_id()); */
-		LOCK2_RELEASE();
-		/* printc("thread h : %d released lock2\n", cos_get_thd_id()); */
-	}
-	return 0;
-}
 
-
-int try_cs_lp(void)
-{
-	volatile int jj, kk;
-	while (1) {
-		/* periodic_wake_wait(cos_spd_id()); */
-		/* printc("<<< thread l : %d is doing something \n", cos_get_thd_id()); */
-		/* printc("thread l : %d try to take lock1\n", cos_get_thd_id()); */
-		LOCK1_TAKE();
-		/* printc("thread l : %d has the lock1\n", cos_get_thd_id()); */
-		/* printc("thread l : %d spin\n", cos_get_thd_id()); */
-		spin = 1;
-		while (spin);
-		spin = 1;
-		/* printc("thread l : %d after spin\n", cos_get_thd_id()); */
-		jj = 0;
-		kk = 0;
-		while(jj++ < 10000){
-			while(kk++ < 100000);
-		}
-		/* printc("thread l : %d spin2\n", cos_get_thd_id()); */
-		spin2 = 1;
-		while(spin2);
-		spin2 = 1;
-		/* printc("thread l : %d after spin2\n", cos_get_thd_id()); */
- 		/* printc("thread l : %d release lock1\n", cos_get_thd_id()); */
-		LOCK1_RELEASE();
-	}
-	return 0;
-}
-
-vaddr_t lmon_ser1_test(void)
-{
-	return 0;
-}
-#elif defined EXAMINE_DEADLINE
-
-volatile int spin = 1;
-unsigned long long start, end, sum;
-
-static int blk_num = 0;
-
-static void periodic_doing(int exe_t, int period)  // in ticks
-{
-	volatile unsigned long i = 0;
-
-	unsigned long exe_cycle;
-	exe_cycle = exe_t*sched_cyc_per_tick();
-
-	printc("In spd %ld Thd %d, period %d, execution time %d in %lu cycles\n", cos_spd_id(),cos_get_thd_id(), period, exe_t, exe_cycle);
-
-	while(1) {
-		periodic_wake_wait(cos_spd_id());
-		printc("thread %d is doing something\n", cos_get_thd_id());
-		start = end = sum = 0;
-		while(1) {
-			rdtscll(start);
-			while(i++ < 1000);
-			rdtscll(end);
-			sum += end-start;
-			if (sum >= exe_cycle) break;
-		}
-		/* while (i++ < exe_cycle); */
-		/* if (cos_get_thd_id() == hig && blk_num++ > 10) sched_block(cos_spd_id(), 0); */
-		i = 0;		
-	}
-	return;
-}
-
-static void hp_deadline(void)   // c/t  = 2/10
-{
-	periodic_doing(2,10);
-	return;
-}
-
-static void mp_deadline(void)    // ct/t 4/22
-{
-	periodic_doing(4,22);
-	return;
-}
-
-static void lp_deadline(void)    // ct/t 12/56
-{
-	periodic_doing(12,56);
-	return;
-}
-
-vaddr_t lmon_ser1_test(void)
-{
-	if (cos_get_thd_id() == hig) hp_deadline();
-	if (cos_get_thd_id() == mid) mp_deadline();
-	if (cos_get_thd_id() == low) lp_deadline();
-
-	return 0;
-}
-#endif
 
 void 
 cos_init(void) 

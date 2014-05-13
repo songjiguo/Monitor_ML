@@ -61,7 +61,7 @@ void cos_init(void)
 			periodic_wake_create(cos_spd_id(), lm_sync_period);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				printc("periodic process log....(thd %d)\n", cos_get_thd_id());
+				/* printc("periodic process log....(thd %d)\n", cos_get_thd_id()); */
 #ifdef MEAS_LOG_ASYNCACTIVATION				
 				rdtscll(log_start);
 #endif

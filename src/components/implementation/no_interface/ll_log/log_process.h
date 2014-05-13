@@ -365,6 +365,7 @@ get_event(struct evt_entry *entry, CK_RING_INSTANCE(logevt_ring) *evtring, int i
 
 	while((CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, entry))) {
 		if (!entry->committed) {
+			if (!entry->owner) continue;  // not a valid entry
 			printc("set thd %d 's eip (find next)\n", entry->owner);
 			assert(cos_thd_cntl(COS_THD_IP_LFT, entry->owner, 0, 0) != -1);
 			continue;
@@ -562,7 +563,12 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 	assert(ttc && entry);
 	assert(entry->evt_type > 0);
 	
-	if (!MONITOR(ttc)) return;
+	/* if (!MONITOR(ttc)) return; */
+
+	// test spd exec only
+	if (ttc->thd_id != 13 && ttc->thd_id != 15) return;
+	/* if (entry->to_spd !=4 && entry->from_spd !=4) return; // for mm test only */
+	if (entry->to_spd !=3 && entry->from_spd !=3) return; // for sched test only
 
 	ttc_spec = &thd_specs[ttc->thd_id];
 	assert(ttc_spec);
@@ -602,12 +608,15 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 			ttc->exec_allinv_in_spd_max_spd = spdid;
 		}
 
-		PRINTD_SPDEXEC("thd %d max exec_oneinv_allspd %llu to spd %d\n",
-		       ttc->thd_id, ttc_spec->exec_oneinv_allspd_max[spdid], spdid);
 		PRINTD_SPDEXEC("thd %d max exec_oneinv_in_spd %llu in spd %d\n",
-		       ttc->thd_id, ttc_spec->exec_oneinv_in_spd_max[spdid], spdid);
-		PRINTD_SPDEXEC("thd %d max exec_allinv_in_spd %llu in spd %d\n",
-		       ttc->thd_id, ttc_spec->exec_allinv_in_spd_max[spdid], spdid);
+		       ttc->thd_id, ttc->exec_oneinv_in_spd[spdid], spdid);
+
+		/* PRINTD_SPDEXEC("thd %d max exec_oneinv_in_spd %llu in spd %d\n", */
+		/*        ttc->thd_id, ttc_spec->exec_oneinv_in_spd_max[spdid], spdid); */
+		/* PRINTD_SPDEXEC("thd %d max exec_oneinv_allspd %llu to spd %d\n", */
+		/*        ttc->thd_id, ttc_spec->exec_oneinv_allspd_max[spdid], spdid); */
+		/* PRINTD_SPDEXEC("thd %d max exec_allinv_in_spd %llu in spd %d\n", */
+		/*        ttc->thd_id, ttc_spec->exec_allinv_in_spd_max[spdid], spdid); */
 #endif
 #ifdef DETECTION_MODE
 		if (ttc->exec_oneinv_in_spd[spdid] > 
@@ -954,7 +963,7 @@ constraint_check(struct evt_entry *entry)
 	
 	check_thd_timing(ttc, ttn, entry, up_t);
 	check_inv_spdexec(ttc, ttn, entry, up_t);
-	check_priority_inversion(ttc, ttn, entry);
+	//check_priority_inversion(ttc, ttn, entry);
 
 	/* Constraint check done ! */
 	/***************************/

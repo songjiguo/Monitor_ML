@@ -10,6 +10,7 @@
 
 //#include <cos_alloc.h>
 #include <pingpong_test.h>
+
 #include <valloc.h>
 
 #define NUM 6

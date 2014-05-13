@@ -59,7 +59,7 @@
 
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
 extern int llog_process(spdid_t spdid);
-extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
+/* extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages); */
 extern int llog_contention(spdid_t spdid, int par1, int par2, int par3);
 
 #include <cos_list.h>
@@ -102,6 +102,9 @@ enum{
 	FN_SCHED_BLOCK = 1,
 	FN_SCHED_WAKEUP,
 	FN_SCHED_TIMEOUT,
+	FN_MM_GET,
+	FN_MM_ALIAS,
+	FN_MM_REVOKE,
 	FN_LOCK_COMPONENT_TAKE,
 	FN_LOCK_COMPONENT_RELEASE,
 	FN_MAX
@@ -170,6 +173,18 @@ print_evt_info(struct evt_entry *entry)
 	return;
 }
 
+static inline CFORCEINLINE int 
+evt_ring_is_full()
+{
+	int capacity, size;
+
+	assert(evt_ring);
+	capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
+	size = CK_RING_SIZE(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
+	if (unlikely(capacity == size + 1)) return 1;
+	else return 0;
+}
+
 #ifdef MEAS_LOG_SYNCACTIVATION
 volatile unsigned long long log_acti_start, log_acti_end;
 #endif
@@ -188,12 +203,13 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 #endif
 
 	if (unlikely(!evt_ring)) {        // create shared RB
-		vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
-		assert(cli_addr);
-		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), cli_addr)))) BUG();
+		/* vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */
+		/* printc("to create RB in spd %ld\n", cos_spd_id()); */
+		char *addr;
+		assert((addr = cos_get_heap_ptr()));
+		cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
+		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr)))) BUG();
 		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
-		printc("created RB with capacity %d\n", capacity);
-
 	}
 
 #ifdef MEAS_LOG_SYNCACTIVATION  // why this does not end itself? (many measurements)
@@ -211,13 +227,13 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 	struct evt_entry *evt;
 	int old, new;
 	do {
-		evt = (struct evt_entry *) CK_RING_GETTAIL(logevt_ring, evt_ring);
-		if (unlikely(!evt)) {
-			printc("full !!!! \n");
+		if (unlikely(evt_ring_is_full())) {
+			/* printc("full !!!! \n"); */
 			llog_process(cos_spd_id());
-			evt = (struct evt_entry *) CK_RING_GETTAIL(logevt_ring, evt_ring);
-			assert(evt);
 		}
+		evt = (struct evt_entry *) CK_RING_GETTAIL(logevt_ring, evt_ring);
+		if (!evt) continue;
+
 		old = 0;
 		new = cos_get_thd_id();
 		assert(evt && evt_ring);

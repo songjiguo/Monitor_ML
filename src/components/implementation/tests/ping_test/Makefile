@@ -2,7 +2,7 @@ C_OBJS=ping.o
 ASM_OBJS=
 COMPONENT=pi.o
 INTERFACES=
-DEPENDENCIES=lock sched printc valloc_local mem_mgr pong_test ll_log 
+DEPENDENCIES=lock sched printc  mem_mgr pong_test ll_log valloc
 IF_LIB=
 
 include ../../Makefile.subsubdir

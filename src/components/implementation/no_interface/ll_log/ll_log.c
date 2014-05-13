@@ -62,7 +62,7 @@ lmgr_action()
 	struct evt_entry *evt;
 
 	event_num = 0;
-	printc("start process log ....\n");
+	/* printc("start process log ....\n"); */
 
 	rdtscll(lpc_start);
 	evt = find_next_evt(NULL);
@@ -81,7 +81,7 @@ lmgr_action()
 	} while ((evt = find_next_evt(evt)));
 
 	/* assert(test_num++ < 2);  // remove this later */
-	printc("log process done (%d evts)\n", event_num);
+	/* printc("log process done (%d evts)\n", event_num); */
 done:
 	rdtscll(lpc_end);
 	lpc_last = lpc_end - lpc_start;
