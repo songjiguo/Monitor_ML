@@ -193,39 +193,42 @@ volatile unsigned long long log_acti_start, log_acti_end;
 volatile unsigned long long log_caseip_start, log_caseip_end;
 #endif
 
+
+/* if (cos_get_thd_id() == 15) some_dealy(evt_ring->p_tail); */
+/* #define TOTAL_AMNT 128 */
+/* static void */
+/* some_dealy(int tail) */
+/* { */
+/* 	unsigned long long t; */
+/* 	unsigned long val; */
+/* 	volatile unsigned long i = 0; */
+/* 	unsigned int delayi = 10;    /\* 10: %7 0: never call ss, 128: always call ss*\/ */
+
+/* 	rdtscll(t); */
+/* 	val = (int)(t & (TOTAL_AMNT-1)); */
+/* 	if (val < delayi) { */
+/* 		/\* while(i++ < 1000); *\/ */
+/* 		while(i++ < 10) { */
+/* 			printc("delay...thd %d (tail %d)\n", cos_get_thd_id(), evt_ring->p_tail */
+/* 				); */
+/* 		} */
+/* 	} */
+/* 	return; */
+/* } */
+
 static inline CFORCEINLINE void 
-evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
+_evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
-	__asm__ volatile(".balign 512");  // align instructions
+	// align the following instructions
+	// change this to __atrribute__((aligned(512))) later
+	__asm__ volatile(".balign 512");
+
+	struct evt_entry *evt;
+	int old, new;
 
 #ifdef MEAS_LOG_CASEIP
 	rdtscll(log_caseip_start);
 #endif
-
-	if (unlikely(!evt_ring)) {        // create shared RB
-		/* vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */
-		/* printc("to create RB in spd %ld\n", cos_spd_id()); */
-		char *addr;
-		assert((addr = cos_get_heap_ptr()));
-		cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
-		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr)))) BUG();
-		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
-	}
-
-#ifdef MEAS_LOG_SYNCACTIVATION  // why this does not end itself? (many measurements)
-	rdtscll(log_acti_start);
-	llog_process(cos_spd_id());
-	rdtscll(log_acti_end);
-	printc("sync activation cost -- %llu\n", log_acti_end - log_acti_start);
-	return;
-#endif
-
-#ifdef MEAS_LOG_ASYNCACTIVATION  // this is fine
-	return;
-#endif
-
-	struct evt_entry *evt;
-	int old, new;
 	do {
 		if (unlikely(evt_ring_is_full())) {
 			/* printc("full !!!! \n"); */
@@ -238,7 +241,7 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 		new = cos_get_thd_id();
 		assert(evt && evt_ring);
 	} while(unlikely(!(cos_cas((unsigned long *)&evt->owner, (unsigned long)old,
-			   (unsigned long )new))) && evt_ring->p_tail++);
+			   (unsigned long )new))));
 
 	old = evt_ring->p_tail;
 	new = evt_ring->p_tail + 1;
@@ -262,6 +265,36 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 
 	/* print_evt_info(evt); */
 
+	return;
+}
+
+static inline CFORCEINLINE void 
+evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
+{
+	if (unlikely(!evt_ring)) {        // create shared RB
+		/* vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */
+		/* printc("to create RB in spd %ld\n", cos_spd_id()); */
+		char *addr;
+		assert((addr = cos_get_heap_ptr()));
+		cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
+		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr)))) BUG();
+		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
+	}
+
+#ifdef MEAS_LOG_SYNCACTIVATION  // why this does not end itself? (many measurements)
+	rdtscll(log_acti_start);
+	llog_process(cos_spd_id());
+	rdtscll(log_acti_end);
+	printc("sync activation cost -- %llu\n", log_acti_end - log_acti_start);
+	return;
+#endif
+
+#ifdef MEAS_LOG_ASYNCACTIVATION  // this is fine
+	return;
+#endif
+
+	_evt_enqueue(par1, par2, par3, par4, par5, evt_type);
+	
 	return;
 }
 

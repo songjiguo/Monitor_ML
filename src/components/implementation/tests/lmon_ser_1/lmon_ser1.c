@@ -310,7 +310,7 @@ CK_RING_INSTANCE(test_logevt_ring) *test_evt_ring;
 #endif
 
 #ifndef FUNALIGN
-#define FUNALIGN __attribute__((aligned(32)))
+#define FUNALIGN __attribute__((aligned(512)))
 #endif
 
 #ifndef CFORCEINLINE
@@ -321,7 +321,7 @@ CK_RING_INSTANCE(test_logevt_ring) *test_evt_ring;
 static inline CFORCEINLINE void 
 test_loop(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
-	__asm__ volatile(".balign 512");
+	/* __asm__ volatile(".balign 512"); */
 
 	struct test_evt_entry *evt;
 	int old, new;
@@ -380,9 +380,14 @@ int try_cs_mp(void)
 
 	CK_RING_INIT(test_logevt_ring, (CK_RING_INSTANCE(test_logevt_ring) *)((void *)test_evt_ring), NULL, get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_test_logevt_ring))/sizeof(struct test_evt_entry)));
 
+	__asm__ volatile(".balign 512");
 	test_loop(55, 2, 3, 4, 5, 6);
-	return;
+	return 0;
 }
+int try_cs_hp(void) { return 0;}
+int try_cs_lp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
+
 #else 
 int try_cs_hp(void) { return 0;}
 int try_cs_mp(void) { return 0;}
