@@ -513,21 +513,23 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
                 /* if not match, an error occurs */
 		if (m->epoch != ttn->epoch) {
 			/* printc("epoch mismatch: m %d (%d) ttn %d (%d) ", m->thd_id, m->epoch, ttn->thd_id, ttn->epoch); */
+#ifdef LOGEVENTS_MODE
 			assert(0);
+#endif
 #ifdef DETECTION_MODE
 			faulty_spd_localizer(root, entry, CONS_SCHEDULING);
 #endif
 		}
 		
 		m->pi_time = ttc->tot_exec - m->pi_start_t - higher_exec(m, 1);
-		/* printc("thd %d pi_time %llu tot_exec %llu pi_start_t %llu track_all %llu\n",  */
-		/*        m->thd_id, m->pi_time, ttc->tot_exec,  */
-		/*        m->pi_start_t, higher_exec(m,1)); */
+		printc("thd %d pi_time %llu tot_exec %llu pi_start_t %llu track_all %llu\n",
+		       m->thd_id, m->pi_time, ttc->tot_exec,
+		       m->pi_start_t, higher_exec(m,1));
 		
 		log_or_det_pit(root, m, entry, m->pi_time);
-		/* printc("After PI remove: "); */
-		/* print_deps(m); */
-		/* printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time); */
+		printc("After PI remove: ");
+		print_deps(m);
+		printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time);
 		m->pi_start_t = 0;
 		root->h = m->n;
 		
@@ -567,15 +569,15 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 
 	// test spd exec only
 	if (ttc->thd_id != 13 && ttc->thd_id != 15) return;
-	/* if (entry->to_spd !=4 && entry->from_spd !=4) return; // for mm test only */
-	if (entry->to_spd !=3 && entry->from_spd !=3) return; // for sched test only
+	if (entry->to_spd !=4 && entry->from_spd !=4) return; // for mm test only
+	/* if (entry->to_spd !=3 && entry->from_spd !=3) return; // for sched test only */
 
 	ttc_spec = &thd_specs[ttc->thd_id];
 	assert(ttc_spec);
 	type = entry->evt_type;
 	
 	switch (type) {
-	case EVT_SINV: // invocation number
+	case EVT_SINV: // invocation number (TODO: move this to EVT_CINV to invlude invocation)
 		spdid = entry->to_spd;
 		ttc->invocation[spdid]++;
 		ttc->exec_oneinv_allspd[spdid] = ttc->tot_exec; // start invocation here
@@ -590,7 +592,7 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 		}
 #endif		
 		break;
-	case EVT_SRET: // invocation spd exec
+	case EVT_SRET: // invocation spd exec (TODO: move this to EVT_CRET to include invocation)
 		spdid = entry->from_spd;
 		ttc->exec_oneinv_allspd[spdid] = ttc->tot_exec - ttc->exec_oneinv_allspd[spdid];
 		ttc->exec_oneinv_in_spd[spdid] += up_t;
@@ -619,10 +621,15 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 		/*        ttc->thd_id, ttc_spec->exec_allinv_in_spd_max[spdid], spdid); */
 #endif
 #ifdef DETECTION_MODE
-		if (ttc->exec_oneinv_in_spd[spdid] > 
-		    ttc_spec->exec_oneinv_in_spd_max[spdid]) {
+		// 5000 for sched  test spdexec (some delay)
+		// 20000 for mm
+		if (ttc->exec_oneinv_in_spd[spdid] > 20000) {
 			faulty_spd_localizer(ttc, entry, CONS_ONEINV_SPD_EXEC);
 		}
+		/* if (ttc->exec_oneinv_in_spd[spdid] >  */
+		/*     ttc_spec->exec_oneinv_in_spd_max[spdid]) { */
+		/* 	faulty_spd_localizer(ttc, entry, CONS_ONEINV_SPD_EXEC); */
+		/* } */
 		if (ttc->exec_allinv_in_spd[spdid] > 
 		    ttc_spec->exec_allinv_in_spd_max[spdid]) {
 			faulty_spd_localizer(ttc, entry, CONS_ALLINV_SPD_EXEC);
@@ -962,8 +969,8 @@ constraint_check(struct evt_entry *entry)
 	check_interrupt(ttc, ttn, entry);
 	
 	check_thd_timing(ttc, ttn, entry, up_t);
-	check_inv_spdexec(ttc, ttn, entry, up_t);
-	//check_priority_inversion(ttc, ttn, entry);
+	//check_inv_spdexec(ttc, ttn, entry, up_t);
+	check_priority_inversion(ttc, ttn, entry);
 
 	/* Constraint check done ! */
 	/***************************/
@@ -1046,6 +1053,8 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 	switch (flt_type) {
 	case CONS_ONEINV_SPD_EXEC:
 		faulty_spd = entry->from_spd;
+		printc("overrun --- fault spd is %d\n", faulty_spd);
+		assert(0);
 		break;
 	case CONS_ALLINV_SPD_EXEC:
 		faulty_spd = entry->from_spd; // not sure....
@@ -1063,6 +1072,8 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 	// incorrect scheduling decision after PI ends
 	case CONS_SCHEDULING:
 		faulty_spd = SCHED_SPD;
+		printc("PI fault --- fault spd is %d\n", faulty_spd);
+		assert(0);
 		break;
 	// too long to be in PI state
 	case CONS_PI:

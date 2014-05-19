@@ -38,6 +38,26 @@
 
 #ifdef LOG_MONITOR
 #define MM_LL_LOG
+
+
+// for overrun test only
+#define TOTAL_AMNT 128
+static void some_delay(void) { 
+	return;
+	unsigned long long t;
+	unsigned long val;
+	volatile unsigned long i = 0;
+	unsigned int delayi = 100;    /* 10: %7 0: never call ss, 128: always call ss*/
+	rdtscll(t);
+	val = (int)(t & (TOTAL_AMNT-1));
+	if (val < delayi) {
+		while(i++ < 1000) {
+			/* printc("delay in MM...thd %d (%ld)\n", cos_get_thd_id() ,val); */
+		}
+	}	
+	return;
+}
+
 #endif
 
 #include <cos_list.h>
@@ -374,6 +394,12 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 	vaddr_t ret = -1;
 
 	LOCK();
+
+#ifdef LOG_MONITOR   //for testing only
+	if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15)
+		some_delay();	
+#endif
+
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
 	assert(frame_nrefs(f) == 0);
@@ -398,6 +424,12 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 	vaddr_t ret = 0;
 
 	LOCK();
+
+#ifdef LOG_MONITOR   //for testing only
+	if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15)
+		some_delay();	
+#endif
+
 	m = mapping_lookup(s_spd, s_addr);
 	if (!m) goto done; 	/* -EINVAL */
 	n = mapping_crt(m, m->f, d_spd, d_addr);
@@ -418,6 +450,12 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 	int ret = 0;
 
 	LOCK();
+
+#ifdef LOG_MONITOR   //for testing only
+	if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15)
+		some_delay();	
+#endif
+
 	m = mapping_lookup(spd, addr);
 	if (!m) {
 		ret = -1;	/* -EINVAL */

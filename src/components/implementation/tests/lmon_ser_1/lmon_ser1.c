@@ -44,12 +44,28 @@ vaddr_t lmon_ser1_test(void)
 }
 /*******************************/
 #elif defined EXAMINE_PI
+
+int try_cs_hp(void)
+{
+	int i;
+	while(1) {
+		periodic_wake_wait(cos_spd_id());
+		/* printc("thread h : %d is doing something\n", cos_get_thd_id()); */
+		spin2 = 0;
+		/* printc("thread h : %d try to take lock2\n", cos_get_thd_id()); */
+		LOCK2_TAKE();
+		/* printc("thread h : %d has the lock2\n", cos_get_thd_id()); */
+		LOCK2_RELEASE();
+		/* printc("thread h : %d released lock2\n", cos_get_thd_id()); */
+	}
+	return 0;
+}
+
 int try_cs_mp(void) 
 {
 	while(1) {
 		periodic_wake_wait(cos_spd_id());
 		/* printc("thread m : %d is doing something\n", cos_get_thd_id()); */
-		timed_event_block(cos_spd_id(), 1);
 
 		LOCK2_TAKE();
 		/* printc("thread m : %d has the lock2\n", cos_get_thd_id()); */
@@ -65,29 +81,12 @@ int try_cs_mp(void)
 	return 0;
 }
 
-int try_cs_hp(void)
-{
-	int i;
-	while(1) {
-		/* periodic_wake_wait(cos_spd_id()); */
-		/* printc("thread h : %d is doing something\n", cos_get_thd_id()); */
-		timed_event_block(cos_spd_id(), 5);
-		spin2 = 0;
-		/* printc("thread h : %d try to take lock2\n", cos_get_thd_id()); */
-		LOCK2_TAKE();
-		/* printc("thread h : %d has the lock2\n", cos_get_thd_id()); */
-		LOCK2_RELEASE();
-		/* printc("thread h : %d released lock2\n", cos_get_thd_id()); */
-	}
-	return 0;
-}
-
 
 int try_cs_lp(void)
 {
 	volatile int jj, kk;
 	while (1) {
-		/* periodic_wake_wait(cos_spd_id()); */
+		periodic_wake_wait(cos_spd_id());
 		/* printc("<<< thread l : %d is doing something \n", cos_get_thd_id()); */
 		/* printc("thread l : %d try to take lock1\n", cos_get_thd_id()); */
 		LOCK1_TAKE();
@@ -113,6 +112,7 @@ int try_cs_lp(void)
 	return 0;
 }
 
+vaddr_t lmon_ser1_test(void) { return 0;}
 /**************************/
 #elif defined EXAMINE_SCHED
 unsigned long long kevin, andy;
@@ -123,6 +123,46 @@ int try_cs_hp(void)
 		hig = cos_get_thd_id();
 		printc("<<<high thd %d -- SCHED test>>>\n", hig);
 	}
+	return 0;
+	kevin = 0;
+	while(kevin++ < 1000) {
+		sched_block(cos_spd_id(), low);
+		local_spin();
+	}
+
+	return 0;
+}
+
+int try_cs_lp(void)
+{
+	if (low == 0) {
+		low = cos_get_thd_id();
+		printc("<<<low thd %d>>>\n", low);
+	}
+	return 0;
+	andy = 0;
+	while(andy++ < 1000) {
+		sched_wakeup(cos_spd_id(), hig);
+		local_spin();
+	}
+
+	return 0;
+}
+
+int try_cs_mp(void) { return 0; }
+vaddr_t lmon_ser1_test(void) { return 0;}
+
+/**************************/
+#elif defined EXAMINE_SCHED_DELAY
+unsigned long long kevin, andy;
+
+int try_cs_hp(void)
+{
+	if (hig == 0) {
+		hig = cos_get_thd_id();
+		printc("<<<high thd %d -- SCHED test>>>\n", hig);
+	}
+
 	kevin = 0;
 	while(kevin++ < 1000) {
 		sched_block(cos_spd_id(), 0);
@@ -138,6 +178,7 @@ int try_cs_lp(void)
 		low = cos_get_thd_id();
 		printc("<<<low thd %d>>>\n", low);
 	}
+
 	andy = 0;
 	while(andy++ < 1000) {
 		sched_wakeup(cos_spd_id(), hig);
@@ -147,11 +188,81 @@ int try_cs_lp(void)
 	return 0;
 }
 
-int try_cs_mp(void) { return 0;}
+#define TOTAL_AMNT 128
+int try_cs_mp(void) { 
+	unsigned long long t;
+	unsigned long val;
+	volatile unsigned long i = 0;
+	unsigned int delayi = 10;    /* 10: %7 0: never call ss, 128: always call ss*/
+
+	return 0;
+
+	while(1) {
+		rdtscll(t);
+		val = (int)(t & (TOTAL_AMNT-1));
+		printc("delay...thd %d (%ld)\n", cos_get_thd_id() ,val);
+		if (val < delayi) {
+			/* while(i++ < 1000); */
+			while(i++ < 10) {
+				printc("delay...thd %d\n", cos_get_thd_id());
+			}
+		}	
+	}
+	return 0;
+}
+
 vaddr_t lmon_ser1_test(void) { return 0;}
 
 /******************************/
 #elif defined EXAMINE_MM
+unsigned long long kevin, andy;
+
+#define PAGE_NUM 10
+vaddr_t s_addr[PAGE_NUM];
+vaddr_t d_addr[PAGE_NUM];
+
+int try_cs_hp(void)
+{
+	int i;
+	if (hig == 0) {
+		hig = cos_get_thd_id();
+		printc("<<<high thd %d -- MM test>>>\n", hig);
+	}
+
+	kevin = 0;
+	while(kevin++ < 10) {
+		for (i = 0; i<PAGE_NUM; i++) {
+			s_addr[i] = (vaddr_t)cos_get_vas_page();
+			d_addr[i] = lmon_ser2_test();
+			
+			/* printc("s address -- %x\n", s_addr[i]); */
+			/* printc("d address -- %x\n", d_addr[i]); */
+		}
+
+		// start testing here........
+		i = 0;
+		for (i = 0; i<PAGE_NUM; i++) {
+			mman_get_page(cos_spd_id(), s_addr[i], 0);
+
+			mman_alias_page(cos_spd_id(), s_addr[i], cos_spd_id()+1, d_addr[i]);
+			mman_revoke_page(cos_spd_id(), s_addr[i], 0);
+			/* rdtscll(end); */
+			/* printc("grant-alias-revoke cost %llu\n", end - start); */
+			/* mman_release_page(cos_spd_id(), s_addr[i], 0); */
+		}
+
+		local_spin();
+	}
+
+	return 0;
+}
+
+int try_cs_lp(void) { return 0; }
+int try_cs_mp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
+
+/******************************/
+#elif defined EXAMINE_MM_DELAY
 unsigned long long kevin, andy;
 
 #define PAGE_NUM 10

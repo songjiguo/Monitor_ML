@@ -90,6 +90,7 @@ done:
 	return;
 }
 
+// naive way to clear all committed bit
 static void
 clear_owner_commit()
 {
@@ -106,8 +107,10 @@ clear_owner_commit()
 		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 
 		struct evt_entry *tmp;
+		unsigned int tail;
 		for (j = 0; j < capacity; j++) {
-			tmp = (struct evt_entry *) CK_RING_GETTAIL(logevt_ring, evtring);
+			tail = evtring->p_tail;
+			tmp = (struct evt_entry *) CK_RING_GETTAIL_EVT(logevt_ring, evtring, tail);
 			if (tmp) {
 				tmp->owner     = 0;
 				tmp->committed = 0;

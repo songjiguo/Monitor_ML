@@ -38,6 +38,25 @@
 #ifdef LOG_MONITOR
 #include <ll_log.h>
 #define SCHED_LL_LOG
+
+// for overrun test only
+#define TOTAL_AMNT 128
+static void some_delay(void) { 
+	return;
+	unsigned long long t;
+	unsigned long val;
+	volatile unsigned long i = 0;
+	unsigned int delayi = 10;    /* 10: %7 0: never call ss, 128: always call ss*/
+	rdtscll(t);
+	val = (int)(t & (TOTAL_AMNT-1));
+	if (val < delayi) {
+		while(i++ < 10) {
+			/* printc("delay in scheduler...thd %d (%ld)\n", cos_get_thd_id() ,val); */
+		}
+	}	
+	return;
+}
+
 #endif
 
 //#define SCHED_DEBUG
@@ -819,11 +838,22 @@ int sched_wakeup(spdid_t spdid, unsigned short int thd_id)
 	struct sched_thd *thd;
 	
 	cos_sched_lock_take();
-		
+
+
+#ifdef LOG_MONITOR   
+//for testing only overrun
+	/* if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15) */
+	/* 	some_delay(); */
+// for PI test (change who to wakeup)
+	/* if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15) { */
+	/* 	if (cos_get_thd_id() == 15) thd_id = 13;  // set always to be 13 */
+	/* } */
+#endif
+
 	/* printc("thread %d waking up thread %d. %d\n", cos_get_thd_id(), thd_id, 0); */
 	thd = sched_get_mapping(thd_id);
 	if (!thd) goto error;
-	
+
 	/* only increase the count once */
 	fp_pre_wakeup(thd);
 	
@@ -929,6 +959,11 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	thd = sched_get_current();
 	assert(thd);
 	assert(spdid);
+
+#ifdef LOG_MONITOR   //for testing only
+	if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15)
+		some_delay();	
+#endif
 
 	/* we shouldn't block while holding a component lock */
 	if (unlikely(0 != thd->ncs_held)) goto warn;

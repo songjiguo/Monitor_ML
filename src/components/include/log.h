@@ -224,29 +224,33 @@ _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par
 	__asm__ volatile(".balign 512");
 
 	struct evt_entry *evt;
-	int old, new;
+	unsigned int old, new, tail;
 
 #ifdef MEAS_LOG_CASEIP
 	rdtscll(log_caseip_start);
 #endif
-	do {
+	while(1) {
 		if (unlikely(evt_ring_is_full())) {
 			/* printc("full !!!! \n"); */
 			llog_process(cos_spd_id());
 		}
-		evt = (struct evt_entry *) CK_RING_GETTAIL(logevt_ring, evt_ring);
-		if (!evt) continue;
+		tail = evt_ring->p_tail;
+		evt = (struct evt_entry *) CK_RING_GETTAIL_EVT(logevt_ring, evt_ring, tail);
+		if (!evt) continue;  // this indicates the full RB and needs process
 
 		old = 0;
 		new = cos_get_thd_id();
 		assert(evt && evt_ring);
-	} while(unlikely(!(cos_cas((unsigned long *)&evt->owner, (unsigned long)old,
-			   (unsigned long )new))));
+		
+		if (unlikely(!(cos_cas((unsigned long *)&evt->owner, (unsigned long)old,
+				       (unsigned long )new)))) {
+			cos_cas((unsigned long *)&evt_ring->p_tail, (unsigned long)tail, 
+				(unsigned long)tail+1);
+		}
+	}
 
-	old = evt_ring->p_tail;
-	new = evt_ring->p_tail + 1;
-	cos_cas((unsigned long *)&evt_ring->p_tail, (unsigned long)old, 
-		(unsigned long)new);
+	cos_cas((unsigned long *)&evt_ring->p_tail, (unsigned long)tail, 
+		(unsigned long)tail+1);
 
 	evt->from_thd	= cos_get_thd_id();
 	evt->to_thd	= par1;
