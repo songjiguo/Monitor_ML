@@ -45,7 +45,6 @@ lock_take_contention(cos_lock_t *l, union cos_lock_atomic_struct *result,
 	 * generation mismatch, and we just want to
 	 * try and take the lock again anyway */
 
-	// Contention here. Log_mgr needs put this event to crob_ring
 	ret = lock_component_take(spdid, lock_id, owner);
 	return ret < 0 ? ret : 0;
 }

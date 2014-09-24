@@ -35,6 +35,8 @@ lmgr_setuprb(spdid_t spdid, vaddr_t cli_addr) {
 	cli_ring = cli_addr;
 	spdmon->mon_ring = (vaddr_t)addr;
 
+	printc("monitor aliasing: addr %p to (spdid %d) cli_ring %p\n", 
+	       (vaddr_t)addr, spdid, (vaddr_t)cli_ring);
 	if (unlikely(cli_ring != __mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, cli_ring))) {
 		printc("alias rings %d failed.\n", spdid);
 		assert(0);

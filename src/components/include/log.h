@@ -59,7 +59,7 @@
 
 extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
 extern int llog_process(spdid_t spdid);
-/* extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages); */
+extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 extern int llog_contention(spdid_t spdid, int par1, int par2, int par3);
 
 #include <cos_list.h>
@@ -224,7 +224,7 @@ _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par
 	__asm__ volatile(".balign 512");
 
 	struct evt_entry *evt;
-	unsigned int old, new, tail;
+	unsigned int tail;
 
 #ifdef MEAS_LOG_CASEIP
 	rdtscll(log_caseip_start);
@@ -236,19 +236,19 @@ _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par
 		}
 		tail = evt_ring->p_tail;
 		evt = (struct evt_entry *) CK_RING_GETTAIL_EVT(logevt_ring, evt_ring, tail);
-		if (!evt) continue;  // this indicates the full RB and needs process
-
-		old = 0;
-		new = cos_get_thd_id();
-		assert(evt && evt_ring);
+		if (!evt) continue;  // this indicates full!! RB and need process
 		
-		if (unlikely(!(cos_cas((unsigned long *)&evt->owner, (unsigned long)old,
-				       (unsigned long )new)))) {
+		if (unlikely(!(cos_cas((unsigned long *)&evt->owner, (unsigned long)0,
+				       (unsigned long )cos_get_thd_id())))) {
 			cos_cas((unsigned long *)&evt_ring->p_tail, (unsigned long)tail, 
 				(unsigned long)tail+1);
+		} else {
+			break;
 		}
 	}
 
+	/* This is updated by any thread. If already "helped", we will
+	 * fail to increment but not repeat */
 	cos_cas((unsigned long *)&evt_ring->p_tail, (unsigned long)tail, 
 		(unsigned long)tail+1);
 
@@ -277,10 +277,25 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 {
 	if (unlikely(!evt_ring)) {        // create shared RB
 		/* vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */
-		/* printc("to create RB in spd %ld\n", cos_spd_id()); */
+		printc("to create RB in spd %ld\n", cos_spd_id());
 		char *addr;
-		assert((addr = cos_get_heap_ptr()));
-		cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
+
+		/* All spds requires page from mm, except mm and
+		 * llog (they get from heap). Hard code here!!! */
+		if (cos_spd_id() == LLLOG_SPD)
+		{
+			assert((addr = cos_get_heap_ptr()));
+			cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
+		}
+		else {
+#ifdef USE_VALLOC
+			addr = (char *)valloc_alloc(cos_spd_id(), cos_spd_id(), 1);
+			if (!addr) return NULL;
+#else
+			addr = (char *)cos_get_vas_page();
+#endif
+		}
+		
 		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr)))) BUG();
 		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 	}

@@ -628,7 +628,6 @@ ck_ring_enqueue_spsccont(struct ck_ring *ring)
 
 #endif
 
-
 /*
  * Atomically enqueues the specified entry. Returns true on success, returns
  * false if the ck_ring is full. This operation only support one active
