@@ -40,17 +40,58 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-/*****  Work mode *********/
+#define US_PER_TICK 10000
+
+// settings  (kevin andy)
+
+/************mode******************/
 //#define DETECTION_MODE
 #define LOGEVENTS_MODE
-/**************************/
 
-/*****  Measure mode *******/
+/************spd execution time paras******************/
+//#define MON_FS
+//#define MON_SCHED
+//#define MON_MM
+
+/**** sched spd error ****/
+//#define MON_SCHED_DELAY
+//#define MON_SCHED_MAX_EXEC 2500   // this is some number estimated in LOGEVENT MODE
+
+//#define MON_MM_DELAY
+//#define MON_MM_MAX_EXEC  20000   // this is some number estimated in LOGEVENT MODE
+
+//#define MON_FS_DELAY
+//#define MON_FS_MAX_EXEC
+
+/***********************************************/
+/************PI time paras******************/
+//#define MON_PI_OVERRUN
+//#define MON_MAX_PI  25000   // this is some number estimated in LOGEVENT MODE
+
+//#define MON_PI_SCHEDULING
+
+//#define MON_DEADLINE
+/***********************************************/
+/************printing**************/
+//#define LOGMGR_DEBUG_PI
+//#define LOGMGR_DEBUG_SPDEXEC
+//#define LOGMGR_DEBUG_THD_TIMING
+//#define LOGMGR_DEBUG_INTNUM
+//#define LOGMGR_DEBUG_ORDER
+/***********************************************/
+
+/************measuring**************/
 //#define MEAS_LOG_SYNCACTIVATION 
 //#define MEAS_LOG_ASYNCACTIVATION
 //#define MEAS_LOG_CASEIP      // cost of event_enqueue()
 //#define MEAS_LOG_CHECKING      // per event processing time (with detection mode only)
-/**************************/
+/***********************************************/
+
+//#define MON_OVERHEAD      /* infrastructure overhead over the interface */
+//#define MON_CAS_TEST      //set eip back overhead
+
+/************no testing**************/
+//#define MON_NORM
 
 #ifdef MEAS_LOG_CHECKING
 #define DETECTION_MODE
@@ -83,6 +124,17 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define LOCK_SPD        7
 #define TE_SPD          8
 #define NETIF_SPD	25
+
+#if defined MON_SCHED
+#define TARGET_SPD SCHED_SPD
+#elif defined MON_MM
+#define TARGET_SPD MM_SPD
+#elif defined MON_FS
+#define TARGET_SPD FS_SPD
+#else
+#undef TARGET_SPD    // no specific spd in this case. Used for PI detection
+#endif
+
 
 // thread ID
 #define MONITOR_THD     4
@@ -150,7 +202,7 @@ print_evt_info(struct evt_entry *entry)
 	int dest;
 
 	assert(entry);
-	printc("owner (%d --> ", entry->owner);
+	printc("owner (%d) ", entry->owner);
 	printc("thd (%d --> ", entry->from_thd);
 	printc("%d) ", entry->to_thd);
 
@@ -192,29 +244,6 @@ volatile unsigned long long log_acti_start, log_acti_end;
 #ifdef MEAS_LOG_CASEIP
 volatile unsigned long long log_caseip_start, log_caseip_end;
 #endif
-
-
-/* if (cos_get_thd_id() == 15) some_dealy(evt_ring->p_tail); */
-/* #define TOTAL_AMNT 128 */
-/* static void */
-/* some_dealy(int tail) */
-/* { */
-/* 	unsigned long long t; */
-/* 	unsigned long val; */
-/* 	volatile unsigned long i = 0; */
-/* 	unsigned int delayi = 10;    /\* 10: %7 0: never call ss, 128: always call ss*\/ */
-
-/* 	rdtscll(t); */
-/* 	val = (int)(t & (TOTAL_AMNT-1)); */
-/* 	if (val < delayi) { */
-/* 		/\* while(i++ < 1000); *\/ */
-/* 		while(i++ < 10) { */
-/* 			printc("delay...thd %d (tail %d)\n", cos_get_thd_id(), evt_ring->p_tail */
-/* 				); */
-/* 		} */
-/* 	} */
-/* 	return; */
-/* } */
 
 static inline CFORCEINLINE void 
 _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
@@ -267,7 +296,7 @@ _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par
 	printc("one event log cost -- %llu\n", log_caseip_end - log_caseip_start);
 #endif
 
-	/* print_evt_info(evt); */
+	/* if (evt->from_spd == 4 ||  evt->to_spd	== 4) print_evt_info(evt); */
 
 	return;
 }

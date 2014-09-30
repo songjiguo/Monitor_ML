@@ -11,12 +11,6 @@
 #define TIMER_FREQ     (CPU_TIMER_FREQ)
 #define CYC_PER_TICK   (CPU_FREQUENCY/TIMER_FREQ)
 
-//#define LOGMGR_DEBUG_PI
-//#define LOGMGR_DEBUG_SPDEXEC
-//#define LOGMGR_DEBUG_THD_TIMING
-//#define LOGMGR_DEBUG_INTNUM
-//#define LOGMGR_DEBUG_ORDER
-
 #ifdef LOGMGR_DEBUG_PI
 #define PRINTD_PI(s, args...) printc(s, args);
 #else
@@ -125,7 +119,7 @@ llog_get_page()
 	if ((vaddr_t)addr !=
 	    __mman_get_page(cos_spd_id(), (vaddr_t)addr, 0)) {
 		printc("fail to get a page in logger\n");
-		assert(0); // or return -1?
+		mon_assert(0); // or return -1?
 	}
 done:
 	return addr;
@@ -133,10 +127,10 @@ done:
 
 /* return which spd the event is logged in */
 static int
-evt_in_spd (struct evt_entry *entry)
+evt_in_spd(struct evt_entry *entry)
 {
 	int logged_in_spd = 0;
-	assert(entry);
+	mon_assert(entry);
 	switch (entry->evt_type) {
 	case EVT_CINV:
 	case EVT_SRET:
@@ -183,13 +177,13 @@ validate_heap_entries(struct heap *hp, int amnt)
 	prev = hp->data[1];
 	for (i = 0 ; i < MAX_NUM_SPDS ; i++) {
 		struct hevtentry *curr = heap_highest(hp);
-		if (!evtcmp((struct hevtentry*)prev, (struct hevtentry*)curr)) assert(0);
+		if (!evtcmp((struct hevtentry*)prev, (struct hevtentry*)curr)) mon_assert(0);
 		printc("earliest spdid %d -- ts %llu\n", 
 		       curr->spdid, LLONG_MAX - curr->ts);
 		prev = curr;
 	}
-	assert(!heap_highest(hp));
-	assert(heap_size(hp) == 0);
+	mon_assert(!heap_highest(hp));
+	mon_assert(heap_size(hp) == 0);
 	
 	return;
 }

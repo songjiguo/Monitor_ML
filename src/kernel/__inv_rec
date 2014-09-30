@@ -4202,7 +4202,7 @@ cos_syscall_mmap_introspect(int spdid, long op_flags_dspd, vaddr_t daddr, unsign
 	switch(op) {
 	case COS_MMAP_INTROSPECT_FRAME:
 	{
-		paddr_t phy_addr;
+		paddr_t phy_addr = 0;
 		int frame_num;
 
 		if (!spd) return -EINVAL;

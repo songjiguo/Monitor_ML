@@ -234,6 +234,7 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 	ml = lock_find(lock_id, spd);
 	/* tried to access a lock not yet created */
 	if (!ml) goto error;
+
 	assert(!lock_is_thd_blocked(ml, curr));
 
 	/* The calling component needs to retry its user-level lock,
@@ -255,6 +256,7 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 
 	RELEASE(spdid);
 
+	/* printc("thread %d is going to block in lock spd\n", cos_get_thd_id()); */
 	if (-1 == sched_block(spdid, thd_id)) {
 		printc("Deadlock including thdids %d -> %d in spd %d, lock id %d.\n", 
 		       cos_get_thd_id(), thd_id, spd, (int)lock_id);
@@ -262,6 +264,8 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 		assert(0);
 		if (-1 == sched_block(spdid, 0)) assert(0);
 	}
+	/* printc("thread %d resumes execution in lock spd after sched_block\n",  */
+	/*        cos_get_thd_id()); */
 	if (!EMPTY_LIST(&blocked_desc, next, prev)) BUG();
 	/* 
 	 * OK, this seems ridiculous but here is the rational: Assume

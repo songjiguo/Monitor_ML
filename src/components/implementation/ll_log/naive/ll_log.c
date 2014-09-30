@@ -26,20 +26,20 @@ lmgr_setuprb(spdid_t spdid, vaddr_t cli_addr) {
         vaddr_t log_ring, cli_ring = 0;
 	char *addr, *hp;
 	
-	assert(spdid && cli_addr);
+	mon_assert(spdid && cli_addr);
 	addr = llog_get_page();
 	if (!addr) goto err;
 	spdmon = &logmon_info[spdid];
-	assert(spdmon);
+	mon_assert(spdmon);
 
 	cli_ring = cli_addr;
 	spdmon->mon_ring = (vaddr_t)addr;
 
-	printc("monitor aliasing: addr %p to (spdid %d) cli_ring %p\n", 
-	       (vaddr_t)addr, spdid, (vaddr_t)cli_ring);
+	/* printc("monitor aliasing: addr %p to (spdid %d) cli_ring %p\n",  */
+	/*        (vaddr_t)addr, spdid, (vaddr_t)cli_ring); */
 	if (unlikely(cli_ring != __mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, cli_ring))) {
 		printc("alias rings %d failed.\n", spdid);
-		assert(0);
+		mon_assert(0);
 	}
 	// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))	
 	spdmon->cli_ring = cli_ring;
@@ -82,7 +82,7 @@ lmgr_action()
 #endif
 	} while ((evt = find_next_evt(evt)));
 
-	/* assert(test_num++ < 2);  // remove this later */
+	/* mon_assert(test_num++ < 2);  // remove this later */
 	/* printc("log process done (%d evts)\n", event_num); */
 done:
 	rdtscll(lpc_end);
@@ -102,7 +102,7 @@ clear_owner_commit()
 
 	for (i = 0; i < MAX_NUM_SPDS; i++) {
 		spdmon = &logmon_info[i];
-		assert(spdmon);
+		mon_assert(spdmon);
 		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
 		if (!evtring) continue;
 
@@ -130,7 +130,7 @@ lllog_loop(void) {
 	while(1) {
 		pthd = LOG_PREV_THD;
 		test_aysncthd = pthd;  // test asyn cost only
-		assert(cos_get_thd_id() == LOG_LOOP_THD);
+		mon_assert(cos_get_thd_id() == LOG_LOOP_THD);
 #if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION)
 		lmgr_action();
 		clear_owner_commit();
@@ -139,7 +139,7 @@ lllog_loop(void) {
 		LOG_PREV_SPD = 0;
 		cos_switch_thread(pthd, 0);
 	}
-	assert(0);
+	mon_assert(0);
 	return; 
 }
 
@@ -170,11 +170,11 @@ lmgr_initialize(void)
 
         // alloc a page for heap operation (assume a page for now)
 	h = log_heap_alloc(MAX_NUM_SPDS, evtcmp, evtupdate);
-	assert(h);
+	mon_assert(h);
 
         // local RB for contention only
 	evt_ring = (CK_RING_INSTANCE(logevt_ring) *)llog_get_page();
-	assert(evt_ring);
+	mon_assert(evt_ring);
 
 	logmon_info[cos_spd_id()].mon_ring = (vaddr_t)evt_ring;
 	// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))	
@@ -279,13 +279,15 @@ llog_setperiod(spdid_t spdid, unsigned int thd_id, unsigned int period)
         struct logmon_info *spdmon;
 	struct thd_trace *ttl = NULL;
 
-	assert(spdid == TE_SPD && thd_id > 0);
+	mon_assert(spdid == TE_SPD && thd_id > 0);
 
 	LOCK();
 
 	ttl = &thd_trace[thd_id];
-	assert(ttl);
+	mon_assert(ttl);
 	ttl->p = period;
+
+	printc("set period %d for thd %d\n", period, thd_id);
 	
 	// set time_window to be the minimum period of all task for interrupts log
 	if (period*CYC_PER_TICK < window_sz) window_sz = period*CYC_PER_TICK;
@@ -305,12 +307,12 @@ llog_setprio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
         struct logmon_info *spdmon;
 	struct thd_trace *ttl = NULL;
 
-	assert(spdid == SCHED_SPD && thd_id > 0 && prio <= PRIO_LOWEST);
+	mon_assert(spdid == SCHED_SPD && thd_id > 0 && prio <= PRIO_LOWEST);
 
 	LOCK();
 
 	ttl = &thd_trace[thd_id];
-	assert(ttl);
+	mon_assert(ttl);
 	ttl->prio = prio;
 
 	UNLOCK();
@@ -325,18 +327,18 @@ llog_init(spdid_t spdid, vaddr_t addr)
 	vaddr_t ret = 0;
         struct logmon_info *spdmon;
 
-	assert(spdid);
+	mon_assert(spdid);
 	spdmon = &logmon_info[spdid];
-	assert(spdmon);
+	mon_assert(spdmon);
 
-	assert(!spdmon->mon_ring && !spdmon->cli_ring);
+	mon_assert(!spdmon->mon_ring && !spdmon->cli_ring);
 
 	LOCK();
 	if (lmgr_setuprb(spdid, addr)) {
 		printc("failed to setup shared rings\n");
 		goto done;
 	}
-	assert(spdmon->mon_ring && spdmon->cli_ring);
+	mon_assert(spdmon->mon_ring && spdmon->cli_ring);
 
 	ret = spdmon->cli_ring;
 done:
@@ -358,7 +360,7 @@ cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 		break;
 	case COS_UPCALL_DESTROY:
 		printc("DESTROY thd %d\n", cos_get_thd_id());
-		assert(0); break;
+		mon_assert(0); break;
 	default:
 		return;
 	}

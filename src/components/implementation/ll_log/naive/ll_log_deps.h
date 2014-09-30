@@ -4,8 +4,10 @@
 #ifndef LL_LOG_H
 #define LL_LOG_H
 
-#ifndef assert
-#define assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); sched_exit();} } while(0)
+void sched_exit(void);
+
+#ifndef mon_assert
+#define mon_assert(node) do { if (unlikely(!(node))) { debug_print("assert error in @ "); sched_exit();} } while(0)
 #endif
 
 #include <cos_component.h>
@@ -13,8 +15,8 @@
 
 static int     frame_frontier    = 0;
 
-#include "../../sched/cos_sched_sync.h"
-#include "../../sched/cos_sched_ds.h"
+#include "../sched/cos_sched_sync.h"
+#include "../sched/cos_sched_ds.h"
 #define LOCK()   if (cos_sched_lock_take())    BUG();
 #define UNLOCK() if (cos_sched_lock_release()) BUG();
 
@@ -39,9 +41,9 @@ __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_addr)
 {
 	int fp;
 
-	assert(init_hp);
+	mon_assert(init_hp);
 	fp = __vpage2frame(s_addr);
-	assert(fp >= 0);
+	mon_assert(fp >= 0);
 	if (cos_mmap_cntl(COS_MMAP_GRANT, 0, d_spd, d_addr, fp)) BUG();
 	return d_addr;
 }

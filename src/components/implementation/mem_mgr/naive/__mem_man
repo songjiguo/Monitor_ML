@@ -42,17 +42,19 @@
 
 // for overrun test only
 #define TOTAL_AMNT 128
-static void some_delay(void) { 
-	return;
+static void 
+some_delay(void) { 
 	unsigned long long t;
 	unsigned long val;
 	volatile unsigned long i = 0;
-	unsigned int delayi = 100;    /* 10: %7 0: never call ss, 128: always call ss*/
+	unsigned int delayi = 10;    /* 10: %7 0: never call ss, 128: always call ss*/
 	rdtscll(t);
 	val = (int)(t & (TOTAL_AMNT-1));
 	if (val < delayi) {
-		while(i++ < 1000) {
-			/* printc("delay in MM...thd %d (%ld)\n", cos_get_thd_id() ,val); */
+		printc("KevinAndy\n");
+		while(i++ < 10) {
+			printc("delay in MM...thd %d (%ld)\n", 
+			       cos_get_thd_id() ,val);
 		}
 	}	
 	return;
@@ -395,11 +397,11 @@ vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags)
 
 	LOCK();
 
-#ifdef LOG_MONITOR   //for testing only
-	if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15)
+#if defined(LOG_MONITOR) && defined(MON_MM_DELAY)
+	if (cos_get_thd_id() == 15 || cos_get_thd_id() == 16 || cos_get_thd_id() == 17)
 		some_delay();	
 #endif
-
+	
 	f = frame_alloc();
 	if (!f) goto done; 	/* -ENOMEM */
 	assert(frame_nrefs(f) == 0);
@@ -425,8 +427,8 @@ vaddr_t mman_alias_page(spdid_t s_spd, vaddr_t s_addr, spdid_t d_spd, vaddr_t d_
 
 	LOCK();
 
-#ifdef LOG_MONITOR   //for testing only
-	if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15)
+#if defined(LOG_MONITOR) && defined(MON_MM_DELAY)
+	if (cos_get_thd_id() == 15 || cos_get_thd_id() == 16 || cos_get_thd_id() == 17)
 		some_delay();	
 #endif
 
@@ -451,8 +453,8 @@ int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags)
 
 	LOCK();
 
-#ifdef LOG_MONITOR   //for testing only
-	if (cos_get_thd_id() == 13 || cos_get_thd_id() == 14 || cos_get_thd_id() == 15)
+#if defined(LOG_MONITOR) && defined(MON_MM_DELAY)
+	if (cos_get_thd_id() == 15 || cos_get_thd_id() == 16 || cos_get_thd_id() == 17)
 		some_delay();	
 #endif
 

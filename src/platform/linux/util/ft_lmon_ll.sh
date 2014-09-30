@@ -11,7 +11,7 @@ fprr.o-print.o|[parent_]mm.o|[faulthndlr_]llboot.o|lllog.o;\
 boot.o-print.o|fprr.o|mm.o|llboot.o|lllog.o;\
 va.o-fprr.o|print.o|mm.o|l.o|boot.o|lllog.o|llboot.o;\
 l.o-fprr.o|mm.o|print.o|lllog.o|llboot.o;\
-te.o-print.o|fprr.o|mm.o|l.o|lllog.o|llboot.o;\
+te.o-print.o|fprr.o|va.o|mm.o|l.o|lllog.o|llboot.o;\
 e.o-sm.o|l.o|mm.o|va.o|fprr.o|print.o|lllog.o;\
 sm.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o|mpool.o|lllog.o;\
 buf.o-boot.o|sm.o|fprr.o|print.o|l.o|mm.o|va.o|mpool.o|lllog.o;\
