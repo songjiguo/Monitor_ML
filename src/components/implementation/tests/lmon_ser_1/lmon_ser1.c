@@ -17,13 +17,16 @@ volatile int spin2 = 1;
 unsigned long long start, end, sum;
 
 #include <cos_synchronization.h>
-cos_lock_t lock1, lock2;
+cos_lock_t lock1, lock2, lock3;
 #define LOCK1_TAKE()    lock_take(&lock1)
 #define LOCK1_RELEASE() lock_release(&lock1)
 #define LOCK1_INIT()    lock_static_init(&lock1)
 #define LOCK2_TAKE()    lock_take(&lock2)
 #define LOCK2_RELEASE() lock_release(&lock2)
 #define LOCK2_INIT()    lock_static_init(&lock2)
+#define LOCK3_TAKE()    lock_take(&lock3)
+#define LOCK3_RELEASE() lock_release(&lock3)
+#define LOCK3_INIT()    lock_static_init(&lock3)
 
 
 static void local_spin()
@@ -216,32 +219,35 @@ int try_cs_hp(void)
 	return 0;
 }
 
-int try_cs_lp(void)
+int try_cs_mp(void)
 {
-	volatile unsigned long jj, kk;
-	jj = 0;
 	while (1) {
-		jj++;
-		printc("thread l : %d try to take lock2\n", cos_get_thd_id());
+		printc("thread m : %d try to take lock2\n", cos_get_thd_id());
 		LOCK2_TAKE();
-		printc("thread l : %d spin\n", cos_get_thd_id());
+		printc("thread m : %d spin\n", cos_get_thd_id());
 		spin = 1;
 		while (spin);
 
-		if (jj%10 == 0) {
-			printc("thread l : %d try to take lock1\n", cos_get_thd_id());
-			LOCK1_TAKE();
-			printc("thread l : %d release lock1\n", cos_get_thd_id());
-			LOCK1_RELEASE();
-		}
+		printc("thread m : %d try to take lock3\n", cos_get_thd_id());
+		LOCK1_TAKE();
+		printc("thread m : %d release lock3\n", cos_get_thd_id());
+		LOCK1_RELEASE();
 		
- 		printc("thread l : %d release lock2\n", cos_get_thd_id());
+ 		printc("thread m : %d release lock2\n", cos_get_thd_id());
 		LOCK2_RELEASE();
 	}
 	return 0;
 }
 
-int try_cs_mp(void) {return 0;}
+// bad, self bloc when hold a lock and this does not affect interface at all!!! 
+int try_cs_lp(void) 
+{
+	printc("thread l : %d try to take lock3\n", cos_get_thd_id());
+	LOCK3_TAKE();
+	while(1);  // so we can inject fault in the lock on contention
+	return 0;
+}
+
 vaddr_t lmon_ser1_test(void) { return 0;}
 /**************************/
 #elif defined MON_SCHED
@@ -549,13 +555,13 @@ int try_cs_lp(void) { return 0;}
 vaddr_t lmon_ser1_test(void) { return 0;}
 #endif
 
-
-
+// lock id are 6,7,8. Hard code in lock for deadlock detection
 void 
 cos_init(void) 
 {
-	LOCK1_INIT();
-	LOCK2_INIT();
+	printc("lock 1 id: %lu\n", LOCK1_INIT());
+	printc("lock 2 id: %lu\n", LOCK2_INIT());
+	printc("lock 3 id: %lu\n", LOCK3_INIT());
 	return;
 }
 

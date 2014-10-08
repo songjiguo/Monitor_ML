@@ -29,6 +29,7 @@ enum{
 	CONS_DLMISS,
 	CONS_SCHEDULING,
 	CONS_PI,
+	CONS_DEADLOCK,
 	CONS_TIMEINT, 
 	CONS_NETINT,
 	// ordering
@@ -640,7 +641,15 @@ contention_on(struct evt_entry *ce)
  * the circular dependency
 
  Complexity: O(2N) where N is the depth of the nested critical
- sectoins */
+ sectoins
+
+ Note: it is strange to inject fault in lock component to mimic a
+ deadlock, since the information we use here is over the
+ interface. When no deadlock from clients, these interface information
+ will be true as well. However, it is enough to tell a deadlock exists
+ and reboot the lock component to solve the deadlock (e.g, for
+ concurrency threads)
+ */
 
 static void
 check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
@@ -663,7 +672,7 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 		printc("deadlock detection\n");
 		dep = &thd_trace[entry->para];
 		mon_assert(dep);
-		/* print_thd_trace(dep); */
+		print_thd_trace(dep);
 		
 		ttc->l = dep;
 		d = ttc;
@@ -687,12 +696,14 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 				}
 				printc("mark deadlock to 1\n");
 				d->deadlock = 1;
-				print_thd_trace(d);
+				/* print_thd_trace(d); */
 				d = d->l;
 			} else {
-				printc("found deadlock\n");
 				print_thd_trace(d);
-				assert(0);   // found a deadlock
+				print_evt_info(entry);
+				/* faulty_spd_localizer(d, entry, CONS_DEADLOCK); */
+				printc("found deadlock in spd %lu\n", entry->to_spd);				
+				mon_assert(0);   // found a deadlock
 			}
 		}
 		printc("deadlock detection done!!!!\n");
@@ -1248,6 +1259,9 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 	case CONS_PI:
 		// dependency runs too long? where?????
 		faulty_spd = find_max_spdexec(ttc, entry, flt_type);
+		break;
+	case CONS_DEADLOCK:
+		faulty_spd = entry->to_spd;  // contention should happen in the lock and detected
 		break;
 	// too much timer interrupt in a time window
 	case CONS_TIMEINT:

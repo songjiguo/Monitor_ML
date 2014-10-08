@@ -21,6 +21,10 @@
 
 #include <sched.h>
 
+#ifdef LOG_MONITOR
+#include <ll_log.h>
+#endif
+
 //#define ACT_LOG
 #ifdef ACT_LOG
 #define ACT_LOG_LEN 32
@@ -214,6 +218,26 @@ done:
 	return ret;
 }
 
+
+// Jiguo: random trigger deadlock detection
+// lock id are 6,7,8. Hard code in lock for deadlock detection
+// see ser1 test
+#define TOTAL_AMNT 128
+static int
+some_deadlock(void) {
+	unsigned long long t;
+	unsigned long val, lockid;
+	volatile unsigned long i = 0;
+	unsigned int delayi = 100;    /* 10: %7 0: never call ss, 128: always call ss*/
+	rdtscll(t);
+	val = (int)(t & (TOTAL_AMNT-1));
+	
+	if (val < delayi) return 1;
+	else return 0;
+}
+
+
+#define MON_DEADLOCK
 /* 
  * Dependencies here (thus priority inheritance) will NOT be used if
  * you specify a timeout value.
@@ -230,6 +254,16 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 	
 	ACT_RECORD(ACT_LOCK, spd, lock_id, cos_get_thd_id(), thd_id);
 	TAKE(spdid);
+
+/* #if defined(LOG_MONITOR) && defined(MON_DEADLOCK) */
+/* 	printc("lock: deadlock testing....(thd %d, lock_id %lu owner %d)\n",  */
+/* 	       cos_get_thd_id(), lock_id, thd_id); */
+/* 	if (cos_get_thd_id() == 16 && lock_id == 8 && thd_id == 17) { */
+/* 		lock_id = 6;  // deadlock */
+/* 		thd_id = 15; */
+/* 		/\* if (some_deadlock()) lock_id = 6;  // deadlock *\/ */
+/* 	} */
+/* #endif */
 
 	ml = lock_find(lock_id, spd);
 	/* tried to access a lock not yet created */
@@ -256,8 +290,9 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 
 	RELEASE(spdid);
 
-	/* printc("thread %d is going to block in lock spd\n", cos_get_thd_id()); */
+	printc("thread %d is going to block in lock spd\n", cos_get_thd_id());
 	if (-1 == sched_block(spdid, thd_id)) {
+		printc("thread %d spinning for deadlock\n", cos_get_thd_id());
 		while(1);  // spinning so that deadlock can be detected
 		printc("Deadlock including thdids %d -> %d in spd %d, lock id %d.\n", 
 		       cos_get_thd_id(), thd_id, spd, (int)lock_id);
