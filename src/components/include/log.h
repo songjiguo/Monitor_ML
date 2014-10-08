@@ -86,6 +86,12 @@
 //#define MEAS_LOG_ASYNCACTIVATION
 //#define MEAS_LOG_CASEIP      // cost of event_enqueue()
 //#define MEAS_LOG_CHECKING      // per event processing time (with detection mode only)
+
+#define  MEAS_DEADLOCK_CHECK
+#ifdef MEAS_DEADLOCK_CHECK
+volatile unsigned long long deadlock_start, deadlock_end;
+#endif
+
 /***********************************************/
 
 //#define MON_OVERHEAD      /* infrastructure overhead over the interface */
@@ -113,6 +119,8 @@ PERCPU_EXTERN(cos_sched_notifications);
 #ifndef CFORCEINLINE
 #define CFORCEINLINE __attribute__((always_inline))
 #endif
+
+#define LM_SYNC_PERIOD 10  // period for asynchronous processing
 
 /********************************/
 /*  Hard code spd and thread ID */

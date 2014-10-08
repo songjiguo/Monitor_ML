@@ -207,10 +207,11 @@ int try_cs_hp(void)
 	while(1) {
 		printc("thread h : %d try to take lock1\n", cos_get_thd_id());
 		LOCK1_TAKE();
-		periodic_wake_wait(cos_spd_id());
+		printc("thread h : %d has lock1\n", cos_get_thd_id());
 		spin = 0;
 		printc("thread h : %d try to take lock2\n", cos_get_thd_id());
 		LOCK2_TAKE();
+		printc("thread h : %d has lock2\n", cos_get_thd_id());
 		printc("thread h : %d released lock2\n", cos_get_thd_id());
 		LOCK2_RELEASE();
 		printc("thread h : %d released lock1\n", cos_get_thd_id());
@@ -219,34 +220,47 @@ int try_cs_hp(void)
 	return 0;
 }
 
-int try_cs_mp(void)
+int try_cs_mp(void) 
 {
 	while (1) {
 		printc("thread m : %d try to take lock2\n", cos_get_thd_id());
 		LOCK2_TAKE();
+		printc("thread m : %d try has lock2\n", cos_get_thd_id());
 		printc("thread m : %d spin\n", cos_get_thd_id());
 		spin = 1;
 		while (spin);
-
+		spin2 = 0;
 		printc("thread m : %d try to take lock3\n", cos_get_thd_id());
-		LOCK1_TAKE();
+		LOCK3_TAKE();
+		printc("thread m : %d has lock3\n", cos_get_thd_id());
 		printc("thread m : %d release lock3\n", cos_get_thd_id());
-		LOCK1_RELEASE();
-		
+		LOCK3_RELEASE();
  		printc("thread m : %d release lock2\n", cos_get_thd_id());
 		LOCK2_RELEASE();
 	}
 	return 0;
 }
 
-// bad, self bloc when hold a lock and this does not affect interface at all!!! 
-int try_cs_lp(void) 
+int try_cs_lp(void)
 {
-	printc("thread l : %d try to take lock3\n", cos_get_thd_id());
-	LOCK3_TAKE();
-	while(1);  // so we can inject fault in the lock on contention
+	while (1) {
+		printc("thread l : %d try to take lock3\n", cos_get_thd_id());
+		LOCK3_TAKE();
+		printc("thread l : %d has lock3\n", cos_get_thd_id());
+		printc("thread l : %d spin\n", cos_get_thd_id());
+		spin2 = 1;
+		while (spin2);
+		printc("thread l : %d try to take lock1.. deadlock...\n", cos_get_thd_id());
+		LOCK1_TAKE();
+		printc("thread l : %d has lock1\n", cos_get_thd_id());
+		printc("thread l : %d release lock1\n", cos_get_thd_id());
+		LOCK1_RELEASE();		
+ 		printc("thread l : %d release lock3\n", cos_get_thd_id());
+		LOCK3_RELEASE();
+	}
 	return 0;
 }
+
 
 vaddr_t lmon_ser1_test(void) { return 0;}
 /**************************/

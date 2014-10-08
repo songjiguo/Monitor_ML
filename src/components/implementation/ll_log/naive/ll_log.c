@@ -9,8 +9,6 @@
 
 int test_aysncthd;
 
-#define LM_SYNC_PERIOD 10  // period for asynchronous processing
-
 static int LOG_INIT_THD;
 static int LOG_LOOP_THD;
 static int LOG_PREV_THD;

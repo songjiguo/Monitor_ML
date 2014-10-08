@@ -113,13 +113,13 @@ cos_init(void)
 			printc("<<<high thd %d>>>\n", cos_get_thd_id());
 			printc("\n[[[[ MON_DEADLOCK Test....]]]]\n");
 			periodic_wake_create(cos_spd_id(), 5);
-			timed_event_block(cos_spd_id(), 1);
+			timed_event_block(cos_spd_id(), 3);
 			try_cs_hp();
 		}
 		if (cos_get_thd_id() == med) {
 			printc("<<<med thd %d>>>\n", cos_get_thd_id());
 			periodic_wake_create(cos_spd_id(), 8);
-			timed_event_block(cos_spd_id(), 2);
+			timed_event_block(cos_spd_id(), 1);
 			try_cs_mp();
 		}
 		if (cos_get_thd_id() == low) {

@@ -14,13 +14,11 @@ int __sg_lock_component_take(spdid_t spdid, unsigned long lock_id, unsigned shor
 {
 	int ret;
 #ifdef LOG_MONITOR
-	printc("lock cli: lock component take EVT_SINV (thd %d)\n", cos_get_thd_id());
 	evt_enqueue(cos_get_thd_id(), spdid, cos_spd_id(), FN_LOCK_COMPONENT_TAKE, 
 		    thd_id, EVT_SINV);
 #endif
 	ret = lock_component_take(spdid, lock_id, thd_id);
 #ifdef LOG_MONITOR
-	printc("lock cli: lock component take EVT_SRET (thd %d)\n", cos_get_thd_id());
 	evt_enqueue(cos_get_thd_id(), cos_spd_id(), spdid, FN_LOCK_COMPONENT_TAKE, 
 		    thd_id, EVT_SRET);
 #endif

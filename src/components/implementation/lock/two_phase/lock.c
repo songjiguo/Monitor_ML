@@ -22,7 +22,7 @@
 #include <sched.h>
 
 #ifdef LOG_MONITOR
-#include <ll_log.h>
+#include <log.h>
 #endif
 
 //#define ACT_LOG
@@ -236,8 +236,6 @@ some_deadlock(void) {
 	else return 0;
 }
 
-
-#define MON_DEADLOCK
 /* 
  * Dependencies here (thus priority inheritance) will NOT be used if
  * you specify a timeout value.
@@ -290,10 +288,16 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 
 	RELEASE(spdid);
 
-	printc("thread %d is going to block in lock spd\n", cos_get_thd_id());
+	/* printc("thread %d is going to block in lock spd\n", cos_get_thd_id()); */
 	if (-1 == sched_block(spdid, thd_id)) {
-		printc("thread %d spinning for deadlock\n", cos_get_thd_id());
-		while(1);  // spinning so that deadlock can be detected
+#if defined(LOG_MONITOR) && defined(MON_DEADLOCK)
+		/* printc("thread %d spinning for deadlock\n", cos_get_thd_id()); */
+               /* spinning so that deadlock can be detected and might
+		* be recovered by rebooting the lock component, or at
+		* least preempted by a higher thread to make
+		* progress */
+		while(1);   // mimic a deadlock action here. No progress for this thread
+#endif
 		printc("Deadlock including thdids %d -> %d in spd %d, lock id %d.\n", 
 		       cos_get_thd_id(), thd_id, spd, (int)lock_id);
 		debug_print("BUG: Possible deadlock @ "); 

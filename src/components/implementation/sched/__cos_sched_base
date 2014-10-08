@@ -463,7 +463,7 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 			report_event(SCHED_TARGETTED_DEPENDENCY);
 			next = target;
 		}
-
+		
 		next = resolve_dependencies(next);
 		if (next == current) goto done;
 		if (sched_is_child() && unlikely(next == PERCPU_GET(sched_base_state)->idle)) {
@@ -1033,29 +1033,26 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 	}
 	/* dependency thread blocked??? */
 	if (dependency_thd) {
-		/* printc("thd %d trying to depend on %d\n", thd->id, dependency_thd); */
 		dep = sched_get_mapping(dependency_thd);
 		if (dep->dependency_thd) {
-
+			/* printc("thd %d trying to depend on %d\n",  */
+			/*        cos_get_thd_id(), dep->dependency_thd->id); */
+#if defined(LOG_MONITOR) && !defined(MON_DEADLOCK)
 			/* circular dependency... */
 			if(dep->dependency_thd->id == cos_get_thd_id()) {
-
-
-				/* cos_sched_lock_release(); */
-				/* while(1); */
-				/* int kk = 0; */
-				/* while(kk++ < 10) { */
-				/* 	printc("delay in scheduler..for deadlock.thd %d\n",  */
-				/* 	       cos_get_thd_id()); */
-				/* } */
-
-
-				/* debug_print("BUG @ "); */
-				/* printc("cos_sched_base: circular dependency between dep %d, curr %d (From spdid %d)\n", dep->id, cos_get_thd_id(), spdid); */
-				/* assert(0); */
+				debug_print("BUG @ ");
+				printc("cos_sched_base: circular dependency between dep %d, curr %d (From spdid %d)\n", dep->id, cos_get_thd_id(), spdid);
+				assert(0);
 				goto unblock;
 			}
-
+#endif
+#if defined(LOG_MONITOR) && defined(MON_DEADLOCK)
+			if(dep->dependency_thd->id == cos_get_thd_id()) {
+				printc("found circular dependency ...\n");
+				goto unblock;
+			}
+			
+#endif
 		}
 
 		if (!dep) {

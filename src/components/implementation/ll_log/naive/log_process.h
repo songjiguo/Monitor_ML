@@ -603,36 +603,42 @@ done:
 /* Constraints Check  -- Deadlock   */
 /************************************/
 
-/* The resource contention (e.g. lock) starts. Similar to pi_on,
- * except it can happen no matter what priority is (e.g, low thread
- * running during PI tries to contend with medium thread, or
- * deadlock). So pi_on is a prerequisite for deadlock detection? 
+/* The resource contention (e.g. lock) starts (e.g, low thread running
+ * during PI tries to contend with medium thread, or deadlock). Is
+ * pi_on is a prerequisite for deadlock detection?
 
  Needs this from lock component, since EVT_CS only happen after
  sched_block
 */
 static int
-contention_on(struct evt_entry *ce)
+contention_on(struct evt_entry *pe, struct evt_entry *ce)
 {
 	int ret = 0;
 
-	/* if (pe->from_thd == 15 || pe->from_thd == 17) { */
+	/* if (pe->from_thd == 17) { */
 	/* 	if (pe->func_num == 9 || pe->func_num == 1) { */
 	/* 		printc("last entry\n"); */
 	/* 		print_evt_info(pe); */
 	/* 	} */
 	/* } */
-	/* if (ce->from_thd == 15 || ce->from_thd == 17) { */
+	/* if (ce->from_thd == 17) { */
 	/* 	if (ce->func_num == 9 || ce->func_num == 1) { */
 	/* 		printc("current entry\n"); */
 	/* 		print_evt_info(ce); */
 	/* 	} */
 	/* } */
 	
-
+	/* printc("previous event\n"); */
+	/* print_evt_info(pe); */
+	/* printc("current event\n"); */
+	/* print_evt_info(ce);	 */
 	return (ce->evt_type == EVT_SINV && 
 		ce->func_num == FN_LOCK_COMPONENT_TAKE &&
-		ce->para > 0);        // lock on some thread (e.g, lock owner)
+		ce->para > 0);
+	/*  && */
+	/* ce->evt_type == EVT_CINV &&    // since no CS can happen if deadlock */
+	/* ce->func_num == FN_SCHED_BLOCK && */
+	/* ce->para > 0); */        // block on some thread (e.g, lock owner)
 }
 
 
@@ -657,6 +663,9 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 	int i;
 	struct thd_trace *d, *n, *m, *root, *dep;
 
+#ifdef MEAS_DEADLOCK_CHECK
+	rdtscll(deadlock_start);
+#endif
 	mon_assert(ttc && entry);
 
         /* we only check periodic tasks now for simplicity */
@@ -668,11 +677,11 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 	 * lock hold by higher thread while high contending with low
 	 * (PI). */
 
-	if (unlikely(contention_on(entry))) {
-		printc("deadlock detection\n");
+	if (unlikely(contention_on(&last_entry, entry))) {
+		/* printc("deadlock detection\n"); */
 		dep = &thd_trace[entry->para];
 		mon_assert(dep);
-		print_thd_trace(dep);
+		/* print_thd_trace(dep); */
 		
 		ttc->l = dep;
 		d = ttc;
@@ -688,21 +697,26 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 							assert(!n->deadlock);
 							break;
 						}
-						printc("mark deadlock to 0\n");
+						/* printc("mark deadlock to 0\n"); */
 						n->deadlock = 0;
 						n = n->l;
 					}
 					break;
 				}
-				printc("mark deadlock to 1\n");
+				/* printc("mark deadlock to 1\n"); */
 				d->deadlock = 1;
 				/* print_thd_trace(d); */
 				d = d->l;
 			} else {
-				print_thd_trace(d);
-				print_evt_info(entry);
+				/* print_thd_trace(d); */
+				/* print_evt_info(entry); */
 				/* faulty_spd_localizer(d, entry, CONS_DEADLOCK); */
-				printc("found deadlock in spd %lu\n", entry->to_spd);				
+#ifdef MEAS_DEADLOCK_CHECK
+				rdtscll(deadlock_end);
+#endif
+				printc("deadlock detection cost %llu\n", 
+				       deadlock_end-deadlock_start);
+				printc("found deadlock in spd %lu\n", entry->to_spd);
 				mon_assert(0);   // found a deadlock
 			}
 		}

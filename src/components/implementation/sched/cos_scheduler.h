@@ -378,12 +378,28 @@ done:
 	return NULL;
 }
 
+/* Issue: 3 threads (h,m and l). If the dependency chain is formed
+ * through, say 2 locks, scheduler won't detect the circular
+ * dependency. If h->m->l->h, the following for loop will be
+ * infinite -- Jiguo */
 static inline struct sched_thd *
 sched_thd_dependency(struct sched_thd *curr)
 {
 	struct sched_thd *d, *p; // dependency and prev dependency
 
-	for (p = curr ; ((d = __sched_thd_dependency(p))) ; p = d) ;
+	/* for (p = curr ; ((d = __sched_thd_dependency(p))) ; p = d) ; */ // old
+	for (p = curr ; ((d = __sched_thd_dependency(p))) ; p = d) {
+		/* Jiguo: Hack for infinite dependency loop, assuming
+		 * no circular dependency other than some child node
+		 * depends back on curr */
+		if (unlikely(d == curr)) {
+                        /* break so that the monitor task can be woken
+			 * up by the timer thread (te needs to take
+			 * the scheduler lock) and detect the
+			 * deadlock */
+			break;  
+		}
+	}
 //	if (sched_thd_blocked(p) /* || sched_thd_inactive_evt(p) */) return NULL;
 	if (!sched_thd_ready(p)) return NULL;
 	return p == curr ? NULL : p;
@@ -464,7 +480,7 @@ static inline int cos_switch_thread_release(unsigned short int thd_id,
 	cos_sched_lock_release();
 
 	/* kernel will read next thread information from cos_next */
-	/* printc("core %ld: __switch_thread, thd %u, flags %u (curr thd %d)\n",  */
+	/* printc("core %ld: __switch_thread, thd %u, flags %u (curr thd %d)\n", */
 	/*        cos_cpuid(), thd_id, flags, cos_get_thd_id()); */
 #ifdef MEA_NET
 	if (cos_get_thd_id() == WHICH_THD) {
