@@ -258,6 +258,7 @@ int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int t
 
 	/* printc("thread %d is going to block in lock spd\n", cos_get_thd_id()); */
 	if (-1 == sched_block(spdid, thd_id)) {
+		while(1);  // spinning so that deadlock can be detected
 		printc("Deadlock including thdids %d -> %d in spd %d, lock id %d.\n", 
 		       cos_get_thd_id(), thd_id, spd, (int)lock_id);
 		debug_print("BUG: Possible deadlock @ "); 

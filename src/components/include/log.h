@@ -49,6 +49,8 @@
 #define LOGEVENTS_MODE
 
 /************spd execution time paras******************/
+//#define MON_PPONG   // just for invocation cost measure
+
 //#define MON_FS
 //#define MON_SCHED
 //#define MON_MM
@@ -69,8 +71,7 @@
 //#define MON_MAX_PI  25000   // this is some number estimated in LOGEVENT MODE
 
 //#define MON_PI_SCHEDULING
-
-//#define MON_DEADLINE
+#define MON_DEADLOCK
 /***********************************************/
 /************printing**************/
 //#define LOGMGR_DEBUG_PI
@@ -154,6 +155,8 @@ enum{
 	FN_SCHED_BLOCK = 1,
 	FN_SCHED_WAKEUP,
 	FN_SCHED_TIMEOUT,
+	FN_SCHED_COMPONENT_TAKE,
+	FN_SCHED_COMPONENT_RELEASE,
 	FN_MM_GET,
 	FN_MM_ALIAS,
 	FN_MM_REVOKE,
@@ -297,6 +300,15 @@ _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par
 #endif
 
 	/* if (evt->from_spd == 4 ||  evt->to_spd	== 4) print_evt_info(evt); */
+
+	// deadlock
+	/* if (evt->from_thd == 15 || evt->from_thd == 17) { */
+	/* 	if (evt->func_num == 9) { */
+	/* 		printc("testing entry\n"); */
+	/* 		print_evt_info(evt); */
+	/* 	} */
+	/* } */
+
 
 	return;
 }

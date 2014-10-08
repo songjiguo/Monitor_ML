@@ -107,6 +107,19 @@ cos_init(void)
 			periodic_wake_create(cos_spd_id(), 13);
 			try_cs_lp();
 		}
+/********  Deadlock Fault*********/
+#elif defined MON_DEADLOCK
+		if (cos_get_thd_id() == high) {
+			printc("<<<high thd %d>>>\n", cos_get_thd_id());
+			printc("\n[[[[ MON_DEADLOCK Test....]]]]\n");
+			periodic_wake_create(cos_spd_id(), 5);
+			try_cs_hp();
+		}
+		if (cos_get_thd_id() == low) {
+			printc("<<<low thd %d>>>\n", cos_get_thd_id());
+			periodic_wake_create(cos_spd_id(), 13);
+			try_cs_lp();
+		}
 /********  Overrun in Scheduler *********/
 #elif defined MON_SCHED  // 2 threads, bloc/wakeup N time, random delay in sched
 		printc("thread %d is in MON_SCHED_DELAY\n", cos_get_thd_id());
@@ -134,6 +147,19 @@ cos_init(void)
 			printc("<<<high thd %d>>>\n", cos_get_thd_id());
 			test_iploop();
 			return;
+		}
+#elif defined MON_PPONG
+		if (cos_get_thd_id() == high) {
+			printc("<<<high thd %d --- PPONG>>>\n", cos_get_thd_id());
+			int i = 0;
+			unsigned long long start_pp, end_pp;
+			
+			while(i++ < RUNITER) {
+				rdtscll(start_pp);
+				try_cs_hp();
+				rdtscll(end_pp);
+				printc("one invocation in cmon is %llu\n", end_pp-start_pp);
+			}
 		}
 #endif		
 	}

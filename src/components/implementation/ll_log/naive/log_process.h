@@ -86,8 +86,8 @@ struct thd_trace {
         // used to detect scheduling decision
 	unsigned long long epoch;
         // used to detect deadlock
-	unsigned int depth;
-	// for dependency list (next, lowest and highest)
+	unsigned int deadlock;
+	// for dependency list (next, highest. l is used for deadlock detection and dep)
 	struct thd_trace *n, *l, *h;
 
 	// number of invocations made to a component by this thread
@@ -134,8 +134,8 @@ print_thd_trace(struct thd_trace *tt)
 	mon_assert(tt);
 	
 	printc("thd_trace info: ");
-	printc("thd_id %d prio %d period %llu exec %llu epoch %llu\n",
-	       tt->thd_id, tt->prio, tt->p, tt->c, tt->epoch);
+	printc("thd_id %d prio %d period %llu exec %llu epoch %llu deadlock %d\n",
+	       tt->thd_id, tt->prio, tt->p, tt->c, tt->epoch, tt->deadlock);
 	return;
 }
 
@@ -168,7 +168,7 @@ init_log()
 		thd_trace[i].pi_time	 = 0;	// how long a thread is in PI status
 		thd_trace[i].pi_start_t	 = 0;	// when a thread starts being in PI status
 		thd_trace[i].epoch	 = 0;	// used to detect scheduling decision
-		thd_trace[i].depth	 = 0;	// used to detect deadlock
+		thd_trace[i].deadlock	 = 0;	// used to detect deadlock
 		thd_trace[i].n = thd_trace[i].l = thd_trace[i].h = &thd_trace[i];
 
 		// number of invocations and execution time in spd due to the invocation
@@ -210,40 +210,6 @@ slide_twindow(struct evt_entry *entry)
 		timer_interrupts = 0;
 	}
 	return;
-}
-
-
-/* PI begin condition: 1) The dependency from high to low
-   (sched_block(spdid, low)) 2) A context switch from high thd to low
-   thd */
-static int
-pi_on(struct evt_entry *pe, int p_prio, 
-	   struct evt_entry *ce, int c_prio)
-{
-	return (ce->evt_type == EVT_CS &&
-		ce->from_thd != ce->to_thd &&
-		p_prio < c_prio &&
-		pe->evt_type == EVT_SINV && 
-		pe->func_num == FN_SCHED_BLOCK &&
-		pe->para > 0);
-}
-
-/* A thread could be in PI before process starts (no events since then) */
-static int
-pi_in(struct thd_trace *ttc) { return (ttc->pi_start_t > 0);}
-
-/* PI end condition: 1) Low thd wakes up high thd (sched_wakeup(spdid,
-   high)); 2) A context switch from low to high */
-static int
-pi_off(struct evt_entry *pe, int p_prio, 
-	   struct evt_entry *ce, int c_prio)
-{
-	return (ce->evt_type == EVT_CS &&
-		ce->from_thd != ce->to_thd &&
-		p_prio > c_prio &&
-		pe->evt_type == EVT_SINV && 
-		pe->func_num == FN_SCHED_WAKEUP &&
-		pe->para > 0);
 }
 
 /* A periodic task begins if 1) sched_timeout (checked by timer
@@ -454,6 +420,7 @@ done:
 /*********************************/
 /*    Constraints Check  -- PI   */
 /*********************************/
+
 static void
 log_or_det_pit(struct thd_trace *l, struct thd_trace *h, 
 	       struct evt_entry *entry, unsigned long long pit)
@@ -493,34 +460,74 @@ higher_exec(struct thd_trace *ttc, int t)
 	return ret;
 }
 
+/* PI begin condition: 1) The dependency from high to low
+   (sched_block(spdid, low)) 2) A context switch from high thd to low
+   thd */
+static int
+pi_on(struct evt_entry *pe, int p_prio, 
+      struct evt_entry *ce, int c_prio)
+{
+	return (ce->evt_type == EVT_CS &&
+		ce->from_thd != ce->to_thd &&
+		p_prio < c_prio &&    // lower number indicates higher prio
+		pe->evt_type == EVT_SINV && 
+		pe->func_num == FN_SCHED_BLOCK &&
+		pe->para > 0);        // block on some thread
+}
+
+/* A thread could be in PI before process starts (no events since then) */
+static int
+pi_in(struct thd_trace *ttc) { return (ttc->pi_start_t > 0);}
+
+/* PI end condition: 1) Low thd wakes up high thd (sched_wakeup(spdid,
+   high)); 2) A context switch from low to high 3) can not be
+   sched_wakeup in timed_evt or evt_trigger (assume lock only now??)*/
+static int
+pi_off(struct evt_entry *pe, int p_prio, 
+       struct evt_entry *ce, int c_prio)
+{
+	return (ce->evt_type == EVT_CS &&
+		ce->from_thd != ce->to_thd &&
+		p_prio > c_prio &&    // lower number indicates higher prio
+		pe->evt_type == EVT_SINV && 
+		pe->func_num == FN_SCHED_WAKEUP &&
+		pe->para > 0);
+}
+
 static void
 check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry)
 {
 	int i;
-	struct thd_trace *d, *n, *m, *root;
+	struct thd_trace *d, *n, *m, *root, *dep;
 
 	mon_assert(ttc && entry);
 	if (!ttn) return;
 
 	if (!RT(ttc) || !RT(ttn)) return;   // we only do PI check periodic tasks
-	
+
 	/* add dependency */
+	/* here last_entry refers to the previous entry, ttc means
+	 * current entry, and ttn is next entry*/
 	if (unlikely(pi_on(&last_entry, ttc->prio, entry, ttn->prio))) {
 		/* printc("add PI dependency\n"); */
-		root = &thd_trace[last_entry.para];
-		mon_assert(root);
-		/* printc("<<root>>\n"); */
-		/* print_thd_trace(root); */
+                /* last_entry.para should be the dep */
+		dep = &thd_trace[last_entry.para];
+		mon_assert(dep);
+		
+		ttc->n	     = dep->h; // track low/high relation (first time is dep itself)
+		dep->h	     = ttc;    // ttc is the running one and should the highest (PIP)
+		
+		dep->epoch++;    // every time when a new dependency comes, for later check
 
-		ttc->n	     = root->h;
-		ttc->l	     = root;
-		root->h	     = ttc;
-		ttc->pi_start_t = root->tot_exec; // start accounting PI time
+		/* start accounting PI time */
+		ttc->pi_start_t = dep->tot_exec;
 		ttc->pi_time    = 0;
 		higher_exec(ttc, 0);
-		goto done;
-		/* return; */
+		
+		/* goto done; */
+		/* fall through to check deadlock after every PI added to the tree */
 	}
+
 	/* remove dependency ( update and check epoch )*/
 	if (unlikely(pi_off(&last_entry, ttc->prio, entry, ttn->prio))) {
 		/* printc("remove PI dependency\n"); */
@@ -528,19 +535,21 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 		/* print_thd_trace(ttn); */
 		/* print_evt_info(entry); */
 		if (!pi_in(ttn)) goto done;  // low wakes up high without dependency is not PI
-		root = ttc;
-		mon_assert(root);
-		m = d = root->h;
-		while((d = d->n) && d!=root);
-		d->epoch++;
-		m->epoch = d->epoch;
-                /* if not match, an error occurs */
-		if (m->epoch != ttn->epoch) {
-			/* print_thd_trace(m); */
+
+		unsigned int dep_counter = 0;
+		m = d = ttn;
+		while(1) {
+			d = d->n;
+			dep_counter++;
+			if (d == ttc) break;
+		}
+		if (dep_counter != ttc->epoch) {
 			/* print_thd_trace(ttn); */
-			/* printc("epoch mismatch: m %d (%d) ttn %d (%d)\n",  */
-			/*        m->thd_id, m->epoch, ttn->thd_id, ttn->epoch); */
+			/* print_thd_trace(ttc); */
+			/* printc("epoch mismatch: walking epoch %d dep %d (%llu)\n", */
+			/*        dep_counter, ttc->thd_id, ttc->epoch); */
 #ifdef LOGEVENTS_MODE
+// this is to detect if the right thread is switched to
 			mon_assert(0);
 #endif
 		}
@@ -550,20 +559,23 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 		/*        m->thd_id, m->pi_time, ttc->tot_exec, */
 		/*        m->pi_start_t, higher_exec(m,1)); */
 		
-		log_or_det_pit(root, m, entry, m->pi_time);
-		/* printc("After PI remove: "); */
-		/* print_deps(m); */
+		log_or_det_pit(ttc, m, entry, m->pi_time);
 		printc("thd %d is in PI for %llu\n", m->thd_id, m->pi_time);
 		m->pi_start_t = 0;
-		root->h = m->n;
+
+		/* reset the node (although it might still have epoch
+		 * counter for threads depends on it, so keep h and
+		 * epoch for it) */
+		ttc->epoch--;
+		ttc->h = m->n;    // set the highest dependent to the next
+		m->n = m;
 		
 #if defined(DETECTION_MODE) && defined(MON_PI_OVERRUN)
 		// Hard coding the highest thread that is in PI, thd 15
 		if ((m->thd_id == 15) && m->pi_time > MON_MAX_PI) {
-			faulty_spd_localizer(root, entry, CONS_SCHEDULING);
+			faulty_spd_localizer(ttc, entry, CONS_SCHEDULING);
 		}
 #endif
-		
 		/* goto done; */
 		/* return; */
 	}
@@ -576,11 +588,114 @@ done:
 			h = &thd_trace[i];
 			if (unlikely(pi_in(h))) {
 				/* printc("thd %d still in PI\n", h->thd_id); */
-				l = h->l;
+				l = l->n;
 				h_pitime = l->tot_exec - h->pi_start_t - higher_exec(h, 1);
 				log_or_det_pit(l, h, entry, h_pitime);
 			}
 		}
+	}
+
+	return;
+}
+
+/************************************/
+/* Constraints Check  -- Deadlock   */
+/************************************/
+
+/* The resource contention (e.g. lock) starts. Similar to pi_on,
+ * except it can happen no matter what priority is (e.g, low thread
+ * running during PI tries to contend with medium thread, or
+ * deadlock). So pi_on is a prerequisite for deadlock detection? 
+
+ Needs this from lock component, since EVT_CS only happen after
+ sched_block
+*/
+static int
+contention_on(struct evt_entry *ce)
+{
+	int ret = 0;
+
+	/* if (pe->from_thd == 15 || pe->from_thd == 17) { */
+	/* 	if (pe->func_num == 9 || pe->func_num == 1) { */
+	/* 		printc("last entry\n"); */
+	/* 		print_evt_info(pe); */
+	/* 	} */
+	/* } */
+	/* if (ce->from_thd == 15 || ce->from_thd == 17) { */
+	/* 	if (ce->func_num == 9 || ce->func_num == 1) { */
+	/* 		printc("current entry\n"); */
+	/* 		print_evt_info(ce); */
+	/* 	} */
+	/* } */
+	
+
+	return (ce->evt_type == EVT_SINV && 
+		ce->func_num == FN_LOCK_COMPONENT_TAKE &&
+		ce->para > 0);        // lock on some thread (e.g, lock owner)
+}
+
+
+/* Note: to make this work, we need change scheduler and lock where
+ * assert(0) was used in the past once the deadlock is found due to
+ * the circular dependency
+
+ Complexity: O(2N) where N is the depth of the nested critical
+ sectoins */
+
+static void
+check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
+{
+	int i;
+	struct thd_trace *d, *n, *m, *root, *dep;
+
+	mon_assert(ttc && entry);
+
+        /* we only check periodic tasks now for simplicity */
+	/* if (!RT(ttc) || !RT(ttn)) return;   */
+	if (!RT(ttc)) return;
+
+	/* check deadlock whenever there is contention (even not
+	 * PI). A deadlock can be formed by lower thread taking the
+	 * lock hold by higher thread while high contending with low
+	 * (PI). */
+
+	if (unlikely(contention_on(entry))) {
+		printc("deadlock detection\n");
+		dep = &thd_trace[entry->para];
+		mon_assert(dep);
+		/* print_thd_trace(dep); */
+		
+		ttc->l = dep;
+		d = ttc;
+		while(1) {
+			assert(d);
+			if (!d->deadlock) {
+				if (d == d->l) {
+					/* no deadlock. clear all
+					 * deadlock bit....*/
+					n = ttc;
+					while(1) {
+						if (n == n->l) {
+							assert(!n->deadlock);
+							break;
+						}
+						printc("mark deadlock to 0\n");
+						n->deadlock = 0;
+						n = n->l;
+					}
+					break;
+				}
+				printc("mark deadlock to 1\n");
+				d->deadlock = 1;
+				print_thd_trace(d);
+				d = d->l;
+			} else {
+				printc("found deadlock\n");
+				print_thd_trace(d);
+				assert(0);   // found a deadlock
+			}
+		}
+		printc("deadlock detection done!!!!\n");
 	}
 
 	return;
@@ -1024,6 +1139,7 @@ constraint_check(struct evt_entry *entry)
 
 	/* only for periodic tasks */
 	check_priority_inversion(ttc, ttn, entry);
+	check_deadlock(ttc, entry);
 
 	/* Constraint check done ! */
 	/***************************/

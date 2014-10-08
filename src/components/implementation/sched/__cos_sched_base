@@ -50,7 +50,7 @@ some_delay(void) {
 	rdtscll(t);
 	val = (int)(t & (TOTAL_AMNT-1));
 	if (val < delayi) {
-		printc("KevinAndy\n");
+		/* printc("KevinAndy\n"); */
 		while(i++ < 10) {
 			printc("delay in scheduler...thd %d (%ld)\n", 
 			       cos_get_thd_id() ,val);
@@ -1036,13 +1036,26 @@ int sched_block(spdid_t spdid, unsigned short int dependency_thd)
 		/* printc("thd %d trying to depend on %d\n", thd->id, dependency_thd); */
 		dep = sched_get_mapping(dependency_thd);
 		if (dep->dependency_thd) {
+
 			/* circular dependency... */
 			if(dep->dependency_thd->id == cos_get_thd_id()) {
-				debug_print("BUG @ ");
-				printc("cos_sched_base: circular dependency between dep %d, curr %d (From spdid %d)\n", dep->id, cos_get_thd_id(), spdid);
-				assert(0);
+
+
+				/* cos_sched_lock_release(); */
+				/* while(1); */
+				/* int kk = 0; */
+				/* while(kk++ < 10) { */
+				/* 	printc("delay in scheduler..for deadlock.thd %d\n",  */
+				/* 	       cos_get_thd_id()); */
+				/* } */
+
+
+				/* debug_print("BUG @ "); */
+				/* printc("cos_sched_base: circular dependency between dep %d, curr %d (From spdid %d)\n", dep->id, cos_get_thd_id(), spdid); */
+				/* assert(0); */
 				goto unblock;
 			}
+
 		}
 
 		if (!dep) {

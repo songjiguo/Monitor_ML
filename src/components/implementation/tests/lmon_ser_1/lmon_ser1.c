@@ -73,7 +73,6 @@ int try_cs_lp(void)
 		/* printc("thread l : %d after spin\n", cos_get_thd_id()); */
  		/* printc("thread l : %d release lock1\n", cos_get_thd_id()); */
 		LOCK1_RELEASE();
-		/* periodic_wake_wait(cos_spd_id()); */
 	}
 	return 0;
 }
@@ -196,6 +195,53 @@ int try_cs_lp(void)
 /* 	return 0; */
 /* } */
 
+vaddr_t lmon_ser1_test(void) { return 0;}
+/**************************/
+#elif defined MON_DEADLOCK
+int try_cs_hp(void)
+{
+	int i;
+	while(1) {
+		printc("thread h : %d try to take lock1\n", cos_get_thd_id());
+		LOCK1_TAKE();
+		periodic_wake_wait(cos_spd_id());
+		spin = 0;
+		printc("thread h : %d try to take lock2\n", cos_get_thd_id());
+		LOCK2_TAKE();
+		printc("thread h : %d released lock2\n", cos_get_thd_id());
+		LOCK2_RELEASE();
+		printc("thread h : %d released lock1\n", cos_get_thd_id());
+		LOCK1_RELEASE();
+	}
+	return 0;
+}
+
+int try_cs_lp(void)
+{
+	volatile unsigned long jj, kk;
+	jj = 0;
+	while (1) {
+		jj++;
+		printc("thread l : %d try to take lock2\n", cos_get_thd_id());
+		LOCK2_TAKE();
+		printc("thread l : %d spin\n", cos_get_thd_id());
+		spin = 1;
+		while (spin);
+
+		if (jj%10 == 0) {
+			printc("thread l : %d try to take lock1\n", cos_get_thd_id());
+			LOCK1_TAKE();
+			printc("thread l : %d release lock1\n", cos_get_thd_id());
+			LOCK1_RELEASE();
+		}
+		
+ 		printc("thread l : %d release lock2\n", cos_get_thd_id());
+		LOCK2_RELEASE();
+	}
+	return 0;
+}
+
+int try_cs_mp(void) {return 0;}
 vaddr_t lmon_ser1_test(void) { return 0;}
 /**************************/
 #elif defined MON_SCHED
@@ -487,6 +533,12 @@ int try_cs_mp(void)
 	return 0;
 }
 int try_cs_hp(void) { return 0;}
+int try_cs_lp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
+
+#elif defined MON_PPONG
+int try_cs_hp(void) { return 0;}
+int try_cs_mp(void) { return 0;}
 int try_cs_lp(void) { return 0;}
 vaddr_t lmon_ser1_test(void) { return 0;}
 
