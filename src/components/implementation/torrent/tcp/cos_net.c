@@ -1291,10 +1291,11 @@ static int cos_net_evt_loop(void)
 	alloc_sz = sizeof(struct cos_array) + MTU;
 	while (1) {
 		int sz;
-
+		
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
 		/* printc("tnet_tip_tread (thd %d)\n", cos_get_thd_id()); */
+		printc("kevin 0 (thd %d)\n", cos_get_thd_id());
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
 		tcp_tread_cnt++;
 		assert(sz > 0);

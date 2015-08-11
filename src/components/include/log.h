@@ -51,9 +51,10 @@
 /************spd execution time paras******************/
 //#define MON_PPONG   // just for invocation cost measure
 
-//#define MON_FS
 //#define MON_SCHED
 //#define MON_MM
+//#define MON_FS
+
 
 /**** sched spd error ****/
 //#define MON_SCHED_DELAY
@@ -71,12 +72,13 @@
 //#define MON_MAX_PI  25000   // this is some number estimated in LOGEVENT MODE
 
 //#define MON_PI_SCHEDULING
-#define MON_DEADLOCK
+//#define MON_DEADLOCK
 /***********************************************/
+
 /************printing**************/
 //#define LOGMGR_DEBUG_PI
-//#define LOGMGR_DEBUG_SPDEXEC
-//#define LOGMGR_DEBUG_THD_TIMING
+#define LOGMGR_DEBUG_SPDEXEC
+#define LOGMGR_DEBUG_THD_TIMING
 //#define LOGMGR_DEBUG_INTNUM
 //#define LOGMGR_DEBUG_ORDER
 /***********************************************/
@@ -324,6 +326,10 @@ _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par
 static inline CFORCEINLINE void 
 evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
+
+	//Jiguo: hack for testing only. port_ns with network. Another hack is in inv.c
+	if (cos_spd_id() == 21) return;
+	
 	if (unlikely(!evt_ring)) {        // create shared RB
 		/* vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */
 		printc("to create RB in spd %ld\n", cos_spd_id());

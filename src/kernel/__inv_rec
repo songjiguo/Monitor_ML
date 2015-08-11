@@ -511,13 +511,11 @@ void initialize_sched_info(struct thread *t, struct spd *curr_sched)
 
 		tsi->scheduler = sched;
 		tsi->thread_notifications = NULL;
+
+		printk("child scheduler %d -- parent scheduler %d (thread %d)\n", 
+		       spd_get_index(sched), spd_get_index(sched->parent_sched), t->thread_id);
 		
 		sched = sched->parent_sched;
-
-		/* printk("child %d -- sched_depth %d\n", spd_get_index(child), child->sched_depth); */
-		/* printk("parent %d -- sched_depth %d\n",  */
-		/*        spd_get_index(child->parent_sched), child->parent_sched->sched_depth); */
-		
 	}
 
 	return;
@@ -539,6 +537,7 @@ static inline void copy_sched_info_structs(struct thd_sched_info *new,
 			assert(old[i].scheduler->parent_sched == prev_sched);
 		}
 
+		printk("copy sched info\n");
 		prev_sched = old[i].scheduler;
 		new[i].scheduler = prev_sched;
 		new[i].thread_notifications = old[i].thread_notifications;
@@ -1652,11 +1651,14 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 		assert(tsi);
 		dest = tsi->scheduler;
 
+		//Jiguo: hack for testing EAC stuff
+		dest = spd_get_by_index(3);  // hard code scheduler
+
 		upcall_inv_setup(curr, dest, COS_UPCALL_BRAND_COMPLETE, 0, 0, 0);
 		upcall_execute(curr, (struct composite_spd*)dest->composite_spd, 
 			       NULL, cspd);
 
-		/* printk("4, curr thd %d\n", thd_get_id(curr)); */
+		printk("4, curr thd %d (dest %d)\n", thd_get_id(curr), spd_get_index(dest));
 		event_record("brand complete, upcall scheduler", thd_get_id(curr), 0);
 		/* printk("scheduler decides:curr %d upcall scheduler\n", thd_get_id(curr)); */
 		cos_meas_event(COS_MEAS_BRAND_COMPLETION_UC);
@@ -1770,7 +1772,7 @@ cos_syscall_brand_wait_cont(int spd_id, unsigned short int bid, int *preempt)
 		goto brand_wait_err;
 	}
 
-	/* printk("thd %d waiting for the interrupt (preempted %d bid %d)\n", curr->thread_id, *preempt, bid); */
+	printk("thd %d waiting for the interrupt (preempted %d bid %d)\n", curr->thread_id, *preempt, bid);
 	return brand_execution_completion(curr, preempt);
 brand_wait_err:
 	curr->regs.ax = -1;
@@ -1956,7 +1958,6 @@ cos_syscall_brand_cntl(int spd_id, int op, u32_t bid_tid, spdid_t dest)
 			tsi = thd_get_sched_info(new_thd, i);
 			if (clear == 1) {
 				tsi->scheduler = NULL;
-				printk("5\n");
 				tsi->thread_notifications = NULL;
 				continue;
 			}
@@ -3542,6 +3543,7 @@ cos_syscall_sched_cntl(int spd_id, int operation, int thd_id, long option)
 		child_tsi = thd_get_sched_info(target_thd, child->sched_depth);
 
 		if (COS_SCHED_GRANT_SCHED == operation) {
+			printk("5\n");
 			child_tsi->scheduler = child;
 		} else if (COS_SCHED_REVOKE_SCHED == operation) {
 			if (child_tsi->scheduler != child) {

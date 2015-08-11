@@ -505,13 +505,15 @@ static int interrupt_wait(void)
 {
 	int ret;
 
+	printc("kevin 1_if (thd %d)\n", cos_get_thd_id());
 	assert(wildcard_brand_id > 0);
 	if (-1 == (ret = cos_brand_wait(wildcard_brand_id))) BUG();
-
+	printc("kevin 2_if (thd %d)\n", cos_get_thd_id());
 /* Network interrupt logging here*/
 #ifdef LOG_MONITOR
 	evt_enqueue(cos_get_thd_id(), cos_spd_id(), cos_spd_id(), 0, 0, EVT_NINT);
 #endif
+	printc("kevin 3_if (thd %d)\n", cos_get_thd_id());
 	rdtscll(start);
 	if (ret > 0) {
 		cos_immediate_process_cnt = ret;
@@ -673,7 +675,6 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	buf = cbuf2buf(cbid, sz);
 	if (!buf) ERR_THROW(-EINVAL, done);
 	ret = netif_event_wait(spdid, buf, sz);
-	
 	/* // debug ?  */
 	/* if (debug_first == 1) { */
 	/* 	ret = netif_event_xmit(spdid, debug_buf, debug_amnt); */
