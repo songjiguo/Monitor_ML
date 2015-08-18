@@ -51,10 +51,9 @@
 /************spd execution time paras******************/
 //#define MON_PPONG   // just for invocation cost measure
 
-//#define MON_SCHED
+#define MON_SCHED
 //#define MON_MM
 //#define MON_FS
-
 
 /**** sched spd error ****/
 //#define MON_SCHED_DELAY
@@ -77,8 +76,8 @@
 
 /************printing**************/
 //#define LOGMGR_DEBUG_PI
-#define LOGMGR_DEBUG_SPDEXEC
-#define LOGMGR_DEBUG_THD_TIMING
+//#define LOGMGR_DEBUG_SPDEXEC
+//#define LOGMGR_DEBUG_THD_TIMING
 //#define LOGMGR_DEBUG_INTNUM
 //#define LOGMGR_DEBUG_ORDER
 /***********************************************/
@@ -319,6 +318,7 @@ _evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par
 	/* 	} */
 	/* } */
 
+	/* print_evt_info(evt); */
 
 	return;
 }
