@@ -111,8 +111,7 @@ updatemax_int(unsigned int *p, unsigned int val) { if (val > *p) *p = val; retur
 static inline void *
 llog_get_page()
 {
-	char *addr = NULL;
-	
+	char *addr;
 	addr = cos_get_heap_ptr();
 	if (!addr) goto done;
 	cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE));
@@ -193,7 +192,7 @@ static struct heap *log_heap_alloc(int max_sz, cmp_fn_t c, update_fn_t u)
 	struct heap *h;
 
 	// assume a page for now
-	h = (struct heap *)llog_get_page();
+	h = (struct heap *)llog_get_page(1);
 	if (NULL == h) return NULL;
 
 	h->max_sz = max_sz+1;

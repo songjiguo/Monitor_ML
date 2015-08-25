@@ -14,36 +14,51 @@ static int LOG_LOOP_THD;
 static int LOG_PREV_THD;
 static int LOG_PREV_SPD;
 
+static int FKML_THD;
+
 void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages) 
 { return NULL; }
 
 /* Set up ring buffer (assume a page for now, not including ll_log) */
 static int 
-lmgr_setuprb(spdid_t spdid, vaddr_t cli_addr) {
+lmgr_setuprb(spdid_t spdid, vaddr_t cli_addr, int npages, int flag) {
         struct logmon_info *spdmon = NULL;
         vaddr_t log_ring, cli_ring = 0;
 	char *addr, *hp;
 	
 	mon_assert(spdid && cli_addr);
-	addr = llog_get_page();
-	if (!addr) goto err;
 	spdmon = &logmon_info[spdid];
 	mon_assert(spdmon);
+	spdmon->cli_ring = cli_addr;
 
-	cli_ring = cli_addr;
+	/* printc("monitor aliasing: addr %p to (spdid %d) cli_ring %p\n", */
+	/*        (vaddr_t)addr, spdid, (vaddr_t)cli_ring); */
+	addr = llog_get_page();
+	if (!addr) goto err;
 	spdmon->mon_ring = (vaddr_t)addr;
 
-	/* printc("monitor aliasing: addr %p to (spdid %d) cli_ring %p\n",  */
-	/*        (vaddr_t)addr, spdid, (vaddr_t)cli_ring); */
-	if (unlikely(cli_ring != __mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, cli_ring))) {
-		printc("alias rings %d failed.\n", spdid);
-		mon_assert(0);
+	int tmp = npages;
+	char *start = addr;
+	while(tmp--) {
+		if (unlikely(cli_addr != __mman_alias_page(cos_spd_id(), (vaddr_t)addr, spdid, cli_addr))) {
+			printc("alias rings %d failed.\n", spdid);
+			mon_assert(0);
+		}
+		if (tmp) {
+			cli_addr += PAGE_SIZE;
+			addr = llog_get_page();
+			if (!addr) goto err;
+		}
 	}
+	addr = start;
 	// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))	
-	spdmon->cli_ring = cli_ring;
-	CK_RING_INIT(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)addr), NULL,
-		     get_powerOf2((PAGE_SIZE - sizeof(struct ck_ring_logevt_ring))/sizeof(struct evt_entry)));
-	
+	if (flag == 0) {         // log
+		CK_RING_INIT(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)addr), NULL, 
+			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_logevt_ring))/sizeof(struct evt_entry)));
+	} else if(flag == 1) {  // fkml
+		CK_RING_INIT(mlbuffer_ring, (CK_RING_INSTANCE(mlbuffer_ring) *)((void *)addr), NULL, 
+			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mlbuffer_ring))/sizeof(struct ml_entry)));
+	}
 	return 0;
 err:
 	return -1;
@@ -52,43 +67,6 @@ err:
 #ifdef MEAS_LOG_CHECKING
 volatile unsigned long long logmeas_start, logmeas_end;
 #endif
-
-volatile unsigned int event_num;   // how many evts processed
-static void
-lmgr_action()
-{
-        struct logmon_info *spdmon;
-        vaddr_t mon_ring, cli_ring;
-	struct evt_entry *evt;
-
-	event_num = 0;
-	/* printc("start process log ....\n"); */
-
-	rdtscll(lpc_start);
-	evt = find_next_evt(NULL);
-	if (!evt) goto done;
-	
-	do {
-#if defined(MEAS_LOG_CHECKING) && defined(DETECTION_MODE)
-		rdtscll(logmeas_start);
-#endif
-		event_num++;
-		constraint_check(evt);
-#if defined(MEAS_LOG_CHECKING) && defined(DETECTION_MODE)
-		rdtscll(logmeas_end);
-		printc("per evt check cost %llu\n", logmeas_end - logmeas_start);
-#endif
-	} while ((evt = find_next_evt(evt)));
-
-	/* mon_assert(test_num++ < 2);  // remove this later */
-	/* printc("log process done (%d evts)\n", event_num); */
-done:
-	rdtscll(lpc_end);
-	lpc_last = lpc_end - lpc_start;
-	update_proc(lpc_last);
-
-	return;
-}
 
 // naive way to clear all committed bit
 static void
@@ -122,24 +100,7 @@ clear_owner_commit()
 	return;
 }
 
-static void
-lllog_loop(void) { 
-	int tid, pthd;
-	while(1) {
-		pthd = LOG_PREV_THD;
-		test_aysncthd = pthd;  // test asyn cost only
-		mon_assert(cos_get_thd_id() == LOG_LOOP_THD);
-#if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION)
-		lmgr_action();
-		clear_owner_commit();
-#endif
-		LOG_PREV_THD = 0;
-		LOG_PREV_SPD = 0;
-		cos_switch_thread(pthd, 0);
-	}
-	mon_assert(0);
-	return; 
-}
+static void lllog_loop(void);
 
 /* Initialize log manager here...do this only once */
 static void
@@ -190,6 +151,115 @@ lmgr_initialize(void)
 	return;
 }
 
+/* copy event information from SMC buffers to the SMC-ML buffer */
+static void
+cra_copy(struct evt_entry *evt)
+{
+	/* printc("thread %d is doing CRA copy\n", cos_get_thd_id()); */
+	int spdid;
+        struct logmon_info *spdmon;
+
+	assert(evt);
+	/* print_evt_info(evt); */
+
+	spdmon = &logmon_info[FKML_SPD];
+	mon_assert(spdmon);
+
+	CK_RING_INSTANCE(mlbuffer_ring) *mlring;
+	mlring = (CK_RING_INSTANCE(mlbuffer_ring) *)spdmon->mon_ring;
+	mon_assert(mlring);
+	unsigned int tail = mlring->p_tail;
+	struct ml_entry *ml_evt;
+	ml_evt = (struct ml_entry *) CK_RING_GETTAIL_EVT(mlbuffer_ring, mlring, tail);
+
+	/* possible memcpy here, for now test only*/
+	ml_evt->para1 = evt->owner;
+	ml_evt->para2 = evt->from_spd;
+	ml_evt->para1 = evt->to_spd;
+	ml_evt->time_stamp = evt->time_stamp;
+
+	/* print_mlentry_info(ml_evt); */
+
+	/* struct ml_entry *ml_evt; */
+	/* while((CK_RING_DEQUEUE_SPSC(mlbuffer_ring, mlring, ml_evt))) { */
+	/* 	if (!entry->committed) { */
+	/* 		if (!entry->owner) continue;  // not a valid entry */
+	/* 		printc("set thd %d 's eip (find next)\n", entry->owner); */
+	/* 		mon_assert(cos_thd_cntl(COS_THD_IP_LFT, entry->owner, 0, 0) != -1); */
+	/* 		continue; */
+	/* 	} else {		 */
+	/* 		es[indx].ts = LLONG_MAX - entry->time_stamp; */
+	/* 		mon_assert(!heap_add(h, &es[indx])); */
+	/* 		break; */
+	/* 	} */
+	/* } */
+
+
+	return;
+}
+
+volatile unsigned int event_num;   // how many evts processed
+static void
+lmgr_action(int flag)  // 1 for CRA copy, 0 for normal constraint check
+{
+        struct logmon_info *spdmon;
+        vaddr_t mon_ring, cli_ring;
+	struct evt_entry *evt;
+
+	event_num = 0;
+	/* printc("start process log ....\n"); */
+
+	rdtscll(lpc_start);
+	evt = find_next_evt(NULL);
+	if (!evt) goto done;
+	
+	do {
+#if defined(MEAS_LOG_CHECKING) && defined(DETECTION_MODE)
+		rdtscll(logmeas_start);
+#endif
+		event_num++;
+
+		if (!flag) constraint_check(evt);
+		else cra_copy(evt);
+
+#if defined(MEAS_LOG_CHECKING) && defined(DETECTION_MODE)
+		rdtscll(logmeas_end);
+		printc("per evt check cost %llu\n", logmeas_end - logmeas_start);
+#endif
+	} while ((evt = find_next_evt(evt)));
+
+	/* mon_assert(test_num++ < 2);  // remove this later */
+	printc("log process done (%d evts)\n", event_num);
+done:
+	rdtscll(lpc_end);
+	lpc_last = lpc_end - lpc_start;
+	update_proc(lpc_last);
+
+	return;
+}
+
+static void
+lllog_loop(void) { 
+	int tid, pthd;
+	while(1) {
+		pthd = LOG_PREV_THD;
+		test_aysncthd = pthd;  // test asyn cost only
+		mon_assert(cos_get_thd_id() == LOG_LOOP_THD);
+#if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION)
+		if (pthd == FKML_THD) lmgr_action(1);  // CRA copy
+		else {
+			lmgr_action(0);
+			clear_owner_commit();
+		}
+#endif
+		LOG_PREV_THD = 0;
+		LOG_PREV_SPD = 0;
+		cos_switch_thread(pthd, 0);
+	}
+	mon_assert(0);
+	return; 
+}
+
 /***********************/
 /*  External functions  */
 /***********************/
@@ -202,7 +272,8 @@ llog_process(spdid_t spdid)
 
 	LOG_PREV_SPD     = spdid;
 	LOG_PREV_THD     = cos_get_thd_id();
-
+	printc("llog_process is setting LOG_PREV_THD to ....%d\n", LOG_PREV_THD);
+	printc("LOG_LOOP_THD is ....%d\n", LOG_LOOP_THD);
 	/*  Log the processing as an event for that any thread that is
 	    still in PI state before process starts
 	*/
@@ -217,6 +288,20 @@ llog_process(spdid_t spdid)
 
 	return 0;
 
+}
+
+/* copy all events to the shared buffer between ML and SMC so the fkml
+ * thread can process it. See fkml.c */
+int
+llog_fkml_retrieve_data(spdid_t spdid)
+{
+	printc("fkml thd %d is retrieving any data in SMC now....\n",
+	       cos_get_thd_id());
+        struct logmon_info *spdmon;
+
+	llog_process(spdid);
+	
+	return 0;
 }
 
 /* Return the periodicity for asynchronously monitor processing  */
@@ -318,9 +403,12 @@ llog_setprio(spdid_t spdid, unsigned int thd_id, unsigned int prio)
 }
 
 /* Initialize shared RB. Called from each client spd when the first
- * event happens in that spd. Not including logmgr itself. */
+ * event happens in that spd. Not including logmgr itself. 
+ flag: 0 -- normal client component
+ flag: 1 -- CRA ML component
+*/
 vaddr_t
-llog_init(spdid_t spdid, vaddr_t addr)
+llog_init(spdid_t spdid, vaddr_t addr, int npages, int flag)
 {
 	vaddr_t ret = 0;
         struct logmon_info *spdmon;
@@ -329,10 +417,18 @@ llog_init(spdid_t spdid, vaddr_t addr)
 	spdmon = &logmon_info[spdid];
 	mon_assert(spdmon);
 
-	mon_assert(!spdmon->mon_ring && !spdmon->cli_ring);
+	// CRA hack
+	if (flag == 1) {
+		FKML_THD = cos_get_thd_id();
+		printc("set FKML thread to be %d\n", FKML_THD);
+	}
+	if (spdmon->mon_ring && spdmon->cli_ring) return spdmon->cli_ring;
 
+
+	mon_assert(!spdmon->mon_ring && !spdmon->cli_ring);
 	LOCK();
-	if (lmgr_setuprb(spdid, addr)) {
+
+	if (lmgr_setuprb(spdid, addr, npages, flag)) {
 		printc("failed to setup shared rings\n");
 		goto done;
 	}

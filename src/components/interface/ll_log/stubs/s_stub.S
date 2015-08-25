@@ -14,3 +14,5 @@ cos_asm_server_stub_spdid(llog_getsyncp)
 cos_asm_server_stub_spdid(llog_setprio)
 cos_asm_server_stub_spdid(llog_setperiod)
 cos_asm_server_stub_spdid(llog_contention)
+
+cos_asm_server_stub_spdid(llog_fkml_retrieve_data)

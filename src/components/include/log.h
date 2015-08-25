@@ -106,10 +106,11 @@ volatile unsigned long long deadlock_start, deadlock_end;
 #undef  LOGEVENTS_MODE
 #endif
 
-extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr);
+extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr, int npages, int flag);
 extern int llog_process(spdid_t spdid);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 extern int llog_contention(spdid_t spdid, int par1, int par2, int par3);
+extern int llog_fkml_retrieve_data(spdid_t spdid);
 
 #include <cos_list.h>
 #include <ck_ring_cos.h>
@@ -134,6 +135,9 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define LOCK_SPD        7
 #define TE_SPD          8
 #define NETIF_SPD	25
+
+// for CRA fake ML component
+#define FKML_SPD	13
 
 #if defined MON_SCHED
 #define TARGET_SPD SCHED_SPD
@@ -351,7 +355,7 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 #endif
 		}
 		
-		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr)))) BUG();
+		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr, 1, 0)))) BUG();
 		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 	}
 
@@ -368,6 +372,36 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 #endif
 
 	_evt_enqueue(par1, par2, par3, par4, par5, evt_type);
+	
+	return;
+}
+
+/**************************
+  CRA ML Component
+**************************/
+/* entry in the ring buffer for ML component*/
+struct ml_entry {
+	int para1;
+	int para2;
+	int para3;
+	unsigned long long time_stamp;
+};
+
+#ifndef CK_RING_CONTINUOUS
+#define CK_RING_CONTINUOUS
+#endif
+
+CK_RING(ml_entry, mlbuffer_ring);
+CK_RING_INSTANCE(mlbuffer_ring) *ml_ring;
+
+static void
+print_mlentry_info(struct ml_entry *entry)
+{
+	assert(entry);
+	printc("para1 (%d) -- ", entry->para1);
+	printc("para2 (%d) -- ", entry->para2);
+	printc("para3 (%d) -- ", entry->para3);
+	printc("time_stamp (%llu) -- \n", entry->time_stamp);
 	
 	return;
 }
