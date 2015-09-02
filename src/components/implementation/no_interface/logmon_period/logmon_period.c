@@ -27,6 +27,9 @@ void cos_init(void)
 		high = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
 		if (cos_get_thd_id() == high) {
+
+			return;  // test CRA stuff
+
 			int lm_sync_period;
 			lm_sync_period = llog_getsyncp(cos_spd_id());
 			periodic_wake_create(cos_spd_id(), lm_sync_period);

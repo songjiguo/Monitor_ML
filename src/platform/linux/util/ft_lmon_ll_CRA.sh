@@ -2,7 +2,7 @@
 
 ./cos_loader \
 "c0.o, ;llboot.o, ;lllog.o, ;*fprr.o, ;mm.o, ;print.o, ;boot.o, ;\
-!l.o,a1;!te.o,a3;!mon_p.o, ;!lmoncli1.o, ;!sm.o,a4;!e.o,a4;!cfkml.o, ;\
+!l.o,a1;!te.o,a3;!mon_p.o, ;!lmoncli1.o, ;!sm.o,a4;!e.o,a4;!cfkml.o, ;!cmultiplexer.o, ;\
 !mpool.o,a3;!buf.o,a5;!bufp.o, ;!lmonser1.o, ;!lmonser2.o, ;!va.o,a2:\
 c0.o-llboot.o;\
 lllog.o-print.o|[parent_]llboot.o;\
@@ -19,7 +19,8 @@ bufp.o-sm.o|fprr.o|print.o|l.o|mm.o|va.o|mpool.o|buf.o|lllog.o;\
 mpool.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o|lllog.o;\
 mon_p.o-print.o|fprr.o|mm.o|te.o|lllog.o|llboot.o|cfkml.o;\
 \
-cfkml.o-sm.o|fprr.o|print.o|l.o|mm.o|te.o|va.o|lllog.o;\
+cfkml.o-sm.o|fprr.o|print.o|l.o|mm.o|te.o|va.o|cmultiplexer.o|lllog.o;\
+cmultiplexer.o-sm.o|fprr.o|print.o|l.o|mm.o|te.o|va.o|lllog.o;\
 \
 lmoncli1.o-print.o|va.o|fprr.o|l.o|mm.o|lmonser1.o|te.o|lllog.o|llboot.o;\
 lmonser2.o-print.o|l.o|va.o|fprr.o|mm.o|lllog.o|llboot.o;\

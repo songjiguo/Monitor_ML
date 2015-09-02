@@ -82,6 +82,14 @@
 //#define LOGMGR_DEBUG_ORDER
 /***********************************************/
 
+/************CRA printing**************/
+//#define LOGMGR_DEBUG_CRA_PI
+//#define LOGMGR_DEBUG_CRA_SPDEXEC
+//#define LOGMGR_DEBUG_CRA_THD_TIMING
+//#define LOGMGR_DEBUG_CRA_INTNUM
+//#define LOGMGR_DEBUG_CRA_ORDER
+/***********************************************/
+
 /************measuring**************/
 //#define MEAS_LOG_SYNCACTIVATION 
 //#define MEAS_LOG_ASYNCACTIVATION
@@ -106,7 +114,7 @@ volatile unsigned long long deadlock_start, deadlock_end;
 #undef  LOGEVENTS_MODE
 #endif
 
-extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr, int npages, int flag);
+extern vaddr_t llog_init(spdid_t spdid, vaddr_t addr, int npages);
 extern int llog_process(spdid_t spdid);
 extern void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages);
 extern int llog_contention(spdid_t spdid, int par1, int par2, int par3);
@@ -137,6 +145,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define NETIF_SPD	25
 
 // for CRA fake ML component
+#define MULTIPLEXER_SPD	14
 #define FKML_SPD	13
 
 #if defined MON_SCHED
@@ -333,7 +342,7 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 
 	//Jiguo: hack for testing only. port_ns with network. Another hack is in inv.c
 	if (cos_spd_id() == 21) return;
-	
+
 	if (unlikely(!evt_ring)) {        // create shared RB
 		/* vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */
 		printc("to create RB in spd %ld\n", cos_spd_id());
@@ -354,8 +363,8 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 			addr = (char *)cos_get_vas_page();
 #endif
 		}
-		
-		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr, 1, 0)))) BUG();
+
+		if (!(evt_ring = (CK_RING_INSTANCE(logevt_ring) *)(llog_init(cos_spd_id(), (vaddr_t) addr, 1)))) BUG();
 		int capacity = CK_RING_CAPACITY(logevt_ring, (CK_RING_INSTANCE(logevt_ring) *)((void *)evt_ring));
 	}
 
@@ -377,31 +386,198 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 }
 
 /**************************
-  CRA ML Component
+  CRA Multiplexer Component -- mpsmc
 **************************/
-/* entry in the ring buffer for ML component*/
-struct ml_entry {
+/* entry in the ring buffer between Multiplexer component and the SMC,
+ * for now, just let the structure to be same --> copy everything */
+
+struct mpsmc_entry {
+	int owner;   // id of thread that owns the entry
+	int from_thd, to_thd;
+	unsigned long from_spd, to_spd; // can be cap_no
+	unsigned long long time_stamp;
+	int evt_type;    
+	int func_num;   // hard code which function call FIXME:naming space
+	int para;   // record passed parameter (e.g. dep_thd)
+	int committed;  // a flag to indicate if the event is committed
+};
+
+#ifndef __MPSMCRING_DEFINED
+#define __MPSMCRING_DEFINED
+CK_RING(mpsmc_entry, mpsmcbuffer_ring);
+CK_RING_INSTANCE(mpsmcbuffer_ring) *mpsmc_ring;
+#endif
+
+static void
+event_copy(struct mpsmc_entry *to, struct evt_entry *from)
+{
+	assert(to && from);
+
+	to->owner = from->owner;
+	to->from_thd = from->from_thd;
+	to->to_thd = from->to_thd;
+	to->from_spd = from->from_spd;
+	to->to_spd = from->to_spd;
+	to->time_stamp = from->time_stamp;
+	to->evt_type = from->evt_type;
+	to->func_num = from->func_num;
+	to->para = from->para;
+	to->committed = from->committed;	
+
+	return;
+}
+
+static void
+print_mpsmcentry_info(struct mpsmc_entry *entry)
+{
+	int dest;
+
+	assert(entry);
+	printc("mpsmcentry:owner (%d) ", entry->owner);
+	printc("thd (%d --> ", entry->from_thd);
+	printc("%d) ", entry->to_thd);
+
+	if (entry->evt_type == EVT_CRET && entry->from_spd > MAX_NUM_SPDS) {
+		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, entry->to_spd, entry->from_spd);
+		printc("spd (%d --> ", dest);
+	} else printc("spd (%lu --> ", entry->from_spd);
+
+	if (entry->evt_type == EVT_CINV && entry->to_spd > MAX_NUM_SPDS) {
+		dest = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, entry->from_spd, entry->to_spd);
+		printc("%d) ", dest);
+	} else printc("%lu) ", entry->to_spd);
+
+	printc("func_num %d ", entry->func_num);
+	printc("para %d ", entry->para);
+	printc("type %d ", entry->evt_type);
+	printc("time_stamp %llu ", entry->time_stamp);
+	printc("committed %d\n", entry->committed);
+	
+	return;
+}
+
+/**************************
+  CRA ML Component        -- mlmp
+**************************/
+/* entry in the ring buffer between the ML component and the
+ * Multiplexer component (stream....) */
+
+enum stream_flags {
+	STREAM_THD_EVT_SEQUENC     = (0x01 << 0),
+	STREAM_THD_EXEC_TIMING     = (0x01 << 1),
+	STREAM_THD_INTERACTION     = (0x01 << 2),
+	STREAM_SPD_INVOCATIONS     = (0x01 << 3),
+	STREAM_SPD_EVT_SEQUENC     = (0x01 << 4),
+	STREAM_MAX                 = (0x01 << 10),   // max 10 different type of streams
+};
+
+/* stream 1 --------- */
+struct mlmp_thdevtseq_entry {
+	unsigned int thd_id;
+	unsigned int thd_evt_seq[1024];
+};
+
+//TODO: use macro define
+
+#ifndef __MLMPRING_THDEVTSEQ_DEFINED
+#define __MLMPRING_THDEVTSEQ_DEFINED
+CK_RING(mlmp_thdevtseq_entry, mlmpthdevtseqbuffer_ring);
+CK_RING_INSTANCE(mlmpthdevtseqbuffer_ring) *mlmpthdevtseq_ring;
+#endif
+
+static void
+print_mlmpthdevtseqevt_info(struct mlmp_thdevtseq_entry *entry)
+{
+	assert(entry);
+	printc("mlmp: thd_id (%d) -- ", entry->thd_id);
+	printc("thd evt seq (%d)\n ", entry->thd_evt_seq[0]);
+	
+	return;
+}
+
+/* stream 2 --------- */
+struct mlmp_thdactexec_entry {
+	unsigned long long thd_activation_time;
+	unsigned long long thd_execution_time;
+};
+
+struct mlmp_thdtime_entry {
+	unsigned int thd_id;
+	struct mlmp_thdactexec_entry thd_time_entry[256];
+};
+
+#ifndef __MLMPRING_THDTIME_DEFINED
+#define __MLMPRING_THDTIME_DEFINED
+CK_RING(mlmp_thdtime_entry, mlmpthdtimebuffer_ring);
+CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *mlmpthdtime_ring;
+#endif
+
+/* stream 3 --------- */
+struct mlmp_thdcsint_entry {
+	unsigned int from_thd;  // this is the current
+	unsigned int to_thd;    // this is next thread or interrupting thread
+	unsigned long long time_stamp;
+};
+
+struct mlmp_thdinteract_entry {
+	struct mlmp_thdcsint_entry thd_cs[128];
+	struct mlmp_thdcsint_entry thd_ints[128];
+};
+
+#ifndef __MLMPRING_THDINTERACT_DEFINED
+#define __MLMPRING_THDINTERACT_DEFINED
+CK_RING(mlmp_thdinteract_entry, mlmpthdinteractbuffer_ring);
+CK_RING_INSTANCE(mlmpthdinteractbuffer_ring) *mlmpthdinteract_ring;
+#endif
+
+/* stream 4 --------- */
+struct mlmp_spdinvnum_entry {
+	unsigned int spd_id;
+	unsigned int invocation_nums;
+};
+
+#ifndef __MLMPRING_SPDINVNUM_DEFINED
+#define __MLMPRING_SPDINVNUMx_DEFINED
+CK_RING(mlmp_spdinvnum_entry, mlmpspdinvnumbuffer_ring);
+CK_RING_INSTANCE(mlmpspdinvnumbuffer_ring) *mlmpspdinvnum_ring;
+#endif
+
+/* stream 5 --------- */
+struct mlmp_spdevtseq_entry {
+	unsigned int spd_id;
+	unsigned int spd_evt_seq[1024];
+};
+
+
+#ifndef __MLMPRING_SPDEVTSEQ_DEFINED
+#define __MLMPRING_SPDEVTSEQ_DEFINED
+CK_RING(mlmp_spdevtseq_entry, mlmpspdevtseqbuffer_ring);
+CK_RING_INSTANCE(mlmpspdevtseqbuffer_ring) *mlmpspdevtseq_ring;
+#endif
+
+/* stream default ------------- */
+struct mlmp_entry {
 	int para1;
 	int para2;
 	int para3;
 	unsigned long long time_stamp;
 };
 
-#ifndef CK_RING_CONTINUOUS
-#define CK_RING_CONTINUOUS
+#ifndef __MLMPRING_DEFINED
+#define __MLMPRING_DEFINED
+CK_RING(mlmp_entry, mlmpbuffer_ring);
+CK_RING_INSTANCE(mlmpbuffer_ring) *mlmp_ring;
 #endif
 
-CK_RING(ml_entry, mlbuffer_ring);
-CK_RING_INSTANCE(mlbuffer_ring) *ml_ring;
 
 static void
-print_mlentry_info(struct ml_entry *entry)
+print_mlmpentry_info(struct mlmp_entry *entry)
 {
 	assert(entry);
-	printc("para1 (%d) -- ", entry->para1);
+	printc("mlmp: para1 (%d) -- ", entry->para1);
 	printc("para2 (%d) -- ", entry->para2);
 	printc("para3 (%d) -- ", entry->para3);
-	printc("time_stamp (%llu) -- \n", entry->time_stamp);
+	printc("time_stamp (%llu) \n", entry->time_stamp);
 	
 	return;
 }

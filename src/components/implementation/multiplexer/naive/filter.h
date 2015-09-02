@@ -8,15 +8,16 @@
 
 #include <ll_log.h>
 #include <heap.h>
-#include <log_util.h>
+#include <filter_util.h>
 
 //#define MEAS_LOG_LOCALIZATION  /* cost of localization */  override log.c #define
 
 #ifdef MEAS_LOG_LOCALIZATION
-#define  DETECTION_MODE
-//#define  LOGEVENTS_MODE
+//#define  DETECTION_MODE
+#define  LOGEVENTS_MODE
 #endif
 
+// for CRA test
 #define RT(ttc)	(ttc->p > 0)    // if a thread is a periodic task
 #define CONT_FLAG (1<<24)       // contention flag on rb
 
@@ -128,11 +129,10 @@ volatile unsigned long long lpc_start, lpc_end, lpc_last;
 unsigned int faulty_spd_localizer(struct thd_trace *ttc, 
 				  struct evt_entry *entry, int evt_type);
 
-
 static void
 print_thd_trace(struct thd_trace *tt)
 {
-	mon_assert(tt);
+	assert(tt);
 	
 	printc("thd_trace info: ");
 	printc("thd_id %d prio %d period %llu exec %llu epoch %llu deadlock %d\n",
@@ -204,7 +204,7 @@ init_log()
 static void
 slide_twindow(struct evt_entry *entry)
 {
-	mon_assert(entry);
+	assert(entry);
 	if (last_entry.time_stamp && 
 	    (window_start + window_sz) < entry->time_stamp) {
 		window_start = last_entry.time_stamp;
@@ -230,7 +230,7 @@ periodic_task_begin(struct evt_entry *last, struct thd_trace *ttn, struct evt_en
 static void
 last_evt_update(struct evt_entry *last, struct evt_entry *src)
 {
-	mon_assert(last && src);
+	assert(last && src);
 	
 	last->to_thd	 = src->to_thd;
 	last->to_spd	 = src->to_spd; 
@@ -252,15 +252,15 @@ update_proc(unsigned long long process_time)
 	int i;
 	struct thd_trace *ttc;
 	
-	mon_assert(process_time > 0);
+	assert(process_time > 0);
 
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
 		ttc = &thd_trace[i];
-		mon_assert(ttc);
+		assert(ttc);
 		// update up running time for a thread
 		if (ttc->last_ts > 0) {
 			ttc->last_ts = ttc->last_ts + process_time;
-			mon_assert(ttc->last_ts > 0);
+			assert(ttc->last_ts > 0);
 		}
 		// other timing here...
 		
@@ -273,7 +273,7 @@ static void
 print_deps(struct thd_trace *root)
 {
 	struct thd_trace *d, *n, *m;
-	mon_assert(root);
+	assert(root);
 
 	if (root->h == root) return;
 	m = d = root->h;
@@ -283,7 +283,7 @@ print_deps(struct thd_trace *root)
 		if (n == d) break;
 		printc("%d<--", n->thd_id);
 	}
-	mon_assert(n == d->n);
+	assert(n == d->n);
 	printc("%d", n->thd_id);
 	printc("\n");
 
@@ -296,13 +296,13 @@ lookup_dest(int spdid, unsigned long cap_no)
 {
 	int i, ret = 0;
 	struct logmon_info *spdmon = &logmon_info[spdid];
-	mon_assert(spdmon && cap_no);
+	assert(spdmon && cap_no);
 
 	/* printc("look for dest for cap_no %lu\n", cap_no);	 */
 	for (i = 0; i < MAX_STATIC_CAP; i++){
 		if (unlikely(!spdmon->capdest[i].capno)) {
 			ret = cos_cap_cntl(COS_CAP_GET_SER_SPD, 0, spdid, cap_no);
-			mon_assert(ret > 0);
+			assert(ret > 0);
 			spdmon->capdest[i].capno = cap_no;
 			spdmon->capdest[i].dest	 = ret;
 			/* printc("add dest %d for cap_no %lu\n", ret, cap_no); */
@@ -310,13 +310,13 @@ lookup_dest(int spdid, unsigned long cap_no)
 			
 		} else if (spdmon->capdest[i].capno == cap_no) {
 			ret = spdmon->capdest[i].dest;
-			mon_assert(ret > 0);
+			assert(ret > 0);
 			/* printc("found dest %d for cap_no %lu\n", ret, cap_no); */
 			goto done;
 		}
 	}
 done:	
-	mon_assert(ret >0);
+	assert(ret >0);
 	return ret;
 }
 
@@ -326,13 +326,13 @@ cap_to_dest(struct evt_entry *entry)
 {
 	int d;
 	
-	mon_assert(entry && (entry->evt_type == EVT_CINV || 
+	assert(entry && (entry->evt_type == EVT_CINV || 
 		entry->evt_type == EVT_CRET));
 	/* print_evt_info(entry); */
 	if (entry->to_spd < MAX_NUM_SPDS) return;
 	
 	d = lookup_dest(entry->from_spd, entry->to_spd);
-	mon_assert(d > 0 && d < MAX_NUM_SPDS);
+	assert(d > 0 && d < MAX_NUM_SPDS);
 	if (entry->evt_type == EVT_CINV) entry->to_spd = d;
 	else entry->from_spd = d;
 	
@@ -342,17 +342,17 @@ cap_to_dest(struct evt_entry *entry)
 static void
 get_event(struct evt_entry *entry, CK_RING_INSTANCE(logevt_ring) *evtring, int indx)
 {
-	mon_assert(entry && evtring);
+	assert(entry && evtring);
 
 	while((CK_RING_DEQUEUE_SPSC(logevt_ring, evtring, entry))) {
 		if (!entry->committed) {
 			if (!entry->owner) continue;  // not a valid entry
 			printc("set thd %d 's eip (find next)\n", entry->owner);
-			mon_assert(cos_thd_cntl(COS_THD_IP_LFT, entry->owner, 0, 0) != -1);
+			assert(cos_thd_cntl(COS_THD_IP_LFT, entry->owner, 0, 0) != -1);
 			continue;
 		} else {		
 			es[indx].ts = LLONG_MAX - entry->time_stamp;
-			mon_assert(!heap_add(h, &es[indx]));
+			assert(!heap_add(h, &es[indx]));
 			break;
 		}
 	}
@@ -371,11 +371,11 @@ populate_evts()
 	struct evt_entry *entry;
 	for (i = 1; i < MAX_NUM_SPDS; i++) {
 		spdmon = &logmon_info[i];
-		mon_assert(spdmon);
+		assert(spdmon);
 		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
 		if (!evtring) continue;
 		entry = &spdmon->first_entry;
-		mon_assert(entry);
+		assert(entry);
 
 		get_event(entry, evtring, i);
 	}	
@@ -397,13 +397,13 @@ find_next_evt(struct evt_entry *evt)
 	if (unlikely(!evt)) {
 		populate_evts();
 	} else {	
-		mon_assert((spdid = evt_in_spd(evt)));
+		assert((spdid = evt_in_spd(evt)));
 		// Check the constraints here too....TODO
 		/* print_evt_info(evt); */
 		spdmon = &logmon_info[spdid];
-		mon_assert(spdmon);
+		assert(spdmon);
 		evtring = (CK_RING_INSTANCE(logevt_ring) *)spdmon->mon_ring;
-		mon_assert(evtring);
+		assert(evtring);
 
 		get_event(evt, evtring, spdid);
 	}
@@ -412,9 +412,9 @@ find_next_evt(struct evt_entry *evt)
 	if (!next || next->ts == 0) goto done;
 	/* printc("earliest next spdid %d -- ts %llu\n", next->spdid, LLONG_MAX - next->ts); */
 	spdmon = &logmon_info[next->spdid];
-	mon_assert(spdmon);
+	assert(spdmon);
 	ret = &spdmon->first_entry;
-	mon_assert(ret);
+	assert(ret);
 done:
 	return ret;
 }
@@ -427,10 +427,10 @@ static void
 log_or_det_pit(struct thd_trace *l, struct thd_trace *h, 
 	       struct evt_entry *entry, unsigned long long pit)
 {
-	mon_assert(l && h && entry);
+	assert(l && h && entry);
 
 	struct thd_specs *h_spec = &thd_specs[h->thd_id];
-	mon_assert(h_spec);
+	assert(h_spec);
 #ifdef LOGEVENTS_MODE
 	updatemax_llu(&h_spec->pi_time_max, pit);
 	PRINTD_PI("thd %d max pi_time %llu \n", h->thd_id, h_spec->pi_time_max);
@@ -449,7 +449,7 @@ higher_exec(struct thd_trace *ttc, int t)
 	int i;
 	struct thd_trace *h;
 	unsigned long long ret = 0;
-	mon_assert(ttc);
+	assert(ttc);
 	
 	for (i = 0; i < MAX_NUM_THREADS; i++) {
 		h = &thd_trace[i];
@@ -502,7 +502,7 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 	int i;
 	struct thd_trace *d, *n, *m, *root, *dep;
 
-	mon_assert(ttc && entry);
+	assert(ttc && entry);
 	if (!ttn) return;
 
 	if (!RT(ttc) || !RT(ttn)) return;   // we only do PI check periodic tasks
@@ -514,7 +514,7 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 		/* printc("add PI dependency\n"); */
                 /* last_entry.para should be the dep */
 		dep = &thd_trace[last_entry.para];
-		mon_assert(dep);
+		assert(dep);
 		
 		ttc->n	     = dep->h; // track low/high relation (first time is dep itself)
 		dep->h	     = ttc;    // ttc is the running one and should the highest (PIP)
@@ -552,7 +552,7 @@ check_priority_inversion(struct thd_trace *ttc, struct thd_trace *ttn, struct ev
 			/*        dep_counter, ttc->thd_id, ttc->epoch); */
 #ifdef LOGEVENTS_MODE
 // this is to detect if the right thread is switched to
-			mon_assert(0);
+			assert(0);
 #endif
 		}
 		
@@ -667,7 +667,7 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 #ifdef MEAS_DEADLOCK_CHECK
 	rdtscll(deadlock_start);
 #endif
-	mon_assert(ttc && entry);
+	assert(ttc && entry);
 
         /* we only check periodic tasks now for simplicity */
 	/* if (!RT(ttc) || !RT(ttn)) return;   */
@@ -681,7 +681,7 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 	if (unlikely(contention_on(&last_entry, entry))) {
 		/* printc("deadlock detection\n"); */
 		dep = &thd_trace[entry->para];
-		mon_assert(dep);
+		assert(dep);
 		/* print_thd_trace(dep); */
 		
 		ttc->l = dep;
@@ -718,7 +718,7 @@ check_deadlock(struct thd_trace *ttc, struct evt_entry *entry)
 				printc("deadlock detection cost %llu\n", 
 				       deadlock_end-deadlock_start);
 				printc("found deadlock in spd %lu\n", entry->to_spd);
-				mon_assert(0);   // found a deadlock
+				assert(0);   // found a deadlock
 			}
 		}
 		printc("deadlock detection done!!!!\n");
@@ -735,10 +735,12 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 {
 	int spdid, type;
 	struct thd_specs *ttc_spec;
-	mon_assert(ttc && entry);
-	mon_assert(entry->evt_type > 0);
-	
+	assert(ttc && entry);
+	assert(entry->evt_type > 0);
+
 	if (!RT(ttc)) return;
+
+	/* printc("cra filtering....spdexec !!!!\n"); */
 	/* print_thd_trace(ttc); */
 	/* if(ttn) print_thd_trace(ttn); */
 
@@ -748,7 +750,10 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 	if (ttc->thd_id != 15) return;  // hardcode testing thread here
 #endif
 #if defined(MON_SCHED)  // for sched test only
-	if (ttc->thd_id != 15 && ttc->thd_id != 17) return;  // hardcode testing threads
+	// for CRA initial result
+	/* printc("cra filtering....spdexec 0 \n"); */
+	/* printc("ttc->thd_id %d \n", ttc->thd_id); */
+	/* if (ttc->thd_id != 16 && ttc->thd_id != 18) return;  // hardcode testing threads */
 #endif
 #if defined(MON_MM_DELAY)  // for mm test only
 	if (entry->to_spd != MM_SPD && entry->from_spd != MM_SPD) return;
@@ -758,7 +763,7 @@ check_inv_spdexec(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry
 #endif
 
 	ttc_spec = &thd_specs[ttc->thd_id];
-	mon_assert(ttc_spec);
+	assert(ttc_spec);
 	type = entry->evt_type;
 	
 	switch (type) {
@@ -851,7 +856,7 @@ static void
 check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *entry, unsigned long long up_t)
 {
 	int i;
-	mon_assert(ttc && entry);
+	assert(ttc && entry);
 
 	ttc->tot_exec += up_t;  // update each thread total execution time here.
 
@@ -860,7 +865,7 @@ check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry 
 #ifdef LOGEVENTS_MODE
 		struct thd_specs *ttn_spec;
 		ttn_spec = &thd_specs[ttn->thd_id];
-		mon_assert(ttn_spec);
+		assert(ttn_spec);
 		for (i = 0; i < MAX_NUM_SPDS; i++) {
 			updatemax_int(&ttn_spec->invocation_max[i], ttn->invocation[i]);
 		}
@@ -881,7 +886,7 @@ check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry 
 #ifdef LOGEVENTS_MODE
 		struct thd_specs *ttc_spec;
 		ttc_spec = &thd_specs[ttc->thd_id];
-		mon_assert(ttc_spec);
+		assert(ttc_spec);
 		updatemax_llu(&ttc_spec->exec_max, ttc->exec); // no use for localization
 		PRINTD_THD_TIMING("thd %d max exec by dl is %llu\n", ttc->thd_id, ttc_spec->exec_max);
 #endif
@@ -909,16 +914,16 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 	struct thd_specs *ttc_spec;
 	int type;
 
-	mon_assert(ttc && entry);
-	mon_assert(entry->evt_type > 0);
+	assert(ttc && entry);
+	assert(entry->evt_type > 0);
 	type = entry->evt_type;
 	ttc_spec = &thd_specs[ttc->thd_id];
-	mon_assert(ttc_spec);	
+	assert(ttc_spec);	
 
 	switch (type) {
 	case EVT_NINT:
-		mon_assert(entry->to_spd == NETIF_SPD);
-		mon_assert(entry->to_thd == NETWORK_THD);
+		assert(entry->to_spd == NETIF_SPD);
+		assert(entry->to_thd == NETWORK_THD);
 		ttc->network_int++;  // still need this?
 		network_interrupts++;
 #ifdef LOGEVENTS_MODE
@@ -931,8 +936,8 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 #endif		
 		break;
 	case EVT_TINT:
-		mon_assert(entry->to_spd == SCHED_SPD);
-		mon_assert(entry->to_thd == TIMER_THD);
+		assert(entry->to_spd == SCHED_SPD);
+		assert(entry->to_thd == TIMER_THD);
 		ttc->timer_int++;  // still need this?
 		timer_interrupts++;
 #ifdef LOGEVENTS_MODE
@@ -959,14 +964,14 @@ static void
 check_ordering(struct thd_trace *ttc, struct evt_entry *c_entry)
 {
 	int flt_type;
-	mon_assert(ttc && c_entry);
+	assert(ttc && c_entry);
 	struct evt_entry *p_entry = &last_entry;
-	mon_assert(p_entry);
+	assert(p_entry);
 	
 	int p_type = p_entry->evt_type; // previous event type
 	if (unlikely(p_type == 0)) return;  // first time only
 	int c_type = c_entry->evt_type; // this event type
-	mon_assert(c_type > 0);
+	assert(c_type > 0);
 
 	/* always check if event's time stamp in a spd is
 	 * monotonically increasing */
@@ -1082,15 +1087,17 @@ fault:
 /*************************************/
 /*    Constraints Check  -- main  */
 /*************************************/
-static void 
-constraint_check(struct evt_entry *entry)
+static void
+cra_constraint_check(struct evt_entry *entry)
 {
 	struct thd_trace *ttc, *ttn = NULL;
 	unsigned long long up_t;
 	int from_thd, from_spd;
 	int owner = 0, contender = 0;  // for RB contention
 
-	mon_assert(entry && entry->evt_type > 0);	
+	/* printc("filtering events in MP.... (thd %d)\n", cos_get_thd_id()); */
+	assert(entry && entry->evt_type > 0);	
+
 	slide_twindow(entry);
 
 	// "paste" the omitted event here
@@ -1098,7 +1105,7 @@ constraint_check(struct evt_entry *entry)
 		owner	      = entry->to_thd & 0x000000FF;
 		contender     = entry->to_thd>>8 & 0x000000FF;
 		entry->to_thd = entry->to_thd>>16 & 0x000000FF;
-		mon_assert(contender == entry->from_thd);
+		assert(contender == entry->from_thd);
 	}
 
 	if (entry->evt_type == EVT_TINT || entry->evt_type == EVT_NINT) {
@@ -1109,13 +1116,15 @@ constraint_check(struct evt_entry *entry)
 	}
 	from_thd = entry->from_thd;
 	from_spd = entry->from_spd;
-	mon_assert(from_thd && from_spd);
+	assert(from_thd && from_spd);
 	
 	// ttc tracks thread that runs up to this point (not the next)
 	ttc = &thd_trace[from_thd];
-	mon_assert(ttc);
+	assert(ttc);
 	if (unlikely(!ttc->last_ts)) ttc->last_ts = entry->time_stamp;
 	
+
+	/* printc("cra_filter 1\n"); */
 	int type = entry->evt_type;
 	switch (type) {
 	case EVT_CINV:
@@ -1123,37 +1132,38 @@ constraint_check(struct evt_entry *entry)
 		cap_to_dest(entry);
 	case EVT_SINV:
 	case EVT_SRET:
-		mon_assert(entry->to_thd == entry->from_thd);
+		assert(entry->to_thd == entry->from_thd);
 		up_t = entry->time_stamp - ttc->last_ts;
 		ttc->last_ts = entry->time_stamp;
-		mon_assert(!ttn);
+		assert(!ttn);
 		break;
 	case EVT_CS:
-		mon_assert(entry->to_spd == SCHED_SPD);  
-		mon_assert(entry->from_thd != entry->to_thd);
+		assert(entry->to_spd == SCHED_SPD);  
+		assert(entry->from_thd != entry->to_thd);
 	case EVT_TINT:
 	case EVT_NINT:
 		up_t = entry->time_stamp - ttc->last_ts;
 		ttn = &thd_trace[entry->to_thd];
-		mon_assert(ttn);
+		assert(ttn);
 		ttn->last_ts = entry->time_stamp;
 		break;
         /* log this for detecting PI. No need for infinite loop since
 	 * there is always event (either timer
 	 * interrupt/sched_timeout) or an event make the RB full*/
 	case EVT_LOG_PROCESS:  
-		mon_assert(entry->to_spd == LLLOG_SPD);
-		mon_assert(entry->to_thd == MONITOR_THD);
-		mon_assert(entry->from_thd != entry->to_thd);
+		assert(entry->to_spd == LLLOG_SPD);
+		assert(entry->to_thd == MONITOR_THD);
+		assert(entry->from_thd != entry->to_thd);
 		ttn = &thd_trace[entry->to_thd];
-		mon_assert(ttn);
+		assert(ttn);
 		break;
 	default:
 		printc("event type error\n");
-		mon_assert(0);
+		assert(0);
 		break;
 	}	
 
+	/* printc("cra_filter 2\n"); */
 	/***************************/
 	/* Constraint check begins */
 
@@ -1169,6 +1179,8 @@ constraint_check(struct evt_entry *entry)
 
 	/* Constraint check done ! */
 	/***************************/
+
+	/* printc("cra_filter 3\n"); */
 
 	if (likely(type != EVT_LOG_PROCESS)) {
 		last_evt_update(&last_entry, entry);
@@ -1188,9 +1200,9 @@ static unsigned int
 find_max_spdexec(struct thd_trace *l, struct evt_entry *entry, int flt_type)
 {
 	int i, ret = 0;
-	mon_assert(l && entry);
-	mon_assert(flt_type == CONS_PI || flt_type == CONS_WCET || flt_type == CONS_DLMISS);
-	mon_assert(RT(l));
+	assert(l && entry);
+	assert(flt_type == CONS_PI || flt_type == CONS_WCET || flt_type == CONS_DLMISS);
+	assert(RT(l));
 
 	return l->exec_allinv_in_spd_max_spd;
 	/* unsigned long long tmp = 0;	 */
@@ -1204,12 +1216,37 @@ find_max_spdexec(struct thd_trace *l, struct evt_entry *entry, int flt_type)
 	/* return ret; */
 }
 
+
+static void
+mlmpevent_copy(struct mlmp_entry *to, struct mlmp_entry *from)
+{
+	assert(to && from);
+
+	to->para1 = from->para1;
+	to->para2 = from->para2;
+	to->para3 = from->para3;
+	to->time_stamp = from->time_stamp;
+
+	return;
+}
+
+static int
+notempty(struct mlmp_entry *entry)
+{
+	assert(entry);
+	
+	if (entry->para1 || entry->para2 || entry->para3
+	    || entry->time_stamp) return 1;
+	else return 0;
+}
+
+
 static unsigned int
 fltspd_alg1(struct thd_trace *ttc, struct evt_entry *entry, int flt_type)
 {
 	struct evt_entry *earliest_evt;
-	mon_assert(ttc && entry);
-	mon_assert(flt_type == CONS_CINV_TYPE || flt_type == CONS_SRET_TYPE);
+	assert(ttc && entry);
+	assert(flt_type == CONS_CINV_TYPE || flt_type == CONS_SRET_TYPE);
 
 	earliest_evt = find_next_evt(entry);
 	
@@ -1235,13 +1272,13 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 	/* printc("find faulty spd here (fault type %d)\n", flt_type); */
 	/* print_evt_info(entry); */
 	unsigned int faulty_spd = 0;
-	mon_assert(ttc && entry);
+	assert(ttc && entry);
 
 #ifdef MEAS_LOG_LOCALIZATION
 	rdtscll(localizer_start);
 #endif
 	struct evt_entry *p_entry = &last_entry;
-	mon_assert(p_entry);
+	assert(p_entry);
 	int p_type = p_entry->evt_type; // previous event type
 	int c_type = entry->evt_type;   // current event type
 
@@ -1249,7 +1286,7 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 	case CONS_ONEINV_SPD_EXEC:
 		faulty_spd = entry->from_spd;
 		printc("overrun --- fault spd is %d\n", faulty_spd);
-		mon_assert(0);
+		assert(0);
 		break;
 	case CONS_ALLINV_SPD_EXEC:
 		faulty_spd = entry->from_spd; // not sure....
@@ -1268,7 +1305,7 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 	case CONS_SCHEDULING:
 		faulty_spd = SCHED_SPD;
 		printc("PI fault --- fault spd is %d\n", faulty_spd);
-		mon_assert(0);
+		assert(0);
 		break;
 	// too long to be in PI state
 	case CONS_PI:
@@ -1339,7 +1376,7 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 		break;
 	default:
 		printc("constraint violation type invalid \n");
-		mon_assert(0);
+		assert(0);
 		break;
 	}	
 

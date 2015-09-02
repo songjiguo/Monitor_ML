@@ -15,4 +15,7 @@ cos_asm_server_stub_spdid(llog_setprio)
 cos_asm_server_stub_spdid(llog_setperiod)
 cos_asm_server_stub_spdid(llog_contention)
 
-cos_asm_server_stub_spdid(llog_fkml_retrieve_data)
+cos_asm_server_stub_spdid(llog_multiplexer_retrieve_data)
+cos_asm_server_stub_spdid(llog_multiplexer_init)
+cos_asm_server_stub_spdid(llog_getprio)
+cos_asm_server_stub_spdid(llog_getperiod)
