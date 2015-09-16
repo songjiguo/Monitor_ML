@@ -90,6 +90,15 @@
 //#define LOGMGR_DEBUG_CRA_ORDER
 /***********************************************/
 
+/************CRA EMP option **************/
+//#define LOGMGR_CRA_IPC_SEQUENCE
+//#define LOGMGR_CRA_CONTEXT_SWITCH
+//#define LOGMGR_CRA_TIMER_INTERRUPT
+//#define LOGMGR_CRA_SPD_EXEC_TIME
+//#define LOGMGR_CRA_SPD_INV_NUMS
+//#define LOGMGR_CRA_EXEC_TIME_SINCE_ACTIVATION
+/***********************************************/
+
 /************measuring**************/
 //#define MEAS_LOG_SYNCACTIVATION 
 //#define MEAS_LOG_ASYNCACTIVATION
@@ -452,132 +461,6 @@ print_mpsmcentry_info(struct mpsmc_entry *entry)
 	printc("type %d ", entry->evt_type);
 	printc("time_stamp %llu ", entry->time_stamp);
 	printc("committed %d\n", entry->committed);
-	
-	return;
-}
-
-/**************************
-  CRA ML Component        -- mlmp
-**************************/
-/* entry in the ring buffer between the ML component and the
- * Multiplexer component (stream....) */
-
-enum stream_flags {
-	STREAM_THD_EVT_SEQUENC     = (0x01 << 0),
-	STREAM_THD_EXEC_TIMING     = (0x01 << 1),
-	STREAM_THD_INTERACTION     = (0x01 << 2),
-	STREAM_SPD_INVOCATIONS     = (0x01 << 3),
-	STREAM_SPD_EVT_SEQUENC     = (0x01 << 4),
-	STREAM_MAX                 = (0x01 << 10),   // max 10 different type of streams
-};
-
-/* stream 1 --------- */
-struct mlmp_thdevtseq_entry {
-	unsigned int thd_id;
-	unsigned int thd_evt_seq[1024];
-};
-
-//TODO: use macro define
-
-#ifndef __MLMPRING_THDEVTSEQ_DEFINED
-#define __MLMPRING_THDEVTSEQ_DEFINED
-CK_RING(mlmp_thdevtseq_entry, mlmpthdevtseqbuffer_ring);
-CK_RING_INSTANCE(mlmpthdevtseqbuffer_ring) *mlmpthdevtseq_ring;
-#endif
-
-static void
-print_mlmpthdevtseqevt_info(struct mlmp_thdevtseq_entry *entry)
-{
-	assert(entry);
-	printc("mlmp: thd_id (%d) -- ", entry->thd_id);
-	printc("thd evt seq (%d)\n ", entry->thd_evt_seq[0]);
-	
-	return;
-}
-
-/* stream 2 --------- */
-struct mlmp_thdactexec_entry {
-	unsigned long long thd_activation_time;
-	unsigned long long thd_execution_time;
-};
-
-struct mlmp_thdtime_entry {
-	unsigned int thd_id;
-	struct mlmp_thdactexec_entry thd_time_entry[256];
-};
-
-#ifndef __MLMPRING_THDTIME_DEFINED
-#define __MLMPRING_THDTIME_DEFINED
-CK_RING(mlmp_thdtime_entry, mlmpthdtimebuffer_ring);
-CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *mlmpthdtime_ring;
-#endif
-
-/* stream 3 --------- */
-struct mlmp_thdcsint_entry {
-	unsigned int from_thd;  // this is the current
-	unsigned int to_thd;    // this is next thread or interrupting thread
-	unsigned long long time_stamp;
-};
-
-struct mlmp_thdinteract_entry {
-	struct mlmp_thdcsint_entry thd_cs[128];
-	struct mlmp_thdcsint_entry thd_ints[128];
-};
-
-#ifndef __MLMPRING_THDINTERACT_DEFINED
-#define __MLMPRING_THDINTERACT_DEFINED
-CK_RING(mlmp_thdinteract_entry, mlmpthdinteractbuffer_ring);
-CK_RING_INSTANCE(mlmpthdinteractbuffer_ring) *mlmpthdinteract_ring;
-#endif
-
-/* stream 4 --------- */
-struct mlmp_spdinvnum_entry {
-	unsigned int spd_id;
-	unsigned int invocation_nums;
-};
-
-#ifndef __MLMPRING_SPDINVNUM_DEFINED
-#define __MLMPRING_SPDINVNUMx_DEFINED
-CK_RING(mlmp_spdinvnum_entry, mlmpspdinvnumbuffer_ring);
-CK_RING_INSTANCE(mlmpspdinvnumbuffer_ring) *mlmpspdinvnum_ring;
-#endif
-
-/* stream 5 --------- */
-struct mlmp_spdevtseq_entry {
-	unsigned int spd_id;
-	unsigned int spd_evt_seq[1024];
-};
-
-
-#ifndef __MLMPRING_SPDEVTSEQ_DEFINED
-#define __MLMPRING_SPDEVTSEQ_DEFINED
-CK_RING(mlmp_spdevtseq_entry, mlmpspdevtseqbuffer_ring);
-CK_RING_INSTANCE(mlmpspdevtseqbuffer_ring) *mlmpspdevtseq_ring;
-#endif
-
-/* stream default ------------- */
-struct mlmp_entry {
-	int para1;
-	int para2;
-	int para3;
-	unsigned long long time_stamp;
-};
-
-#ifndef __MLMPRING_DEFINED
-#define __MLMPRING_DEFINED
-CK_RING(mlmp_entry, mlmpbuffer_ring);
-CK_RING_INSTANCE(mlmpbuffer_ring) *mlmp_ring;
-#endif
-
-
-static void
-print_mlmpentry_info(struct mlmp_entry *entry)
-{
-	assert(entry);
-	printc("mlmp: para1 (%d) -- ", entry->para1);
-	printc("para2 (%d) -- ", entry->para2);
-	printc("para3 (%d) -- ", entry->para3);
-	printc("time_stamp (%llu) \n", entry->time_stamp);
 	
 	return;
 }

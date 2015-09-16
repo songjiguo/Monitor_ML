@@ -8,7 +8,7 @@
 
 #include <ll_log.h>
 #include <heap.h>
-#include <filter_util.h>
+#include <util.h>
 
 //#define MEAS_LOG_LOCALIZATION  /* cost of localization */  override log.c #define
 
@@ -67,12 +67,44 @@ struct logmon_info {
 	unsigned long long spd_last_ts;
 } logmon_info[MAX_NUM_SPDS];
 
+/* CRA: track the execution stack */
+#define TRACK_SPDS 100
+#define TRACK_INTS 40
+#define TRACK_CS   40
+
+struct exe_stack {   // only one event at a time
+	int inv_from_spd;
+	int inv_into_spd;
+	int ret_from_spd;
+	int ret_back_spd;
+	unsigned long long ts;
+};
+
+struct thd_ints {
+	int curr_thd;
+	int int_spd;
+	int int_thd;
+	unsigned long long ts;
+} thd_ints[TRACK_INTS];
+int track_ints_num = 0;
+
+struct thd_cs {
+	int from_thd;
+	int to_thd;
+	unsigned long long ts;
+} thd_cs[TRACK_CS];
+int track_cs_num = 0;
+
 /* per thread tracking data structure */
 struct thd_trace {
 	int thd_id, prio;
 
 	// d and c for a periodic task
 	unsigned long long p, c;
+
+	// CRA: track execution stack (max 30)
+	struct exe_stack exe_stack[TRACK_SPDS];
+	int track_exe_stack_num;
 
 	// Total execution time of this thread
 	unsigned long long tot_exec, last_ts;
@@ -154,7 +186,18 @@ init_log()
 		thd_trace[i].dl_s	   = 0;	// a deadline start
 		thd_trace[i].dl_e	   = 0;	// a deadline ends
 		thd_trace[i].exec	   = 0;	// actual exec before deadline
-		
+	
+		// CRA
+		for (j = 0; j < TRACK_SPDS; j++) {
+			thd_trace[i].exe_stack[j].inv_from_spd = 0;
+			thd_trace[i].exe_stack[j].inv_into_spd = 0;
+			thd_trace[i].exe_stack[j].ret_from_spd = 0;
+			thd_trace[i].exe_stack[j].ret_back_spd = 0;
+			thd_trace[i].exe_stack[j].ts = 0;
+		}
+		thd_trace[i].track_exe_stack_num = 0;
+
+	
 		// timing info for a thread
 		thd_trace[i].tot_exec = 0;	// the total exec time for thd
 		thd_trace[i].last_ts  = 0;	// the last time stamp for this thd
@@ -196,6 +239,7 @@ init_log()
 			thd_specs[i].invocation_max[j]	       = 0;
 		}
 	}
+
 	return;
 }
 
@@ -940,6 +984,7 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 		assert(entry->to_thd == TIMER_THD);
 		ttc->timer_int++;  // still need this?
 		timer_interrupts++;
+		
 #ifdef LOGEVENTS_MODE
 		updatemax_int(&timer_int_max, timer_interrupts);
 		PRINTD_INTNUM("max timer interrupts %d in time window %llu\n", timer_int_max, window_sz);
@@ -1128,10 +1173,43 @@ cra_constraint_check(struct evt_entry *entry)
 	int type = entry->evt_type;
 	switch (type) {
 	case EVT_CINV:
+		//CRA
+		/* print_evt_info(entry); */
+		ttc->exe_stack[ttc->track_exe_stack_num].inv_from_spd = entry->from_spd;
+		ttc->exe_stack[ttc->track_exe_stack_num].ts = entry->time_stamp;
+		ttc->track_exe_stack_num++;
+
 	case EVT_CRET:
 		cap_to_dest(entry);
+
+		// CRA
+		if (type == EVT_CRET) {
+			/* print_evt_info(entry); */
+			ttc->exe_stack[ttc->track_exe_stack_num].ret_back_spd = entry->to_spd;
+			ttc->exe_stack[ttc->track_exe_stack_num].ts = entry->time_stamp;
+			ttc->track_exe_stack_num++;
+		}
+
 	case EVT_SINV:
+
+		// CRA
+		if (type == EVT_SINV) {
+			/* print_evt_info(entry); */
+			ttc->exe_stack[ttc->track_exe_stack_num].inv_into_spd = entry->to_spd;
+			ttc->exe_stack[ttc->track_exe_stack_num].ts = entry->time_stamp;
+			ttc->track_exe_stack_num++;
+		}
+
 	case EVT_SRET:
+
+		// CRA
+		if (type == EVT_SRET) {
+			/* print_evt_info(entry); */
+			ttc->exe_stack[ttc->track_exe_stack_num].ret_from_spd = entry->from_spd;
+			ttc->exe_stack[ttc->track_exe_stack_num].ts = entry->time_stamp;
+			ttc->track_exe_stack_num++;
+		}
+
 		assert(entry->to_thd == entry->from_thd);
 		up_t = entry->time_stamp - ttc->last_ts;
 		ttc->last_ts = entry->time_stamp;
@@ -1140,7 +1218,27 @@ cra_constraint_check(struct evt_entry *entry)
 	case EVT_CS:
 		assert(entry->to_spd == SCHED_SPD);  
 		assert(entry->from_thd != entry->to_thd);
+
+		// CRA:
+		/* print_evt_info(entry); */
+		thd_cs[track_cs_num].from_thd = entry->from_thd;
+		thd_cs[track_cs_num].to_thd   = entry->to_thd;
+		thd_cs[track_cs_num].ts       = entry->time_stamp;
+		track_cs_num++;		
+
 	case EVT_TINT:
+
+		// CRA: track interrupts here
+		if (type == EVT_TINT) {
+			print_evt_info(entry);
+			//print_evt_info(&last_entry);
+			thd_ints[track_ints_num].curr_thd = entry->from_thd;
+			thd_ints[track_ints_num].int_spd = entry->to_spd;
+			thd_ints[track_ints_num].int_thd = entry->to_thd;
+			thd_ints[track_ints_num].ts = entry->time_stamp;
+			track_ints_num++;		
+		}
+
 	case EVT_NINT:
 		up_t = entry->time_stamp - ttc->last_ts;
 		ttn = &thd_trace[entry->to_thd];
@@ -1214,30 +1312,6 @@ find_max_spdexec(struct thd_trace *l, struct evt_entry *entry, int flt_type)
 	/* } */
 	
 	/* return ret; */
-}
-
-
-static void
-mlmpevent_copy(struct mlmp_entry *to, struct mlmp_entry *from)
-{
-	assert(to && from);
-
-	to->para1 = from->para1;
-	to->para2 = from->para2;
-	to->para3 = from->para3;
-	to->time_stamp = from->time_stamp;
-
-	return;
-}
-
-static int
-notempty(struct mlmp_entry *entry)
-{
-	assert(entry);
-	
-	if (entry->para1 || entry->para2 || entry->para3
-	    || entry->time_stamp) return 1;
-	else return 0;
 }
 
 
@@ -1392,5 +1466,6 @@ faulty_spd_localizer(struct thd_trace *ttc, struct evt_entry *entry, int flt_typ
 
 	return 0;
 }
+
 
 #endif
