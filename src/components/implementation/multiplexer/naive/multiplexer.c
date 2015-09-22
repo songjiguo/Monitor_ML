@@ -10,8 +10,8 @@
 //  1) stream process when ML asks for the data from MP
 //  2) stream process when MP asks for the data from SMC
 
-#define STREAM_PROCESS_OPTION_1
-//#define STREAM_PROCESS_OPTION_2
+#define STREAM_PROCESS_OPTION_1     // fkml thd is periodically processing streams
+//#define STREAM_PROCESS_OPTION_2   // em   thd is periodically processing streams
 
 #include <cos_component.h>
 #include <sched.h>
@@ -53,7 +53,9 @@ init_rb_mpsmc()
 	cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE*MULTIPLEXER_BUFF_SZ));
 
 	printc("set up rb: MP -- SMC @addr %p \n", addr);
-	if (!(mpsmc_ring = (CK_RING_INSTANCE(mpsmcbuffer_ring) *)(llog_multiplexer_init(cos_spd_id(), (vaddr_t) addr, MULTIPLEXER_BUFF_SZ)))) BUG();
+	if (!(mpsmc_ring = (CK_RING_INSTANCE(mpsmcbuffer_ring) *)
+	      (llog_multiplexer_init(cos_spd_id(), (vaddr_t) addr, 
+				     MULTIPLEXER_BUFF_SZ)))) BUG();
 	assert(mpsmc_ring == (CK_RING_INSTANCE(mpsmcbuffer_ring) *)addr);
 	printc("set up rb: MP -- SMC @addr %p done! \n", addr);
 	return;
@@ -117,7 +119,8 @@ update_stream(struct thd_trace *ttc, unsigned long long ts)
 	
 	tail = mlmpthdevtseq_ring->p_tail;
 	mlmpevtseq = (struct mlmp_thdevtseq_entry *) 
-		CK_RING_GETTAIL_EVT(mlmpthdevtseqbuffer_ring,									 mlmpthdevtseq_ring, tail);
+		CK_RING_GETTAIL_EVT(mlmpthdevtseqbuffer_ring, 
+				    mlmpthdevtseq_ring, tail);
 	assert(mlmpevtseq);
 	mlmpevtseq->time_stamp = ts;
 	mlmpevtseq->thd_id = ttc->thd_id;
@@ -167,7 +170,8 @@ stream_event_info(int streams)
 			assert(ttc_spec);
 			/* print_thd_trace(ttc); */
 			if (ttc_spec->exec_max) {
-				printc("thd %d max exec %llu (%llu)\n", ttc->thd_id, ttc_spec->exec_max, ttc->dl_s);
+				printc("thd %d max exec %llu (%llu)\n", 
+				       ttc->thd_id, ttc_spec->exec_max, ttc->dl_s);
 			}
 		}
 	}
@@ -410,17 +414,19 @@ cos_init(void *d)
 		multiplexer_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
 		if (cos_get_thd_id() == multiplexer_thd) {
+
 			/* initialize the shared buffer between SMC and multiplexer */
 			init_rb_mpsmc();
 
 			init_log();
 
-			periodic_wake_create(cos_spd_id(), 54);
+			periodic_wake_create(cos_spd_id(), 10);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				/* printc("periodic process multiplexer....(thd %d)\n",  */
-				/*        cos_get_thd_id()); */
+				printc("periodic process multiplexer....(thd %d)\n",
+				       cos_get_thd_id());
 				llog_multiplexer_retrieve_data(cos_spd_id());
+				return;   // debug network, so disable this for now
 #ifdef STREAM_PROCESS_OPTION_2
 				multiplexer_process();	
 #endif

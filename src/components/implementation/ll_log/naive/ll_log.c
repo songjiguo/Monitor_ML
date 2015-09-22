@@ -223,6 +223,11 @@ mpsmc_action()
 	
 	do {
 		event_num++;
+		if (event_num > 64) {
+			printc("mpsmc_action has processed %d events, so break!!!!\n",
+				event_num);
+			break;  // test network only
+		}
 		cra_copy(evt);
 	} while ((evt = find_next_evt(evt)));
 
@@ -293,9 +298,8 @@ llog_multiplexer_retrieve_data(spdid_t spdid)
 	/* printc("multiplexer thd %d is retrieving any data in SMC now....\n", */
 	/*        cos_get_thd_id()); */
         struct logmon_info *spdmon;
-
 	llog_process(spdid);
-	
+
 	return 0;
 }
 

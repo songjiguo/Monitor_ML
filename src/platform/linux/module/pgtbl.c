@@ -44,6 +44,9 @@ chal_pgtbl_add(paddr_t pgtbl, vaddr_t vaddr, paddr_t paddr)
 {
 	pte_t *pte = pgtbl_lookup_address(pgtbl, (unsigned long)vaddr);
 
+	if (!pte) printk("pte is not there!!!\n");
+	if ((pte_val(*pte) & _PAGE_PRESENT)) printk("page is already in!!!\n");
+
 	if (!pte || pte_val(*pte) & _PAGE_PRESENT) return -1;
 	pte->pte_low = ((unsigned long)paddr) | (_PAGE_PRESENT | _PAGE_RW | _PAGE_USER | _PAGE_ACCESSED);
 

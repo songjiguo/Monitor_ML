@@ -453,7 +453,6 @@ meas_record(u64_t meas)
 	}
 }
 
-
 void
 cos_init(void *arg)
 {

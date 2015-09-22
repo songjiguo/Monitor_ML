@@ -6,8 +6,8 @@
 
 ./cos_loader \
 "c0.o, ;llboot.o, ;lllog.o, ;*fprr.o, ;mm.o, ;print.o, ;boot.o, ;\
-!l.o,a1;!te.o,a3;!mon_p.o, ;!lmoncli1.o, ;!sm.o,a4;!eg.o,a5;!e.o,a4;\
-!mpool.o,a3;!buf.o,a5;!bufp.o, ;!lmonser1.o, ;!lmonser2.o, ;!va.o,a2;\
+!l.o,a1;!te.o,a3;!mon_p.o, ;!lmoncli1.o, ;!sm.o,a4;!eg.o,a5;!e.o,a4;!cfkml.o, ;\
+!cmultiplexer.o, ;!mpool.o,a3;!buf.o,a5;!bufp.o, ;!lmonser1.o, ;!lmonser2.o, ;!va.o,a2;\
 !stconnmt.o, '1:10:200:/bind:0:%d/listen:255';\
 !port.o, ;!tif.o,a2;!tip.o, ;!tnet.o, ;!httpt.o,a8;\
 !rfs.o, ;!initfs.o,a3;!unique_map.o, ;!popcgi.o, ;\
@@ -28,6 +28,9 @@ bufp.o-sm.o|fprr.o|print.o|l.o|mm.o|va.o|mpool.o|buf.o|lllog.o;\
 mpool.o-print.o|fprr.o|mm.o|boot.o|va.o|l.o|lllog.o;\
 va.o-fprr.o|print.o|mm.o|l.o|boot.o|lllog.o|llboot.o;\
 \
+cfkml.o-sm.o|fprr.o|print.o|l.o|mm.o|te.o|va.o|cmultiplexer.o|lllog.o;\
+cmultiplexer.o-sm.o|fprr.o|print.o|l.o|mm.o|te.o|va.o|lllog.o;\
+\
 stconnmt.o-sm.o|print.o|fprr.o|mm.o|va.o|l.o|httpt.o|te.o|[from_]tnet.o|buf.o|bufp.o|eg.o|lllog.o;\
 \
 httpt.o-sm.o|l.o|print.o|fprr.o|mm.o|buf.o|eg.o|bufp.o|[server_]rfs.o|te.o|va.o|lllog.o;\
@@ -42,7 +45,7 @@ rfs.o-sm.o|va.o|fprr.o|print.o|mm.o|buf.o|bufp.o|l.o|e.o|unique_map.o|lllog.o;\
 unique_map.o-sm.o|va.o|fprr.o|print.o|mm.o|l.o|e.o|buf.o|bufp.o|lllog.o;\
 popcgi.o-sm.o|fprr.o|print.o|mm.o|buf.o|bufp.o|va.o|l.o|[server_]rfs.o|eg.o|te.o|lllog.o;\
 \
-mon_p.o-print.o|fprr.o|mm.o|te.o|lllog.o|llboot.o;\
+mon_p.o-print.o|fprr.o|mm.o|te.o|lllog.o|llboot.o|cfkml.o;\
 \
 lmoncli1.o-print.o|va.o|fprr.o|l.o|mm.o|lmonser1.o|te.o|lllog.o|llboot.o;\
 lmonser2.o-print.o|l.o|va.o|fprr.o|mm.o|lllog.o|llboot.o;\

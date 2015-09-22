@@ -28,7 +28,7 @@ void cos_init(void)
 	} else {
 		if (cos_get_thd_id() == high) {
 
-			return;  // test CRA stuff
+			return;  // disable this for CRA stuff (disable CMon check)
 
 			int lm_sync_period;
 			lm_sync_period = llog_getsyncp(cos_spd_id());

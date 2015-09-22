@@ -13,6 +13,7 @@
 #include <cos_component.h>
 #include <cos_synchronization.h>
 
+#include <sched.h>
 #include <net_portns.h>
 
 cos_lock_t port_lock;

@@ -141,9 +141,44 @@ PERCPU_EXTERN(cos_sched_notifications);
 
 #define LM_SYNC_PERIOD 10  // period for asynchronous processing
 
+/* [ 3938.886250] 	1: alpha */
+/* [ 3938.886250] 	2: recov */
+/* [ 3938.886251] 	3: init */
+/* [ 3938.886256] cobj lllog:2 found at 0x40838000:97b0, size de2c8 -> 41800000 */
+/* [ 3938.886258] cobj fprr:3 found at 0x408417c0:10844, size 3e364 -> 41c00000 */
+/* [ 3938.886261] cobj mm:4 found at 0x40852040:9e64, size 3daf0 -> 42000000 */
+/* [ 3938.886263] cobj print:5 found at 0x4085bec0:1558, size 2c3c8 -> 42400000 */
+/* [ 3938.886264] cobj boot:6 found at 0x4085d440 -> 42800000 */
+/* [ 3939.888135] cobj l:7 found at 0x42839000:9380, size 34fb0 -> 43800000 */
+/* [ 3939.888140] cobj te:8 found at 0x42842380:bd60, size 398a0 -> 43c00000 */
+/* [ 3939.888145] cobj mon_p:9 found at 0x4284e100:934c, size 3406c -> 44000000 */
+/* [ 3939.888151] cobj lmoncli1:10 found at 0x42857480:b210, size 35eb4 -> 44400000 */
+/* [ 3939.888156] cobj sm:11 found at 0x428626c0:c9f0, size 48e54 -> 44800000 */
+/* [ 3939.888161] cobj eg:12 found at 0x4286f0c0:934c, size e2d4 -> 44c00000 */
+/* [ 3939.888166] cobj e:13 found at 0x42878440:9870, size e878 -> 45000000 */
+/* [ 3939.888170] cobj cfkml:14 found at 0x42881cc0:89cc, size 346e8 -> 45400000 */
+/* [ 3939.888176] cobj cmultiplexer:15 found at 0x4288a6c0:d1b8, size f9290 -> 45800000 */
+/* [ 3939.888181] cobj mpool:16 found at 0x42897880:855c, size 3741c -> 45c00000 */
+/* [ 3939.888186] cobj buf:17 found at 0x4289fe00:f034, size 4b068 -> 46000000 */
+/* [ 3939.888192] cobj bufp:18 found at 0x428aee40:b95c, size 3c504 -> 46400000 */
+/* [ 3939.888197] cobj lmonser1:19 found at 0x428ba7c0:c67c, size 382b0 -> 46800000 */
+/* [ 3939.888202] cobj lmonser2:20 found at 0x428c6e40:7de0, size 32b58 -> 46c00000 */
+/* [ 3939.888208] cobj va:21 found at 0x428cec40:8ad8, size 34750 -> 47000000 */
+/* [ 3939.888212] cobj stconnmt:22 found at 0x428d7740:11fd4, size 1bd5c -> 47400000 */
+/* [ 3939.888218] cobj port:23 found at 0x428e9740:7a08, size bac8 -> 47800000 */
+/* [ 3939.888223] cobj tif:24 found at 0x428f1180:12260, size 20088 -> 47c00000 */
+/* [ 3939.888228] cobj tip:25 found at 0x42903400:13c10, size 1b9f0 -> 48000000 */
+/* [ 3939.888234] cobj tnet:26 found at 0x42917040:25c4e, size 1e0756 -> 48400000 */
+/* [ 3939.888239] cobj httpt:27 found at 0x4293ccc0:15a98, size 1d868 -> 48800000 */
+/* [ 3939.888244] cobj rfs:28 found at 0x42952780:101c4, size 18084 -> 48c00000 */
+/* [ 3939.888250] cobj initfs:29 found at 0x42962980:c514, size 3b09c -> 49000000 */
+/* [ 3939.888255] cobj unique_map:30 found at 0x4296eec0:b4f8, size 3b088 -> 49400000 */
+/* [ 3939.888260] cobj popcgi:31 found at 0x4297a3c0 -> 49800000 */
+
 /********************************/
 /*  Hard code spd and thread ID */
 /********************************/
+// TODO: auto update these ids
 // component ID
 #define LLLOG_SPD       2
 #define SCHED_SPD	3
@@ -151,11 +186,11 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define BOOTER_SPD	6
 #define LOCK_SPD        7
 #define TE_SPD          8
-#define NETIF_SPD	25
+#define NETIF_SPD	24
 
-// for CRA fake ML component
-#define MULTIPLEXER_SPD	14
-#define FKML_SPD	13
+// MLC and EMC
+#define FKML_SPD	14
+#define MULTIPLEXER_SPD	15
 
 #if defined MON_SCHED
 #define TARGET_SPD SCHED_SPD
@@ -172,7 +207,7 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define MONITOR_THD     4
 #define TIMER_THD	8
 #define TE_THD	        10
-#define NETWORK_THD	20
+#define NETWORK_THD	14
 
 #define NUM_PRIOS    32
 #define PRIO_LOWEST  (NUM_PRIOS-1)
@@ -349,8 +384,11 @@ static inline CFORCEINLINE void
 evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5, int evt_type)
 {
 
-	//Jiguo: hack for testing only. port_ns with network. Another hack is in inv.c
-	if (cos_spd_id() == 21) return;
+	/* //Jiguo: hack for testing only. port_ns with network. Another hack is in inv.c */
+	if (cos_spd_id() == 23) {
+		printc("kkkkkkkevin andy\n");
+		return;
+	}
 
 	if (unlikely(!evt_ring)) {        // create shared RB
 		/* vaddr_t cli_addr = (vaddr_t)valloc_alloc(cos_spd_id(), cos_spd_id(), 1); */

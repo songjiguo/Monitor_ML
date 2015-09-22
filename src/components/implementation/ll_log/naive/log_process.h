@@ -917,7 +917,11 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 
 	switch (type) {
 	case EVT_NINT:
+		printc("entry->to_spd %lu NETIF_SPD %d \n", 
+		       entry->to_spd, NETIF_SPD);
 		mon_assert(entry->to_spd == NETIF_SPD);
+		printc("entry->to_thd %d NETWORK_THD %d \n", 
+		       entry->to_thd, NETWORK_THD);
 		mon_assert(entry->to_thd == NETWORK_THD);
 		ttc->network_int++;  // still need this?
 		network_interrupts++;

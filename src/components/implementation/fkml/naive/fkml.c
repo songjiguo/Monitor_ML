@@ -210,7 +210,7 @@ cos_init(void *d)
         /* The fkml thread will do 2 things: 
 	   1) set up the shared buffer between ML and multiplexer
 	   2) periodically retrieve event stream */
-	int fkml_thd;
+	int fkml_thd = 0;
 
 	if(first == 0){
 		first = 1;
@@ -219,12 +219,14 @@ cos_init(void *d)
 		fkml_thd = sched_create_thd(cos_spd_id(), sp.v, 0, 0);
 	} else {
 		if (cos_get_thd_id() == fkml_thd) {
+			return;   // debug network, so disable this for now
 			
 			/* initialize the shared stream buffers
 			 * between EMP and ML */
 			init_rb_mlmp(streams);
 
-			periodic_wake_create(cos_spd_id(), 67);
+			timed_event_block(cos_spd_id(), 5);
+			periodic_wake_create(cos_spd_id(), 10);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
 				multiplexer_retrieve_data(cos_spd_id(), streams);

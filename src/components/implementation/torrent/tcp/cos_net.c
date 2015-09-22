@@ -1070,9 +1070,11 @@ int net_recv(spdid_t spdid, net_connection_t nc, void *data, int sz)
 		//NET_LOCK_RELEASE();
 		return -EINVAL;
 	}
-	if (tid != ic->tid) {
+	if (tid != ic->tid) {  
 		//NET_LOCK_RELEASE();
-		return -EPERM;
+		/* printc("tid %d ic->tid %d\n", tid, ic->tid); */
+		// Jiguo::::CRA case a different thread reads, so no return
+		//return -EPERM;
 	}
 
 	switch (ic->conn_type) {
@@ -1081,6 +1083,7 @@ int net_recv(spdid_t spdid, net_connection_t nc, void *data, int sz)
 		break;
 	case TCP:
 		xfer_amnt = cos_net_tcp_recv(ic, data, sz);
+		/* printc("TCP: after cos_net_tcp_recv xfer_amnt %d\n", xfer_amnt); */
 		break;
 	case TCP_CLOSED:
 //		__net_close(ic);
@@ -1112,8 +1115,10 @@ int net_send(spdid_t spdid, net_connection_t nc, void *data, int sz)
 		goto err;
 	}
 	if (tid != ic->tid) {
-		ret = -EPERM;
-		goto err;
+		/* printc("tid %d ic->tid %d\n", tid, ic->tid); */
+		// Jiguo::::CRA case a different thread reads, so no return
+		/* ret = -EPERM; */
+		/* goto err; */
 	}
 
 	switch (ic->conn_type) {
@@ -1295,7 +1300,7 @@ static int cos_net_evt_loop(void)
 		data = cbuf_alloc(alloc_sz, &cb);
 		assert(data);
 		/* printc("tnet_tip_tread (thd %d)\n", cos_get_thd_id()); */
-		printc("kevin 0 (thd %d)\n", cos_get_thd_id());
+		/* printc("kevin 0 (thd %d)\n", cos_get_thd_id()); */
 		sz = parent_tread(cos_spd_id(), ip_td, cb, alloc_sz);
 		tcp_tread_cnt++;
 		assert(sz > 0);
@@ -1472,6 +1477,7 @@ tsplit(spdid_t spdid, td_t tid, char *param, int len,
 		if (!t) goto done;
 		nc = (net_connection_t)t->data;
 	}
+
 	if (!accept && len != 0) {
 		int r;
 
@@ -1569,6 +1575,8 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	nc = (net_connection_t)t->data;
 
 	ret = net_recv(spdid, nc, buf, sz);
+	/* printc("after net_recv, thd %d reads from tor %d (ret %d)\n",  */
+	/*        cos_get_thd_id(), td, ret); */
 done:
 	NET_LOCK_RELEASE();
 	assert(lock_contested(&net_lock) != cos_get_thd_id());
