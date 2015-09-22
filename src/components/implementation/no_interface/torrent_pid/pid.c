@@ -185,15 +185,14 @@ to_data_new(ap_data *out_data)
 	
 	if (!(buf = cbuf_alloc(BUFF_SZ, &cb))) BUG();
 	
-	static int pid2out = 100;
-
+	static int pid2out = 20;
 
 	/* prepare the information to be sent outside here */
 	// TODO:
 
 	char tmpstr[1024];
 	char *test_str = tmpstr;
-	sprintf(test_str, "%d", pid2out--);
+	sprintf(test_str, "%d", pid2out++);
 	//char *test_str = "this is just a read test";
 
 	memcpy(buf, test_str, strlen(test_str)+1);
