@@ -1,4 +1,5 @@
 /* Jiguo: fake ML component */
+// TODO: move this to the non-interface
 
 #include <cos_component.h>
 #include <sched.h>
