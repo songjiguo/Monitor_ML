@@ -1772,7 +1772,7 @@ cos_syscall_brand_wait_cont(int spd_id, unsigned short int bid, int *preempt)
 		goto brand_wait_err;
 	}
 
-	printk("thd %d waiting for the interrupt (preempted %d bid %d)\n", curr->thread_id, *preempt, bid);
+	/* printk("thd %d waiting for the interrupt (preempted %d bid %d)\n", curr->thread_id, *preempt, bid); */
 	return brand_execution_completion(curr, preempt);
 brand_wait_err:
 	curr->regs.ax = -1;

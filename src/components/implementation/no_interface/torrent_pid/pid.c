@@ -12,13 +12,15 @@
 #include <sys/socket.h>
 #include <stdio.h>
 #include <torrent.h>
+#include <sched.h>
+#include <periodic_wake.h>
+
+#include <log.h>
+
 extern td_t from_tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
 extern void from_trelease(spdid_t spdid, td_t tid);
 extern int from_tread(spdid_t spdid, td_t td, int cbid, int sz);
 extern int from_twrite(spdid_t spdid, td_t td, int cbid, int sz);
-#include <sched.h>
-
-#include <periodic_wake.h>
 
 /* pid control */
 #include "pid.h"
@@ -28,9 +30,6 @@ float deriv_error = 0.0;
 float integral_error = 0.0;
 float last_error = 0.0;
 #define TARGET_HEADING 90.0 
-
-
-
 
 unsigned int pid_thd = 0;
 int pid_torrent = 0;
@@ -190,10 +189,11 @@ to_data_new(ap_data *out_data)
 	/* prepare the information to be sent outside here */
 	// TODO:
 
-	char tmpstr[1024];
-	char *test_str = tmpstr;
-	sprintf(test_str, "%d", pid2out++);
-	//char *test_str = "this is just a read test";
+	/* char tmpstr[1024]; */
+	/* char *test_str = tmpstr; */
+	/* sprintf(test_str, "%d", pid2out++); */
+	
+	char *test_str = "this is fake message from PID controller\n";
 
 	memcpy(buf, test_str, strlen(test_str)+1);
 	amnt = strlen(test_str);
@@ -309,7 +309,7 @@ pid_process()
 	ap_data in_data;
 	ap_data out_data;
 
-	if (periodic_wake_create(cos_spd_id(), 100)) BUG();
+	if (periodic_wake_create(cos_spd_id(), PID_PERIOD)) BUG();
 	while(1) {
 		periodic_wake_wait(cos_spd_id());
 
@@ -352,6 +352,7 @@ cos_init(void *arg)
 		init(init_str);
 		return;
 	}
+
 
 	printc("Thread %d, port %d\n", cos_get_thd_id(), __port+off);	
 	port = off++;

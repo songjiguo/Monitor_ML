@@ -608,6 +608,8 @@ static void start_timer_thread(void)
 	spdid_t spdid = cos_spd_id();
 	unsigned int tick_freq;
 
+	printc("te: start timer thread %d\n", cos_get_thd_id());
+
 	sched_timeout_thd(spdid);
 	tick_freq = sched_tick_freq();
 	assert(tick_freq == 100);

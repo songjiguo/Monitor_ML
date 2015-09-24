@@ -29,11 +29,13 @@
 #include <log.h>
 #include <ck_ring_cos.h>
 
+#include <log.h>
+
 #include <multiplexer.h>
 #include <filter.h>
 #include <util.h>
 
-#define MULTIPLEXER_BUFF_SZ 32   // number of pages for the RB
+#define MULTIPLEXER_BUFF_SZ 90   // number of pages for the RB
 int multiplexer_thd;
 
 // statically allocate the buffer for sharing 
@@ -80,7 +82,7 @@ static unsigned int get_powerOf2(unsigned int orig) {
  * which needs some protocol. For now, for simplicity assume
  * only one stream. */
 static void
-prepare_for_stream(struct mpsmc_entry *mpsmcevt)
+prepare_for_stream(struct evt_entry *mpsmcevt)
 {
 	int i;
 	assert(mpsmcevt);
@@ -103,10 +105,8 @@ prepare_for_stream(struct mpsmc_entry *mpsmcevt)
 		}
 	}
 
-	struct evt_entry *entry = (struct evt_entry *)mpsmcevt;
-
 	// check each entry and update the information interested
-	cra_constraint_check(entry);
+	cra_constraint_check(mpsmcevt);
 
 	return;
 }
@@ -116,15 +116,20 @@ update_stream(struct thd_trace *ttc, unsigned long long ts)
 {
 	unsigned int tail;
 	struct mlmp_thdevtseq_entry *mlmpevtseq;
-	
+
+	assert(mlmpthdevtseq_ring);
+
 	tail = mlmpthdevtseq_ring->p_tail;
-	mlmpevtseq = (struct mlmp_thdevtseq_entry *) 
-		CK_RING_GETTAIL_EVT(mlmpthdevtseqbuffer_ring, 
+
+	mlmpevtseq = (struct mlmp_thdevtseq_entry *)
+		CK_RING_GETTAIL_EVT(mlmpthdevtseqbuffer_ring,
 				    mlmpthdevtseq_ring, tail);
 	assert(mlmpevtseq);
+
 	mlmpevtseq->time_stamp = ts;
 	mlmpevtseq->thd_id = ttc->thd_id;
 	mlmpthdevtseq_ring->p_tail = tail+1;
+
 	return mlmpevtseq;
 }
 
@@ -143,6 +148,7 @@ stream_event_info(int streams)
 	struct thd_trace *ttc;
 	struct thd_specs *ttc_spec;
 	int i, j;
+
 
 	if (streams & STREAM_SPD_EXEC_TIMING) {
 		printc("\n<<< event stream: max execution time in component >>>\n");
@@ -251,6 +257,7 @@ stream_event_info(int streams)
 				/* printc("@ %llu\n", ttc->exe_stack[j].ts); */
 			}
 		}
+
 		for (i = 0; i < MAX_NUM_THREADS; i++) {   // reset
 			ttc = &thd_trace[i];
 			assert(ttc);
@@ -275,13 +282,14 @@ stream_event_info(int streams)
 static int
 multiplexer_process(int streams)
 {
-	struct mpsmc_entry mpsmcentry;
+	struct evt_entry mpsmcentry;
 
 	while((CK_RING_DEQUEUE_SPSC(mpsmcbuffer_ring, mpsmc_ring, &mpsmcentry))) {
 		prepare_for_stream(&mpsmcentry);
 		/* print_mpsmcentry_info(&mpsmcentry); */
 	}
-	
+//	printc("EMP EVTSEQ STREAM 4: current tail %d\n", mlmpthdevtseq_ring->p_tail);
+
 	stream_event_info(streams);
 
 	return 0;
@@ -294,10 +302,14 @@ multiplexer_retrieve_data(spdid_t spdid, int streams)
 {
 	/* printc("fkml thd %d is retrieving event stream....\n", */
 	/*        cos_get_thd_id()); */
-
 #ifdef STREAM_PROCESS_OPTION_1
 	multiplexer_process(streams);	
 #endif
+	
+	// reset the tracking array for CRA
+	track_ints_num = 0;
+	track_cs_num   = 0;
+	
 	return 0;
 }
 
@@ -420,13 +432,12 @@ cos_init(void *d)
 
 			init_log();
 
-			periodic_wake_create(cos_spd_id(), 10);
+			periodic_wake_create(cos_spd_id(), EMP_PERIOD);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				printc("periodic process multiplexer....(thd %d)\n",
-				       cos_get_thd_id());
+				printc("PERIODIC: emp....(thd %d)\n", cos_get_thd_id());
 				llog_multiplexer_retrieve_data(cos_spd_id());
-				return;   // debug network, so disable this for now
+				/* return;   // debug network, so disable this for now */
 #ifdef STREAM_PROCESS_OPTION_2
 				multiplexer_process();	
 #endif

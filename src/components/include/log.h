@@ -139,7 +139,15 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define CFORCEINLINE __attribute__((always_inline))
 #endif
 
-#define LM_SYNC_PERIOD 10  // period for asynchronous processing
+// asynchronous processing period
+#define LM_SYNC_PERIOD 10  
+
+// CRA period settings
+#define EMP_PERIOD  23
+#define FML_PERIOD  34
+
+// PID controller period
+#define PID_PERIOD  100
 
 /* [ 3938.886250] 	1: alpha */
 /* [ 3938.886250] 	2: recov */
@@ -205,9 +213,10 @@ PERCPU_EXTERN(cos_sched_notifications);
 
 // thread ID
 #define MONITOR_THD     4
+#define CRA_THD         5   // added for CRA
 #define TIMER_THD	8
 #define TE_THD	        10
-#define NETWORK_THD	14
+#define NETWORK_THD	16
 
 #define NUM_PRIOS    32
 #define PRIO_LOWEST  (NUM_PRIOS-1)
@@ -386,7 +395,7 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 
 	/* //Jiguo: hack for testing only. port_ns with network. Another hack is in inv.c */
 	if (cos_spd_id() == 23) {
-		printc("kkkkkkkevin andy\n");
+		/* printc("kkkkkkkevin andy\n"); */
 		return;
 	}
 
@@ -438,25 +447,25 @@ evt_enqueue(int par1, unsigned long par2, unsigned long par3, int par4, int par5
 /* entry in the ring buffer between Multiplexer component and the SMC,
  * for now, just let the structure to be same --> copy everything */
 
-struct mpsmc_entry {
-	int owner;   // id of thread that owns the entry
-	int from_thd, to_thd;
-	unsigned long from_spd, to_spd; // can be cap_no
-	unsigned long long time_stamp;
-	int evt_type;    
-	int func_num;   // hard code which function call FIXME:naming space
-	int para;   // record passed parameter (e.g. dep_thd)
-	int committed;  // a flag to indicate if the event is committed
-};
+/* struct mpsmc_entry { */
+/* 	int owner;   // id of thread that owns the entry */
+/* 	int from_thd, to_thd; */
+/* 	unsigned long from_spd, to_spd; // can be cap_no */
+/* 	unsigned long long time_stamp; */
+/* 	int evt_type;     */
+/* 	int func_num;   // hard code which function call FIXME:naming space */
+/* 	int para;   // record passed parameter (e.g. dep_thd) */
+/* 	int committed;  // a flag to indicate if the event is committed */
+/* }; */
 
 #ifndef __MPSMCRING_DEFINED
 #define __MPSMCRING_DEFINED
-CK_RING(mpsmc_entry, mpsmcbuffer_ring);
+CK_RING(evt_entry, mpsmcbuffer_ring);
 CK_RING_INSTANCE(mpsmcbuffer_ring) *mpsmc_ring;
 #endif
 
 static void
-event_copy(struct mpsmc_entry *to, struct evt_entry *from)
+event_copy(struct evt_entry *to, struct evt_entry *from)
 {
 	assert(to && from);
 
@@ -475,7 +484,7 @@ event_copy(struct mpsmc_entry *to, struct evt_entry *from)
 }
 
 static void
-print_mpsmcentry_info(struct mpsmc_entry *entry)
+print_mpsmcentry_info(struct evt_entry *entry)
 {
 	int dest;
 

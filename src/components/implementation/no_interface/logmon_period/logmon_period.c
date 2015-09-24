@@ -28,17 +28,15 @@ void cos_init(void)
 	} else {
 		if (cos_get_thd_id() == high) {
 
-			return;  // disable this for CRA stuff (disable CMon check)
+			/* return;  // disable this for CRA stuff (disable CMon check) */
 
 			int lm_sync_period;
 			lm_sync_period = llog_getsyncp(cos_spd_id());
 			periodic_wake_create(cos_spd_id(), lm_sync_period);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				printc("periodic process log....(thd %d)\n", cos_get_thd_id());
+				printc("PERIODIC: logmon....(thd %d)\n", cos_get_thd_id());
 				llog_process(cos_spd_id());
-				printc("periodic process log done!....(thd %d)\n", 
-				       cos_get_thd_id());
 			}
 		}
 	}

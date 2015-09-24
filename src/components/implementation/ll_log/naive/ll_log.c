@@ -9,12 +9,15 @@
 
 int test_aysncthd;
 
+
+//#define CRA_ENABLED
+
 static int LOG_INIT_THD;
 static int LOG_LOOP_THD;
 static int LOG_PREV_THD;
 static int LOG_PREV_SPD;
 
-static int MULTIPLEXER_THD;
+/* static int MULTIPLEXER_THD; */
 
 void *valloc_alloc(spdid_t spdid, spdid_t dest, unsigned long npages) 
 { return NULL; }
@@ -97,6 +100,7 @@ clear_owner_commit()
 }
 
 static void lllog_loop(void);
+/* static void lllog_cra_loop(void); */
 
 /* Initialize log manager here...do this only once */
 static void
@@ -140,9 +144,13 @@ lmgr_initialize(void)
 
 	LOG_INIT_THD = cos_get_thd_id();
 	sched_init(0);
-	LOG_LOOP_THD = cos_create_thread((int)lllog_loop, (int)0, 0);
 
+	LOG_LOOP_THD = cos_create_thread((int)lllog_loop, (int)0, 0);
 	printc("log_loop_thd %d is created by thd %d\n", LOG_LOOP_THD, cos_get_thd_id());
+
+	/* MULTIPLEXER_THD = cos_create_thread((int)lllog_cra_loop, (int)2, 0); */
+	/* printc("multiplexer_thd %d is created by thd %d\n",  */
+	/*        MULTIPLEXER_THD, cos_get_thd_id()); */
 
 	return;
 }
@@ -195,9 +203,15 @@ cra_copy(struct evt_entry *evt)
 	 * the buffer between the SMC and EMP is faster than they are
 	 * consumed to different stream buffer. The processing the
 	 * events could be separated at the different speed. */
-	struct mpsmc_entry *mpsmcevt = NULL;
-	mpsmcevt = (struct mpsmc_entry *) CK_RING_GETTAIL_EVT(mpsmcbuffer_ring,
+	struct evt_entry *mpsmcevt = NULL;
+	mpsmcevt = (struct evt_entry *) CK_RING_GETTAIL_EVT(mpsmcbuffer_ring,
 							      mpsmc_ring, tail);
+	/* int capacity = CK_RING_CAPACITY( */
+	/* 	mpsmcbuffer_ring,  */
+	/* 	(CK_RING_INSTANCE(mpsmcbuffer_ring) *)((void *)mpsmc_ring)); */
+	/* printc("SMC:the mpsmc ring cap is %d\n\n", capacity); */
+	/* printc("SMC:the mpsmc ring tail is %d\n\n", mpsmc_ring->p_tail); */
+	
 	assert(mpsmcevt);
 	event_copy(mpsmcevt, evt);
 	mpsmc_ring->p_tail = tail+1;
@@ -223,18 +237,31 @@ mpsmc_action()
 	
 	do {
 		event_num++;
-		if (event_num > 64) {
-			printc("mpsmc_action has processed %d events, so break!!!!\n",
-				event_num);
-			break;  // test network only
-		}
 		cra_copy(evt);
 	} while ((evt = find_next_evt(evt)));
 
-	/* printc("cra copy process done (%d evts)\n", event_num); */
+	/* printc("cra copy process done (thd %d %d evts)\n",  */
+	/*        cos_get_thd_id(), event_num); */
 done:
 	return;
 }
+
+/* static void */
+/* lllog_cra_loop(void) {  */
+/* 	int tid, pthd; */
+/* 	while(1) { */
+/* 		pthd = LOG_PREV_THD; */
+/* 		/\* mon_assert(cos_get_thd_id() == MULTIPLEXER_THD); *\/ */
+
+/* 		mpsmc_action();  // CRA process */
+
+/* 		LOG_PREV_THD = 0; */
+/* 		LOG_PREV_SPD = 0; */
+/* 		cos_switch_thread(pthd, 0); */
+/* 	} */
+/* 	mon_assert(0); */
+/* 	return;  */
+/* } */
 
 static void
 lllog_loop(void) { 
@@ -243,14 +270,42 @@ lllog_loop(void) {
 		pthd = LOG_PREV_THD;
 		test_aysncthd = pthd;  // test asyn cost only
 		mon_assert(cos_get_thd_id() == LOG_LOOP_THD);
-#if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION)
-		if (pthd == MULTIPLEXER_THD) {
-			mpsmc_action();  // CRA copy
+
+
+/* #if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION) */
+/* 		lmgr_action(); */
+/* 		clear_owner_commit(); */
+/* #endif */
+
+
+		/* for CRA, the ring might not have been set up when any rb is
+		 * full, so for now, just ignore any thing before the ring is
+		 * set up. */
+		if (mpsmc_ring) {
+			mpsmc_action();
+			clear_owner_commit();
 		} else {
+#if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION)
 			lmgr_action();
 			clear_owner_commit();
-		}
 #endif
+		}
+
+
+/* #ifdef CRA_ENABLED */
+/* 		mpsmc_action();  // CRA */
+/* #else */
+
+/* #if !defined(MEAS_LOG_SYNCACTIVATION) && !defined(MEAS_LOG_ASYNCACTIVATION) */
+/* 		/\* if (pthd == MULTIPLEXER_THD) { *\/ */
+/* 		/\* 	mpsmc_action();  // CRA copy *\/ */
+/* 		/\* } else { *\/ */
+/* 		lmgr_action(); */
+/* 		clear_owner_commit(); */
+/* 		/\* } *\/ */
+/* #endif */
+/* #endif */
+
 		LOG_PREV_THD = 0;
 		LOG_PREV_SPD = 0;
 		cos_switch_thread(pthd, 0);
@@ -267,6 +322,9 @@ lllog_loop(void) {
 int
 llog_process(spdid_t spdid)
 {
+	/* printc("llog_process thd %d is processing data in SMC now....(from spd %d)\n", */
+	/*        cos_get_thd_id(), spdid); */
+	
 	LOCK();
 
 	LOG_PREV_SPD     = spdid;
@@ -280,16 +338,16 @@ llog_process(spdid_t spdid)
 	evt_enqueue(LOG_LOOP_THD, LOG_PREV_SPD, cos_spd_id(),
 		    0, 0, EVT_LOG_PROCESS);
 #endif
-
 	while (LOG_PREV_THD == cos_get_thd_id()) cos_switch_thread(LOG_LOOP_THD, 0);
 
+	/* printc("llog_process thd %d is releasing the lock\n", cos_get_thd_id()); */
 	UNLOCK();
 
 	return 0;
 
 }
 
-/* Copy all events to the shared buffer between the multiplexer and
+/* Copy all left events to the shared buffer between the multiplexer and
  * SMC so the multiplexer thread can process/stream it. See
  * multiplexer.c */
 int
@@ -297,10 +355,20 @@ llog_multiplexer_retrieve_data(spdid_t spdid)
 {
 	/* printc("multiplexer thd %d is retrieving any data in SMC now....\n", */
 	/*        cos_get_thd_id()); */
-        struct logmon_info *spdmon;
-	llog_process(spdid);
 
-	return 0;
+	return llog_process(spdid);
+
+	/* LOCK(); */
+
+	/* LOG_PREV_SPD     = spdid; */
+	/* LOG_PREV_THD     = cos_get_thd_id(); */
+
+	/* while (LOG_PREV_THD == cos_get_thd_id()) cos_switch_thread(MULTIPLEXER_THD, 0); */
+
+	/* /\* printc("llog_process thd %d is releasing the lock\n", cos_get_thd_id()); *\/ */
+	/* UNLOCK(); */
+
+	/* return 0; */
 }
 
 /* Return the periodicity for asynchronously monitor processing  */
@@ -487,7 +555,7 @@ mpsmc_setuprb(spdid_t spdid, vaddr_t cli_addr, int npages) {
 	addr = start;
 	// FIXME: PAGE_SIZE - sizeof((CK_RING_INSTANCE(logevts_ring))	
 	CK_RING_INIT(mpsmcbuffer_ring, (CK_RING_INSTANCE(mpsmcbuffer_ring) *)((void *)addr), NULL, 
-		     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mpsmcbuffer_ring))/sizeof(struct mpsmc_entry)));
+		     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mpsmcbuffer_ring))/sizeof(struct evt_entry)));
 
 	/* printc("\nmpsmc: test the size %d\n", get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mpsmcbuffer_ring))/sizeof(struct mpsmc_entry))); */
 	/* printc("PAGE_SIZE*npages %d\n",PAGE_SIZE*npages); */
@@ -508,8 +576,8 @@ llog_multiplexer_init(spdid_t spdid, vaddr_t addr, int npages)
 	vaddr_t ret = 0;
 
 	assert(spdid == MULTIPLEXER_SPD);
-	MULTIPLEXER_THD = cos_get_thd_id();
-	printc("set multiplexer thread to be %d\n", MULTIPLEXER_THD);
+	/* MULTIPLEXER_THD = cos_get_thd_id(); */
+	/* printc("set multiplexer thread to be %d\n", MULTIPLEXER_THD); */
 
 	LOCK();
 
@@ -529,10 +597,14 @@ typedef void (*crt_thd_fn_t)(void);
 void 
 cos_upcall_fn(upcall_type_t t, void *arg1, void *arg2, void *arg3)
 {
+	/* printc("thd %d passed in arg1 %d, arg2 %d arg3 %d\n", cos_get_thd_id(), */
+	/*        (int)arg1, (int)arg2, (int)arg3); */
 	switch (t) {
 	case COS_UPCALL_BOOTSTRAP:
 		lmgr_initialize(); break;
 	case COS_UPCALL_CREATE:
+		/* if ((int)arg2 == 1) lllog_loop(); */
+		/* if ((int)arg2 == 2) lllog_cra_loop(); */
 		lllog_loop();
 		((crt_thd_fn_t)arg1)();
 		break;

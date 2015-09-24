@@ -69,8 +69,8 @@ struct logmon_info {
 
 /* CRA: track the execution stack */
 #define TRACK_SPDS 100
-#define TRACK_INTS 40
-#define TRACK_CS   40
+#define TRACK_INTS 100
+#define TRACK_CS   100
 
 struct exe_stack {   // only one event at a time
 	int inv_from_spd;
@@ -86,14 +86,14 @@ struct thd_ints {
 	int int_thd;
 	unsigned long long ts;
 } thd_ints[TRACK_INTS];
-int track_ints_num = 0;
+unsigned int track_ints_num = 0;
 
 struct thd_cs {
 	int from_thd;
 	int to_thd;
 	unsigned long long ts;
 } thd_cs[TRACK_CS];
-int track_cs_num = 0;
+unsigned int track_cs_num = 0;
 
 /* per thread tracking data structure */
 struct thd_trace {
@@ -966,7 +966,11 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 
 	switch (type) {
 	case EVT_NINT:
+		printc("entry->to_spd %ld  NETIF_SPD %d\n", 
+		       entry->to_spd, NETIF_SPD);
 		assert(entry->to_spd == NETIF_SPD);
+		printc("entry->to_thd %d  NETWORK_THD %d\n", 
+		       entry->to_thd, NETWORK_THD);
 		assert(entry->to_thd == NETWORK_THD);
 		ttc->network_int++;  // still need this?
 		network_interrupts++;
@@ -1159,17 +1163,17 @@ cra_constraint_check(struct evt_entry *entry)
 			entry->from_spd = last_entry.to_spd;
 		}
 	}
+
 	from_thd = entry->from_thd;
 	from_spd = entry->from_spd;
 	assert(from_thd && from_spd);
-	
+
 	// ttc tracks thread that runs up to this point (not the next)
 	ttc = &thd_trace[from_thd];
 	assert(ttc);
-	if (unlikely(!ttc->last_ts)) ttc->last_ts = entry->time_stamp;
-	
 
-	/* printc("cra_filter 1\n"); */
+	if (unlikely(!ttc->last_ts)) ttc->last_ts = entry->time_stamp;
+
 	int type = entry->evt_type;
 	switch (type) {
 	case EVT_CINV:
@@ -1214,6 +1218,7 @@ cra_constraint_check(struct evt_entry *entry)
 		up_t = entry->time_stamp - ttc->last_ts;
 		ttc->last_ts = entry->time_stamp;
 		assert(!ttn);
+		
 		break;
 	case EVT_CS:
 		assert(entry->to_spd == SCHED_SPD);  
@@ -1227,17 +1232,19 @@ cra_constraint_check(struct evt_entry *entry)
 		track_cs_num++;		
 
 	case EVT_TINT:
-
 		// CRA: track interrupts here
 		if (type == EVT_TINT) {
-			print_evt_info(entry);
+			/* print_evt_info(entry); */
 			//print_evt_info(&last_entry);
 			thd_ints[track_ints_num].curr_thd = entry->from_thd;
 			thd_ints[track_ints_num].int_spd = entry->to_spd;
 			thd_ints[track_ints_num].int_thd = entry->to_thd;
 			thd_ints[track_ints_num].ts = entry->time_stamp;
-			track_ints_num++;		
+			track_ints_num++;
 		}
+		/* printc("6 (track_ints_num %d)\n", track_ints_num); */
+		/* printc("EMP EVTSEQ STREAM debug 6: current tail %d\n", */
+		/*        mlmpthdevtseq_ring->p_tail); */
 
 	case EVT_NINT:
 		up_t = entry->time_stamp - ttc->last_ts;
@@ -1261,6 +1268,7 @@ cra_constraint_check(struct evt_entry *entry)
 		break;
 	}	
 
+	/* return;  // debug CRA	  // bad */
 	/* printc("cra_filter 2\n"); */
 	/***************************/
 	/* Constraint check begins */

@@ -25,7 +25,7 @@ enum stream_flags {
 
 // in pages
 #define	STREAM_TEST_BUFF             8
-#define	STREAM_THD_EVT_SEQUENC_BUFF  8
+#define	STREAM_THD_EVT_SEQUENC_BUFF  32
 #define	STREAM_THD_EXEC_TIMING_BUFF  8
 #define	STREAM_THD_INTERACTION_BUFF  8
 #define	STREAM_THD_CONTEX_SWCH_BUFF  8
