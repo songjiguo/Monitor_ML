@@ -19,12 +19,10 @@ enum stream_flags {
 	STREAM_SPD_INVOCATIONS     = (0x001 << 4),
 	STREAM_SPD_EXEC_TIMING     = (0x001 << 5),
 
-	STREAM_TEST                = (0x001 << 9),
 	STREAM_MAX                 = (0x001 << 10),   // max 10 different type of streams
 };
 
 // in pages
-#define	STREAM_TEST_BUFF             8
 #define	STREAM_THD_EVT_SEQUENC_BUFF  32
 #define	STREAM_THD_EXEC_TIMING_BUFF  8
 #define	STREAM_THD_INTERACTION_BUFF  8
@@ -103,19 +101,22 @@ static void
 print_mlmpthdevtseq_info(struct mlmp_thdevtseq_entry *mlmpevt)
 {
 	assert(mlmpevt);
-	if (mlmpevt->thd_id) printc ("thread %d \n", mlmpevt->thd_id);
-	if (mlmpevt->time_stamp) printc ("@ %llu: ", mlmpevt->time_stamp);
-	if (mlmpevt->inv_from_spd) printc ("invoke from %d \n", mlmpevt->inv_from_spd);
-	if (mlmpevt->inv_into_spd) printc ("invoke into %d \n", mlmpevt->inv_into_spd);
-	if (mlmpevt->ret_from_spd) printc ("return from %d \n", mlmpevt->ret_from_spd);
-	if (mlmpevt->ret_back_spd) printc ("return back %d \n", mlmpevt->ret_back_spd);
+	if (mlmpevt->thd_id) {
+		printc ("seq:thd %d ", mlmpevt->thd_id);
+		if (mlmpevt->time_stamp) printc ("@ %llu:", mlmpevt->time_stamp);
+		if (mlmpevt->inv_from_spd) printc ("inv-> %d \n", mlmpevt->inv_from_spd);
+		if (mlmpevt->inv_into_spd) printc ("->inv %d \n", mlmpevt->inv_into_spd);
+		if (mlmpevt->ret_from_spd) printc ("<-ret %d \n", mlmpevt->ret_from_spd);
+		if (mlmpevt->ret_back_spd) printc ("ret<- %d \n", mlmpevt->ret_back_spd);
+	}
 	return;
 }
 
 /*************************************/
 struct mlmp_thdtime_entry {
 	unsigned int thd_id;
-	unsigned long long time_stamp;
+	unsigned long long exec_max;
+	unsigned long long deadline_start;
 };
 
 #ifndef __MLMPRING_THDTIME_DEFINED
@@ -128,15 +129,21 @@ static void
 print_mlmpthdtime_info(struct mlmp_thdtime_entry *mlmpevt)
 {
 	assert(mlmpevt);
-	if (mlmpevt->thd_id) printc ("thread %d \n", mlmpevt->thd_id);
-	if (mlmpevt->time_stamp) printc ("@ %llu: ", mlmpevt->time_stamp);
+	if (mlmpevt->thd_id) {
+		printc ("exec:thd %d n", mlmpevt->thd_id);
+		if (mlmpevt->exec_max) printc ("exec %llu ", mlmpevt->exec_max);
+		if (mlmpevt->deadline_start) printc ("(%llu)\n", mlmpevt->deadline_start);
+	}
 	return;
 }
 
 /*************************************/
 
 struct mlmp_thdinteract_entry {
-	int thd_id;
+	int curr_thd;
+	int int_thd;
+	int int_spd;
+	unsigned long long time_stamp;
 };
 
 #ifndef __MLMPRING_THDINTERACT_DEFINED
@@ -145,10 +152,24 @@ CK_RING(mlmp_thdinteract_entry, mlmpthdinteractbuffer_ring);
 CK_RING_INSTANCE(mlmpthdinteractbuffer_ring) *mlmpthdinteract_ring;
 #endif
 
+static void
+print_mlmpthdinteract_info(struct mlmp_thdinteract_entry *mlmpevt)
+{
+	assert(mlmpevt);
+	if (mlmpevt->curr_thd) {
+		printc ("int:curr thd %d ", mlmpevt->curr_thd);
+		if (mlmpevt->int_thd) printc ("(thd %d ", mlmpevt->int_thd);
+		if (mlmpevt->int_spd) printc ("spd %d ", mlmpevt->int_spd);
+		if (mlmpevt->time_stamp) printc ("@ %llu)\n", mlmpevt->time_stamp);
+	}
+	return;
+}
 /*************************************/
 
 struct mlmp_thdcs_entry {
-	int thd_id;
+	int from_thd;
+	int to_thd;
+	unsigned long long time_stamp;
 };
 
 #ifndef __MLMPRING_THDCS_DEFINED
@@ -157,12 +178,24 @@ CK_RING(mlmp_thdcs_entry, mlmpthdcsbuffer_ring);
 CK_RING_INSTANCE(mlmpthdcsbuffer_ring) *mlmpthdcs_ring;
 #endif
 
+static void
+print_mlmpthdcs_info(struct mlmp_thdcs_entry *mlmpevt)
+{
+	assert(mlmpevt);
+	if (mlmpevt->from_thd) {
+		printc ("cs:thd %d", mlmpevt->from_thd);
+		if (mlmpevt->to_thd) printc ("->%d ", mlmpevt->to_thd);
+		if (mlmpevt->time_stamp) printc ("(@ %llu)\n", mlmpevt->time_stamp);
+	}
+	return;
+}
 
 /*************************************/
 
 struct mlmp_spdinvnum_entry {
-	unsigned int spd_id;
-	unsigned int invocation_nums;
+	unsigned int thd_id;
+	unsigned int invnum;
+	unsigned int spd;
 };
 
 #ifndef __MLMPRING_SPDINVNUM_DEFINED
@@ -170,6 +203,20 @@ struct mlmp_spdinvnum_entry {
 CK_RING(mlmp_spdinvnum_entry, mlmpspdinvnumbuffer_ring);
 CK_RING_INSTANCE(mlmpspdinvnumbuffer_ring) *mlmpspdinvnum_ring;
 #endif
+
+static void
+print_mlmpspdinvnum_info(struct mlmp_spdinvnum_entry *mlmpevt)
+{
+	assert(mlmpevt);
+	//TODO: fix the overflow in spdinvnum later
+	if (mlmpevt->invnum > 0 && mlmpevt->invnum < 10000 && mlmpevt->spd < 28) {
+		printc ("inv:thd %d ", mlmpevt->thd_id);
+		if (mlmpevt->spd) printc ("->spd %d ", mlmpevt->spd);
+		if (mlmpevt->invnum) printc ("%d times\n", mlmpevt->invnum);
+	}
+
+	return;
+}
 
 /*************************************/
 

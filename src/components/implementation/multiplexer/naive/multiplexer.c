@@ -111,8 +111,90 @@ prepare_for_stream(struct evt_entry *mpsmcevt)
 	return;
 }
 
+static struct mlmp_spdinvnum_entry *
+update_spdinvnum_stream(struct thd_trace *ttc)
+{
+	unsigned int tail;
+	struct mlmp_spdinvnum_entry *mlmpspdinvnum;
+
+	assert(mlmpspdinvnum_ring);
+
+	tail = mlmpspdinvnum_ring->p_tail;
+
+	mlmpspdinvnum = (struct mlmp_spdinvnum_entry *)
+		CK_RING_GETTAIL_EVT(mlmpspdinvnumbuffer_ring,
+				    mlmpspdinvnum_ring, tail);
+	assert(mlmpspdinvnum);
+	mlmpspdinvnum_ring->p_tail = tail+1;
+
+	return mlmpspdinvnum;
+}
+
+static struct mlmp_thdcs_entry *
+update_thdcs_stream(struct thd_trace *ttc)
+{
+	unsigned int tail;
+	struct mlmp_thdcs_entry *mlmpthdcs;
+
+	assert(mlmpthdcs_ring);
+
+	tail = mlmpthdcs_ring->p_tail;
+
+	mlmpthdcs = (struct mlmp_thdcs_entry *)
+		CK_RING_GETTAIL_EVT(mlmpthdcsbuffer_ring,
+				    mlmpthdcs_ring, tail);
+	assert(mlmpthdcs);
+	mlmpthdcs_ring->p_tail = tail+1;
+
+	return mlmpthdcs;
+}
+
+static struct mlmp_thdinteract_entry *
+update_thdinteract_stream(struct thd_trace *ttc)
+{
+	unsigned int tail;
+	struct mlmp_thdinteract_entry *mlmpthdinteract;
+
+	assert(mlmpthdinteract_ring);
+
+	tail = mlmpthdinteract_ring->p_tail;
+
+	mlmpthdinteract = (struct mlmp_thdinteract_entry *)
+		CK_RING_GETTAIL_EVT(mlmpthdinteractbuffer_ring,
+				    mlmpthdinteract_ring, tail);
+	assert(mlmpthdinteract);
+	mlmpthdinteract_ring->p_tail = tail+1;
+
+	return mlmpthdinteract;
+}
+
+static struct mlmp_thdtime_entry *
+update_thdtime_stream(struct thd_trace *ttc)
+{
+	unsigned int tail;
+	struct mlmp_thdtime_entry *mlmpthdtime;
+
+	assert(mlmpthdtime_ring);
+
+	tail = mlmpthdtime_ring->p_tail;
+
+	/* int capacity, size; */
+	/* capacity = CK_RING_CAPACITY(mlmpthdtimebuffer_ring, (CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *)((void *)mlmpthdtime_ring)); */
+	/* size = CK_RING_SIZE(mlmpthdtimebuffer_ring, (CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *)((void *)mlmpthdtime_ring)); */
+	/* printc("get an thdtime entry (tail %d)\n", tail); */
+	/* printc("cap %d size %d\n", capacity, size); */
+	
+	mlmpthdtime = (struct mlmp_thdtime_entry *)
+		CK_RING_GETTAIL_EVT(mlmpthdtimebuffer_ring,
+				    mlmpthdtime_ring, tail);
+	assert(mlmpthdtime);
+	mlmpthdtime_ring->p_tail = tail+1;
+
+	return mlmpthdtime;
+}
+
 static struct mlmp_thdevtseq_entry *
-update_stream(struct thd_trace *ttc, unsigned long long ts)
+update_evtseq_stream(struct thd_trace *ttc)
 {
 	unsigned int tail;
 	struct mlmp_thdevtseq_entry *mlmpevtseq;
@@ -126,8 +208,6 @@ update_stream(struct thd_trace *ttc, unsigned long long ts)
 				    mlmpthdevtseq_ring, tail);
 	assert(mlmpevtseq);
 
-	mlmpevtseq->time_stamp = ts;
-	mlmpevtseq->thd_id = ttc->thd_id;
 	mlmpthdevtseq_ring->p_tail = tail+1;
 
 	return mlmpevtseq;
@@ -143,117 +223,47 @@ stream_event_info(int streams)
 {
 	/* printc("thread %d is doing streaming copy\n", cos_get_thd_id()); */
         struct logmon_info *spdmon;
-	struct mlmp_entry *mlmpevt = NULL;
-	struct mlmp_thdevtseq_entry *mlmpevtseq;
 	struct thd_trace *ttc;
 	struct thd_specs *ttc_spec;
 	int i, j;
 
-
-	if (streams & STREAM_SPD_EXEC_TIMING) {
-		printc("\n<<< event stream: max execution time in component >>>\n");
-		for (i = 0; i < MAX_NUM_THREADS; i++) {
-			ttc = &thd_trace[i];
-			assert(ttc);
-			ttc_spec = &thd_specs[ttc->thd_id];
-			assert(ttc_spec);
-			/* print_thd_trace(ttc); */
-			for (j = 0; j < MAX_NUM_SPDS; j++) {
-				if (ttc->exec_oneinv_in_spd[j]) {
-					printc("thd %d max exec_oneinv_in_spd %llu in spd %d\n",
-					       ttc->thd_id, ttc->exec_oneinv_in_spd[j], j);
-				}
-			}
-		}
-	}
-
-	if (streams & STREAM_THD_EXEC_TIMING) {
-		printc("\n<<< event stream: execution time (since activation)  >>>\n");
-		for (i = 0; i < MAX_NUM_THREADS; i++) {
-			ttc = &thd_trace[i];
-			assert(ttc);
-			ttc_spec = &thd_specs[ttc->thd_id];
-			assert(ttc_spec);
-			/* print_thd_trace(ttc); */
-			if (ttc_spec->exec_max) {
-				printc("thd %d max exec %llu (%llu)\n", 
-				       ttc->thd_id, ttc_spec->exec_max, ttc->dl_s);
-			}
-		}
-	}
-
-	if (streams & STREAM_SPD_INVOCATIONS) {
-		printc("\n<<< event stream: component invocation numbers >>>\n");
-		for (i = 0; i < MAX_NUM_THREADS; i++) {
-			ttc = &thd_trace[i];
-			assert(ttc);
-			for (j = 0; j < MAX_NUM_SPDS; j++) {
-				if (ttc->invocation[j]) {
-					printc("thd %d invokes %d times to spd %d\n",
-					       ttc->thd_id, ttc->invocation[j], j);
-				}
-			}
-		}
-	}
-
-	if (streams & STREAM_THD_INTERACTION) {
-		printc("\n<<< event stream: interrupts  >>>\n");
-		for (i = 0; i < TRACK_INTS; i++) {
-			if (!thd_ints[i].ts) continue;
-			printc("thd %d is interrupted by thd %d in spd %d (@ %llu)\n",
-			       thd_ints[i].curr_thd, thd_ints[i].int_thd,
-			       thd_ints[i].int_spd, thd_ints[i].ts);
-		}
-		for (i = 0; i < TRACK_INTS; i++) {   // reset
-			thd_ints[track_ints_num].curr_thd = 0;
-			thd_ints[track_ints_num].int_spd = 0;
-			thd_ints[track_ints_num].int_thd = 0;
-			thd_ints[track_ints_num].ts = 0;
-			track_ints_num = 0;
-		}
-	}
-
-	if (streams & STREAM_THD_CONTEX_SWCH) {
-		printc("\n<<< event stream: context switch  >>>\n");
-		for (i = 0; i < TRACK_CS; i++) {
-			if (!thd_cs[i].ts) continue;
-			printc("context switch from thd %d to %d (@ %llu)\n",
-			       thd_cs[i].from_thd, thd_cs[i].to_thd, thd_cs[i].ts);
-		}
-		for (i = 0; i < TRACK_CS; i++) {   // reset
-			thd_cs[track_cs_num].from_thd = 0;
-			thd_cs[track_cs_num].to_thd   = 0;
-			track_cs_num = 0;
-		}
-	}
-
-
+	struct mlmp_thdevtseq_entry *mlmpevtseq;
 	if ((streams & STREAM_THD_EVT_SEQUENC)) {
-		printc("\n<<< event stream: component IPC sequence >>>\n");
+		/* printc("\n<<< event stream: component IPC sequence >>>\n"); */
 		for (i = 0; i < MAX_NUM_THREADS; i++) {
 			ttc = &thd_trace[i];
 			assert(ttc);
 			if (!ttc->exe_stack[0].ts) continue;  // no event for this thread
-			printc("\nthd %d execution stack ---> \n", ttc->thd_id);
+			/* printc("thd %d exec stack ---> \n", ttc->thd_id); */
 
+			mlmpevtseq = NULL;
 			for (j = 0; j < TRACK_SPDS; j++) {
 				if (!ttc->exe_stack[j].ts) break;
 				if (ttc->exe_stack[j].inv_from_spd) {
-					mlmpevtseq = update_stream(ttc, ttc->exe_stack[j].ts);
-					mlmpevtseq->inv_from_spd = ttc->exe_stack[j].inv_from_spd;
+					mlmpevtseq = update_evtseq_stream(ttc);
+					mlmpevtseq->inv_from_spd = 
+						ttc->exe_stack[j].inv_from_spd;
 				}
 				if (ttc->exe_stack[j].inv_into_spd) {
-					mlmpevtseq = update_stream(ttc, ttc->exe_stack[j].ts);
-					mlmpevtseq->inv_into_spd = ttc->exe_stack[j].inv_into_spd;
+					mlmpevtseq = update_evtseq_stream(ttc);
+					mlmpevtseq->inv_into_spd = 
+						ttc->exe_stack[j].inv_into_spd;
 				}
 				if (ttc->exe_stack[j].ret_from_spd) {
-					mlmpevtseq = update_stream(ttc, ttc->exe_stack[j].ts);
-					mlmpevtseq->ret_from_spd = ttc->exe_stack[j].ret_from_spd;
+					mlmpevtseq = update_evtseq_stream(ttc);
+					mlmpevtseq->ret_from_spd = 
+						ttc->exe_stack[j].ret_from_spd;
 				}
 				if (ttc->exe_stack[j].ret_back_spd) {
-					mlmpevtseq = update_stream(ttc, ttc->exe_stack[j].ts);
-					mlmpevtseq->ret_back_spd = ttc->exe_stack[j].ret_back_spd;
+					mlmpevtseq = update_evtseq_stream(ttc);
+					mlmpevtseq->ret_back_spd = 
+						ttc->exe_stack[j].ret_back_spd;
 				}
+				if (mlmpevtseq) {
+					mlmpevtseq->time_stamp = ttc->exe_stack[j].ts;
+					mlmpevtseq->thd_id = ttc->thd_id;
+				}
+					
 				/* printc("@ %llu\n", ttc->exe_stack[j].ts); */
 			}
 		}
@@ -272,8 +282,115 @@ stream_event_info(int streams)
 		}
 	}
 
-	if ((streams & STREAM_TEST)) {
-		
+	struct mlmp_thdtime_entry *mlmpthdtime;
+	if (streams & STREAM_THD_EXEC_TIMING) {
+		/* printc("\n<<< event stream: execution time (since activation)  >>>\n"); */
+		for (i = 0; i < MAX_NUM_THREADS; i++) {
+			ttc = &thd_trace[i];
+			assert(ttc);
+			ttc_spec = &thd_specs[ttc->thd_id];
+			assert(ttc_spec);
+			/* print_thd_trace(ttc); */
+			if (ttc_spec->exec_max) {
+				/* printc("thd %d max exec %llu (%llu)\n", */
+				/*        ttc->thd_id, ttc_spec->exec_max, ttc->dl_s); */
+				mlmpthdtime = update_thdtime_stream(ttc);
+				assert(mlmpthdtime);
+				mlmpthdtime->thd_id         = ttc->thd_id;
+				mlmpthdtime->exec_max       = ttc_spec->exec_max;
+				mlmpthdtime->deadline_start = ttc->dl_s;
+			}
+			ttc_spec->exec_max = 0;  // reset
+			ttc->dl_s = 0;
+			
+		}
+	}
+
+	struct mlmp_thdinteract_entry *mlmpthdinteract;
+	if (streams & STREAM_THD_INTERACTION) {
+		/* printc("\n<<< event stream: interrupts  >>>\n"); */
+		for (i = 0; i < TRACK_INTS; i++) {
+			if (!thd_ints[i].ts) continue;
+			/* printc("thd %d is interrupted by thd %d in spd %d (@ %llu)\n", */
+			/*        thd_ints[i].curr_thd, thd_ints[i].int_thd, */
+			/*        thd_ints[i].int_spd, thd_ints[i].ts); */
+			
+			mlmpthdinteract = update_thdinteract_stream(ttc);
+			assert(mlmpthdinteract);
+			mlmpthdinteract->curr_thd = thd_ints[i].curr_thd;
+			mlmpthdinteract->int_thd = thd_ints[i].int_thd;
+			mlmpthdinteract->int_spd = thd_ints[i].int_spd;
+			mlmpthdinteract->time_stamp = thd_ints[i].ts;
+		}
+		for (i = 0; i < TRACK_INTS; i++) {   // reset
+			thd_ints[i].curr_thd = 0;
+			thd_ints[i].int_spd = 0;
+			thd_ints[i].int_thd = 0;
+			thd_ints[i].ts = 0;
+		}
+		track_ints_num = 0;
+	}
+
+	struct mlmp_thdcs_entry *mlmpthdcs;
+	if (streams & STREAM_THD_CONTEX_SWCH) {
+		/* printc("\n<<< event stream: context switch  >>>\n"); */
+		for (i = 0; i < TRACK_CS; i++) {
+			if (!thd_cs[i].ts) continue;
+			/* printc("context switch from thd %d to %d (@ %llu)\n", */
+			/*        thd_cs[i].from_thd, thd_cs[i].to_thd, thd_cs[i].ts); */
+
+			mlmpthdcs = update_thdcs_stream(ttc);
+			assert(mlmpthdcs);
+			mlmpthdcs->from_thd = thd_cs[i].from_thd;
+			mlmpthdcs->to_thd = thd_cs[i].to_thd;
+			mlmpthdcs->time_stamp = thd_cs[i].ts;
+		}
+		for (i = 0; i < TRACK_CS; i++) {   // reset
+			thd_cs[i].from_thd = 0;
+			thd_cs[i].to_thd   = 0;
+		}
+		track_cs_num = 0;
+	}
+
+	struct mlmp_spdinvnum_entry *mlmpspdinvnum;
+	if (streams & STREAM_SPD_INVOCATIONS) {
+		/* printc("\n<<< event stream: component invocation numbers >>>\n"); */
+		for (i = 0; i < MAX_NUM_THREADS; i++) {
+			ttc = &thd_trace[i];
+			assert(ttc);
+			for (j = 0; j < MAX_NUM_SPDS; j++) {
+				if (ttc->invocation[j]) {
+					/* printc("thd %d invokes %d times to spd %d\n", */
+					/*        ttc->thd_id, ttc->invocation[j], j); */
+
+					mlmpspdinvnum = update_spdinvnum_stream(ttc);
+					assert(mlmpspdinvnum);
+					mlmpspdinvnum->thd_id = ttc->thd_id;
+					mlmpspdinvnum->invnum = ttc->invocation[j];
+					mlmpspdinvnum->spd    = j;
+				}
+				ttc->invocation[j] = 0; // reset
+			}
+		}
+	}
+
+
+
+	if (streams & STREAM_SPD_EXEC_TIMING) {
+		/* printc("\n<<< event stream: max execution time in component >>>\n"); */
+		for (i = 0; i < MAX_NUM_THREADS; i++) {
+			ttc = &thd_trace[i];
+			assert(ttc);
+			ttc_spec = &thd_specs[ttc->thd_id];
+			assert(ttc_spec);
+			/* print_thd_trace(ttc); */
+			for (j = 0; j < MAX_NUM_SPDS; j++) {
+				if (ttc->exec_oneinv_in_spd[j]) {
+					printc("thd %d max exec_oneinv_in_spd %llu in spd %d\n",
+					       ttc->thd_id, ttc->exec_oneinv_in_spd[j], j);
+				}
+			}
+		}
 	}
 
 	return;
@@ -288,8 +405,7 @@ multiplexer_process(int streams)
 		prepare_for_stream(&mpsmcentry);
 		/* print_mpsmcentry_info(&mpsmcentry); */
 	}
-//	printc("EMP EVTSEQ STREAM 4: current tail %d\n", mlmpthdevtseq_ring->p_tail);
-
+	
 	stream_event_info(streams);
 
 	return 0;
@@ -300,8 +416,8 @@ multiplexer_process(int streams)
 int
 multiplexer_retrieve_data(spdid_t spdid, int streams)
 {
-	/* printc("fkml thd %d is retrieving event stream....\n", */
-	/*        cos_get_thd_id()); */
+	printc("fkml thd %d is retrieving event stream(%d)....\n",
+	       cos_get_thd_id(), streams);
 #ifdef STREAM_PROCESS_OPTION_1
 	multiplexer_process(streams);	
 #endif
@@ -367,7 +483,7 @@ multiplexer_init(spdid_t spdid, vaddr_t cli_addr, int npages, int stream_type)
 	/* addr = (char *)malloc(MULTIPLEXER_BUFF_SZ*PAGE_SIZE); */
 	addr = cos_get_heap_ptr();
 	assert(addr);
-	cos_set_heap_ptr((void*)(((unsigned long)addr)+MULTIPLEXER_BUFF_SZ*PAGE_SIZE));
+	cos_set_heap_ptr((void*)(((unsigned long)addr) + PAGE_SIZE*npages));
 
 	emp_get_pages(npages, addr);
 
@@ -385,26 +501,54 @@ multiplexer_init(spdid_t spdid, vaddr_t cli_addr, int npages, int stream_type)
 			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mlmpthdevtseqbuffer_ring))/sizeof(struct mlmp_thdevtseq_entry)));
 		break;
 	case STREAM_THD_EXEC_TIMING:
-		break;
-	case STREAM_THD_INTERACTION:
-		break;
-	case STREAM_THD_CONTEX_SWCH:
-		break;
-	case STREAM_SPD_INVOCATIONS:
-		break;
-	case STREAM_SPD_EXEC_TIMING:
-		break;
-	case STREAM_TEST:
-		printc("init test stream!!!!\n");
+		printc("init thd exec timing stream!!!!\n");
 
-		assert(!mlmp_ring);
-		mlmp_ring = (CK_RING_INSTANCE(mlmpbuffer_ring) *)addr;
-
+		assert(!mlmpthdtime_ring);
+		mlmpthdtime_ring = (CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *)addr;
+		
 		emp_alias_pages(npages, spdid, addr, cli_ring);
 		
-		CK_RING_INIT(mlmpbuffer_ring,
-			     (CK_RING_INSTANCE(mlmpbuffer_ring) *)((void *)addr), NULL,
-			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mlmpbuffer_ring))/sizeof(struct mlmp_entry)));
+		CK_RING_INIT(mlmpthdtimebuffer_ring,
+			     (CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *)((void *)addr), NULL,
+			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mlmpthdtimebuffer_ring))/sizeof(struct mlmp_thdtime_entry)));
+		break;
+	case STREAM_THD_INTERACTION:
+		printc("init thd interaction stream!!!!\n");
+
+		assert(!mlmpthdinteract_ring);
+		mlmpthdinteract_ring = (CK_RING_INSTANCE(mlmpthdinteractbuffer_ring) *)addr;
+		
+		emp_alias_pages(npages, spdid, addr, cli_ring);
+		
+		CK_RING_INIT(mlmpthdinteractbuffer_ring,
+			     (CK_RING_INSTANCE(mlmpthdinteractbuffer_ring) *)((void *)addr), NULL,
+			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mlmpthdinteractbuffer_ring))/sizeof(struct mlmp_thdinteract_entry)));
+		break;
+	case STREAM_THD_CONTEX_SWCH:
+		printc("init thd context cs stream!!!!\n");
+
+		assert(!mlmpthdcs_ring);
+		mlmpthdcs_ring = (CK_RING_INSTANCE(mlmpthdcsbuffer_ring) *)addr;
+		
+		emp_alias_pages(npages, spdid, addr, cli_ring);
+		
+		CK_RING_INIT(mlmpthdcsbuffer_ring,
+			     (CK_RING_INSTANCE(mlmpthdcsbuffer_ring) *)((void *)addr), NULL,
+			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mlmpthdcsbuffer_ring))/sizeof(struct mlmp_thdcs_entry)));
+		break;
+	case STREAM_SPD_INVOCATIONS:
+		printc("init spd invocations stream!!!!\n");
+
+		assert(!mlmpspdinvnum_ring);
+		mlmpspdinvnum_ring = (CK_RING_INSTANCE(mlmpspdinvnumbuffer_ring) *)addr;
+		
+		emp_alias_pages(npages, spdid, addr, cli_ring);
+		
+		CK_RING_INIT(mlmpspdinvnumbuffer_ring,
+			     (CK_RING_INSTANCE(mlmpspdinvnumbuffer_ring) *)((void *)addr), NULL,
+			     get_powerOf2((PAGE_SIZE*npages - sizeof(struct ck_ring_mlmpspdinvnumbuffer_ring))/sizeof(struct mlmp_spdinvnum_entry)));
+		break;
+	case STREAM_SPD_EXEC_TIMING:
 		break;
 	default:
 		assert(0);
@@ -435,7 +579,8 @@ cos_init(void *d)
 			periodic_wake_create(cos_spd_id(), EMP_PERIOD);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				printc("PERIODIC: emp....(thd %d)\n", cos_get_thd_id());
+				printc("PERIODIC: emp....(thd %d in spd %ld)\n",
+				       cos_get_thd_id(), cos_spd_id());
 				llog_multiplexer_retrieve_data(cos_spd_id());
 				/* return;   // debug network, so disable this for now */
 #ifdef STREAM_PROCESS_OPTION_2

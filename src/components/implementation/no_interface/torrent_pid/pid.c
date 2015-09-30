@@ -131,7 +131,7 @@ mapping_add(int from, int to, long feid, long teid)
 	UNLOCK();
 }
 
-/* outside ==> pid */
+/* simulator ==> pid */
 static int
 from_data_new(ap_data *in_data)
 {
@@ -140,7 +140,7 @@ from_data_new(ap_data *in_data)
 	int amnt;
 	int ret = 0;
 
-	printc("from_data_new\n");
+	/* printc("from_data_new\n"); */
 
 	buf = cbuf_alloc(BUFF_SZ, &cb);
 	assert(buf);
@@ -153,14 +153,14 @@ from_data_new(ap_data *in_data)
 		printc("EPIPE close connection\n");
 		goto close;
 	} else if (amnt < 0) {
-		printc("read from pid_torrent %d produced %d.\n", pid_torrent, amnt);
+		/* printc("read from pid_torrent %d produced %d.\n", pid_torrent, amnt); */
 		goto done;
 	}
 
 	/* copy the external information here*/
 	// TODO
 
-	printc("outside ==> pid:: %s\n", buf);
+	printc("simulator ==> pid:: %s\n", buf);
 
 	if (buf) ret = 1;
 	
@@ -172,7 +172,7 @@ close:
 	goto done;
 }
 
-/* pid ==> outside */
+/* pid ==> simulator */
 static void 
 to_data_new(ap_data *out_data)
 {
@@ -186,14 +186,14 @@ to_data_new(ap_data *out_data)
 	
 	static int pid2out = 20;
 
-	/* prepare the information to be sent outside here */
+	/* prepare the information to be sent simulator here */
 	// TODO:
 
 	/* char tmpstr[1024]; */
 	/* char *test_str = tmpstr; */
 	/* sprintf(test_str, "%d", pid2out++); */
 	
-	char *test_str = "this is fake message from PID controller\n";
+	char *test_str = "fake msg from PID controller\n";
 
 	memcpy(buf, test_str, strlen(test_str)+1);
 	amnt = strlen(test_str);
@@ -203,7 +203,7 @@ to_data_new(ap_data *out_data)
 		goto close;
 	}
 
-	printc("pid ==> outside:: %s\n", buf);
+	printc("pid ==> simulator:: %s\n", buf);
 
 	memset(buf, 0, strlen(test_str)+1);
 	
@@ -312,14 +312,16 @@ pid_process()
 	if (periodic_wake_create(cos_spd_id(), PID_PERIOD)) BUG();
 	while(1) {
 		periodic_wake_wait(cos_spd_id());
+		printc("PERIODIC: pid....(thd %d in spd %ld)\n", 
+		       cos_get_thd_id(), cos_spd_id());
 
-		/* outside ==> pid */
+		/* simulator ==> pid */
 		if (from_data_new(&in_data)) {
 			/* If there is data to process, we process and
-			 * send back to outside */
+			 * send back to simulator */
 			/* pid */
 			ap_control(&in_data, &out_data);			
-			/* pid ==> outside */
+			/* pid ==> simulator */
 			to_data_new(&out_data);
 		}
 	}

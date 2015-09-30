@@ -22,25 +22,31 @@
 /* the stream type is defined in multiplexer interface
  * (see mutiplexer.h) */
 
+/* unsigned int streams =  */
+/* 	STREAM_THD_EVT_SEQUENC |  */
+/* 	STREAM_THD_EXEC_TIMING | */
+/* 	STREAM_THD_INTERACTION | */
+/* 	STREAM_THD_CONTEX_SWCH | */
+/* 	STREAM_SPD_INVOCATIONS; */
+
 unsigned int streams = 
-	STREAM_THD_EVT_SEQUENC | 
-	STREAM_TEST;
+	STREAM_THD_EVT_SEQUENC |	
+	STREAM_THD_EXEC_TIMING |
+	STREAM_THD_INTERACTION |
+	STREAM_THD_CONTEX_SWCH |
+	STREAM_SPD_INVOCATIONS;
+
+
+//unsigned int streams = STREAM_THD_EXEC_TIMING;
 
 static int
 fkml_process(int streams)
 {
 	/* printc("fkml process (thd %d)\n", cos_get_thd_id()); */
 
-	/* printc("[[[ test info ]]]\n"); */
-	if ((streams & STREAM_TEST)) {
-		struct mlmp_entry mlmpentry;
-		while((CK_RING_DEQUEUE_SPSC(mlmpbuffer_ring, mlmp_ring, &mlmpentry))) {
-			print_mlmpentry_info(&mlmpentry);
-		}
-	}
-	       
+	printc("\n");
 	if ((streams & STREAM_THD_EVT_SEQUENC)) {
-		printc("[[[ Event sequence info ]]]\n");
+		/* printc("[[[ Event sequence info ]]]\n"); */
 		struct mlmp_thdevtseq_entry mlmpentry;
 		while((CK_RING_DEQUEUE_SPSC(mlmpthdevtseqbuffer_ring, 
 					    mlmpthdevtseq_ring, &mlmpentry))) {
@@ -49,52 +55,52 @@ fkml_process(int streams)
 	}
 
 	if (streams & STREAM_THD_EXEC_TIMING) {
-		printc("[[[ Thread timing info ]]]\n");
+		/* printc("[[[ Thread timing info ]]]\n"); */
 		struct mlmp_thdtime_entry mlmpentry;
 		while((CK_RING_DEQUEUE_SPSC(mlmpthdtimebuffer_ring, 
 					    mlmpthdtime_ring, &mlmpentry))) {
-			print_mlmpthdtime_info(&mlmpentry);
+			//print_mlmpthdtime_info(&mlmpentry);
 		}
 		
 	}
 
 	if (streams & STREAM_THD_INTERACTION) {
-		printc("[[[ Thread interrupts info ]]]\n");
-		struct mlmp_thdevtseq_entry mlmpentry;
-		while((CK_RING_DEQUEUE_SPSC(mlmpthdevtseqbuffer_ring, 
-					    mlmpthdevtseq_ring, &mlmpentry))) {
-			print_mlmpthdevtseq_info(&mlmpentry);
+		/* printc("[[[ Thread interrupts info ]]]\n"); */
+		struct mlmp_thdinteract_entry mlmpentry;
+		while((CK_RING_DEQUEUE_SPSC(mlmpthdinteractbuffer_ring, 
+					    mlmpthdinteract_ring, &mlmpentry))) {
+			//print_mlmpthdinteract_info(&mlmpentry);
 		}
 	}
 
 	if (streams & STREAM_THD_CONTEX_SWCH) {
-		printc("[[[ Thread context switch info ]]]\n");
-		struct mlmp_thdevtseq_entry mlmpentry;
-		while((CK_RING_DEQUEUE_SPSC(mlmpthdevtseqbuffer_ring, 
-					    mlmpthdevtseq_ring, &mlmpentry))) {
-			print_mlmpthdevtseq_info(&mlmpentry);
+		/* printc("[[[ Thread context switch info ]]]\n"); */
+		struct mlmp_thdcs_entry mlmpentry;
+		while((CK_RING_DEQUEUE_SPSC(mlmpthdcsbuffer_ring, 
+					    mlmpthdcs_ring, &mlmpentry))) {
+			//print_mlmpthdcs_info(&mlmpentry);
 		}
 	}
 
 	if (streams & STREAM_SPD_INVOCATIONS) {
-		printc("[[[ Component invocations info ]]]\n");
-		struct mlmp_thdevtseq_entry mlmpentry;
-		while((CK_RING_DEQUEUE_SPSC(mlmpthdevtseqbuffer_ring, 
-					    mlmpthdevtseq_ring, &mlmpentry))) {
-			print_mlmpthdevtseq_info(&mlmpentry);
+		/* printc("[[[ Component invocations info ]]]\n"); */
+		struct mlmp_spdinvnum_entry mlmpentry;
+		while((CK_RING_DEQUEUE_SPSC(mlmpspdinvnumbuffer_ring, 
+					    mlmpspdinvnum_ring, &mlmpentry))) {
+			//print_mlmpspdinvnum_info(&mlmpentry);
 		}
 	}
 
 	if (streams & STREAM_SPD_EXEC_TIMING) {
-		printc("[[[ Component execution info ]]]\n");
+		/* printc("[[[ Component execution info ]]]\n"); */
 		struct mlmp_thdevtseq_entry mlmpentry;
 		while((CK_RING_DEQUEUE_SPSC(mlmpthdevtseqbuffer_ring, 
 					    mlmpthdevtseq_ring, &mlmpentry))) {
-			print_mlmpthdevtseq_info(&mlmpentry);
+			//print_mlmpthdevtseq_info(&mlmpentry);
 		}
 	}
 
-	printc("fkml process done! (thd %d)\n", cos_get_thd_id());
+	/* printc("fkml process done! (thd %d)\n", cos_get_thd_id()); */
 
 	return 0;
 }
@@ -109,7 +115,7 @@ _init_rb_mlmp(int buffer_size)
 		assert(0);
 	}
 	printc("set up rb: ML -- MP @addr %p \n", addr);
-	cos_set_heap_ptr((void*)(((unsigned long)addr)+PAGE_SIZE*buffer_size));
+	cos_set_heap_ptr((void*)(((unsigned long)addr) + PAGE_SIZE*buffer_size));
 	printc("set up rb: ML -- MP @addr %p done! \n", addr);
 
 	return addr;
@@ -120,17 +126,6 @@ init_rb_mlmp(int streams)
 {
 	char *addr;
 
-	if ((streams & STREAM_TEST)) {
-		addr = _init_rb_mlmp(STREAM_TEST_BUFF);
-		assert(addr);
-		if (!(mlmp_ring = (CK_RING_INSTANCE(mlmpbuffer_ring) *)
-		      (multiplexer_init(cos_spd_id(), (vaddr_t) addr, 
-					STREAM_TEST_BUFF, 
-					STREAM_TEST)))) BUG();
-		assert(mlmp_ring == 
-		       (CK_RING_INSTANCE(mlmpbuffer_ring) *)addr);
-	}
-	
 	if ((streams & STREAM_THD_EVT_SEQUENC)) {
 		addr = _init_rb_mlmp(STREAM_THD_EVT_SEQUENC_BUFF);
 		assert(addr);
@@ -144,7 +139,7 @@ init_rb_mlmp(int streams)
 	} 
 
 	if (streams & STREAM_THD_EXEC_TIMING) {
-		addr = _init_rb_mlmp(STREAM_THD_EXEC_TIMING);
+		addr = _init_rb_mlmp(STREAM_THD_EXEC_TIMING_BUFF);
 		assert(addr);
 		if (!(mlmpthdtime_ring = 
 		      (CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *)
@@ -236,7 +231,8 @@ cos_init(void *d)
 			periodic_wake_create(cos_spd_id(), FML_PERIOD);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				printc("PERIODIC: fkml....(thd %d)\n", cos_get_thd_id());
+				printc("PERIODIC: fkml....(thd %d in spd %ld)\n",
+				       cos_get_thd_id(), cos_spd_id());
 				multiplexer_retrieve_data(cos_spd_id(), streams);
 				fkml_process(streams);
 			}			

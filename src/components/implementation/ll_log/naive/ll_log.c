@@ -437,7 +437,7 @@ llog_setperiod(spdid_t spdid, unsigned int thd_id, unsigned int period)
 	mon_assert(ttl);
 	ttl->p = period;
 
-	printc("set period %d for thd %d\n", period, thd_id);
+	printc("set period %d for thd %d (from spd %d)\n", period, thd_id, spdid);
 	
 	// set time_window to be the minimum period of all task for interrupts log
 	if (period*CYC_PER_TICK < window_sz) window_sz = period*CYC_PER_TICK;

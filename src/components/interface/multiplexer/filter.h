@@ -966,11 +966,11 @@ check_interrupt(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry *
 
 	switch (type) {
 	case EVT_NINT:
-		printc("entry->to_spd %ld  NETIF_SPD %d\n", 
-		       entry->to_spd, NETIF_SPD);
+		/* printc("entry->to_spd %ld  NETIF_SPD %d\n",  */
+		/*        entry->to_spd, NETIF_SPD); */
 		assert(entry->to_spd == NETIF_SPD);
-		printc("entry->to_thd %d  NETWORK_THD %d\n", 
-		       entry->to_thd, NETWORK_THD);
+		/* printc("entry->to_thd %d  NETWORK_THD %d\n",  */
+		/*        entry->to_thd, NETWORK_THD); */
 		assert(entry->to_thd == NETWORK_THD);
 		ttc->network_int++;  // still need this?
 		network_interrupts++;
@@ -1216,6 +1216,7 @@ cra_constraint_check(struct evt_entry *entry)
 
 		assert(entry->to_thd == entry->from_thd);
 		up_t = entry->time_stamp - ttc->last_ts;
+		assert(up_t >= 0);
 		ttc->last_ts = entry->time_stamp;
 		assert(!ttn);
 		
@@ -1248,6 +1249,7 @@ cra_constraint_check(struct evt_entry *entry)
 
 	case EVT_NINT:
 		up_t = entry->time_stamp - ttc->last_ts;
+		assert(up_t >= 0);
 		ttn = &thd_trace[entry->to_thd];
 		assert(ttn);
 		ttn->last_ts = entry->time_stamp;

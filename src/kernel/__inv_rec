@@ -1658,7 +1658,7 @@ static struct pt_regs *brand_execution_completion(struct thread *curr, int *pree
 		upcall_execute(curr, (struct composite_spd*)dest->composite_spd, 
 			       NULL, cspd);
 
-		printk("4, curr thd %d (dest %d)\n", thd_get_id(curr), spd_get_index(dest));
+		/* printk("4, curr thd %d (dest %d)\n", thd_get_id(curr), spd_get_index(dest)); */
 		event_record("brand complete, upcall scheduler", thd_get_id(curr), 0);
 		/* printk("scheduler decides:curr %d upcall scheduler\n", thd_get_id(curr)); */
 		cos_meas_event(COS_MEAS_BRAND_COMPLETION_UC);

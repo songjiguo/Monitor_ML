@@ -52,9 +52,6 @@ extern int server_tread(spdid_t spdid, td_t td, int cbid, int sz);
 static volatile unsigned long http_conn_cnt = 0, http_req_cnt = 0;
 static volatile unsigned long http_new_request_cnt = 0;
 
-static volatile unsigned long  tread_cnt = 0;  // debug
-static volatile unsigned long  tread_cnt2 = 0;  // debug
-
 inline static int is_whitespace(char s) { return ' ' == s; }
 
 inline static char *remove_whitespace(char *s, int len)
@@ -610,7 +607,6 @@ static int connection_get_reply(struct connection *c, char *resp, int resp_sz)
 	 */
 	r = c->pending_reqs;
 	if (NULL == r) return 0;
-	tread_cnt2++;
 	while (r) {
 		struct http_request *next;
 		char *local_resp;
@@ -834,7 +830,6 @@ tread(spdid_t spdid, td_t td, int cbid, int sz)
 	char *buf;
 	int ret;
 
-	tread_cnt++;
 	/* printc("connmgr reads https thd %d\n", cos_get_thd_id()); */
 	if (tor_isnull(td)) return -EINVAL;
 	buf = cbuf2buf(cbid, sz);
@@ -975,10 +970,7 @@ void cos_init(void *arg)
 		printc("HTTP conns %ld, reqs %ld\n", http_conn_cnt, http_req_cnt);
 		http_conn_cnt = http_req_cnt = 0;
 
-		/* printc("tread from connmgr: %ld, thread2 %ld\n", tread_cnt, tread_cnt2); */
 		/* printc("http_new_request_cnt %ld\n", http_new_request_cnt); */
-		tread_cnt = 0;		
-		tread_cnt2 = 0;
 		http_new_request_cnt = 0;
 	}
 	
