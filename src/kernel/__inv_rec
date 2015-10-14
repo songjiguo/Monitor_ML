@@ -2837,7 +2837,6 @@ brand_higher_urgency(struct thread *upcall, struct thread *prev)
 			return 1;
 		}
 	}
-
 	u_urg = thd_get_depth_urg(upcall, d);
 	p_urg = thd_get_depth_urg(prev, d);
 	/* We should not run the upcall if it doesn't have more

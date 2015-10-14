@@ -312,8 +312,8 @@ pid_process()
 	if (periodic_wake_create(cos_spd_id(), PID_PERIOD)) BUG();
 	while(1) {
 		periodic_wake_wait(cos_spd_id());
-		printc("PERIODIC: pid....(thd %d in spd %ld)\n", 
-		       cos_get_thd_id(), cos_spd_id());
+		/* printc("PERIODIC: pid....(thd %d in spd %ld)\n",  */
+		/*        cos_get_thd_id(), cos_spd_id()); */
 
 		/* simulator ==> pid */
 		if (from_data_new(&in_data)) {

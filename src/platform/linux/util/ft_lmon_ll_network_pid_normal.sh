@@ -10,7 +10,7 @@
 !cmultiplexer.o, ;!mpool.o,a3;!buf.o,a5;!bufp.o, ;!lmonser1.o, ;!lmonser2.o, ;!va.o,a2;\
 !cpid.o, '1:10:200:/bind:0:%d/listen:255';\
 !port.o, ;!tif.o,a2;!tip.o, ;!tnet.o, ;!httpt.o,a8;\
-!rfs.o, ;!initfs.o,a3;!unique_map.o, ;!popcgi.o, ;!noise_c.o, ;\
+!rfs.o, ;!initfs.o,a3;!unique_map.o, ;!popcgi.o, ;\
 :\
 c0.o-llboot.o;\
 lllog.o-print.o|[parent_]llboot.o;\
@@ -46,7 +46,6 @@ unique_map.o-sm.o|va.o|fprr.o|print.o|mm.o|l.o|e.o|buf.o|bufp.o|lllog.o;\
 popcgi.o-sm.o|fprr.o|print.o|mm.o|buf.o|bufp.o|va.o|l.o|[server_]rfs.o|eg.o|te.o|lllog.o;\
 \
 mon_p.o-print.o|fprr.o|mm.o|te.o|lllog.o|llboot.o|cfkml.o;\
-noise_c.o-print.o|fprr.o|mm.o|te.o|lllog.o;\
 \
 lmoncli1.o-print.o|va.o|fprr.o|l.o|mm.o|lmonser1.o|te.o|lllog.o|llboot.o;\
 lmonser2.o-print.o|l.o|va.o|fprr.o|mm.o|lllog.o|llboot.o;\

@@ -902,6 +902,11 @@ check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry 
 	int i;
 	assert(ttc && entry);
 
+	/* if (ttc->thd_id == 22 || ttc->thd_id == 25) { */
+	/* 	printc("ttc->p %d ttc->dl_e %llu\n", ttc->p, ttc->dl_e); */
+	/* 	printc("thd %d timing (up_t %llu)\n", ttc->thd_id, up_t); */
+	/* } */
+
 	ttc->tot_exec += up_t;  // update each thread total execution time here.
 
 	// a periodic task starts its execution
@@ -917,22 +922,36 @@ check_thd_timing(struct thd_trace *ttc, struct thd_trace *ttn, struct evt_entry 
 		ttn->exec = 0;
 		ttn->dl_s = entry->time_stamp;
 		ttn->dl_e = ttn->dl_s + ttn->p*CYC_PER_TICK;
+		/* printc("KEVIN: thd %d has started\n", ttn->thd_id); */
+		/* printc("dl_s %llu dl_e %llu\n", ttn->dl_s, ttn->dl_e); */
 		for (i = 0; i < MAX_NUM_SPDS; i++) {
 			ttn->invocation[i] = 0;
 			ttn->exec_allinv_in_spd[i] = 0;
 		}
-		return;
+		//return;
 	}
 	
 	// a periodic task has started (with non-zero next deadline now)
 	if (RT(ttc) && ttc->dl_e) {
+	/* if (RT(ttc)) { */
 		ttc->exec  = ttc->exec + up_t;
 #ifdef LOGEVENTS_MODE
+		/* printc("thd %d exec %llu\n", ttc->thd_id, ttc->exec); */
 		struct thd_specs *ttc_spec;
 		ttc_spec = &thd_specs[ttc->thd_id];
 		assert(ttc_spec);
 		updatemax_llu(&ttc_spec->exec_max, ttc->exec); // no use for localization
-		PRINTD_THD_TIMING("thd %d max exec by dl is %llu\n", ttc->thd_id, ttc_spec->exec_max);
+		/* printc("thd %d max exec by dl is %llu\n", ttc->thd_id, ttc_spec->exec_max); */
+
+		if (unlikely(entry->time_stamp > ttc->dl_e)) {
+			if (ttc->thd_id != 19 && 
+			    ttc->thd_id != 14 &&
+			    ttc->thd_id != 25) // hardcode for test
+			{
+				printc("thd %d deadline miss!\n", ttc->thd_id);
+				/* printc("dl_s %llu dl_e %llu\n", ttc->dl_s, ttc->dl_e); */
+			}
+		}
 #endif
 #ifdef DETECTION_MODE
 		if (unlikely(entry->time_stamp > ttc->dl_e)) {

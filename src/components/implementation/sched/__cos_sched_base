@@ -463,7 +463,6 @@ static int sched_switch_thread_target(int flags, report_evt_t evt, struct sched_
 			report_event(SCHED_TARGETTED_DEPENDENCY);
 			next = target;
 		}
-		
 		next = resolve_dependencies(next);
 		if (next == current) goto done;
 		if (sched_is_child() && unlikely(next == PERCPU_GET(sched_base_state)->idle)) {

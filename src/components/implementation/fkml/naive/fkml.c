@@ -30,12 +30,11 @@
 /* 	STREAM_SPD_INVOCATIONS; */
 
 unsigned int streams = 
-	STREAM_THD_EVT_SEQUENC |	
-	STREAM_THD_EXEC_TIMING |
-	STREAM_THD_INTERACTION |
-	STREAM_THD_CONTEX_SWCH |
-	STREAM_SPD_INVOCATIONS;
-
+	STREAM_THD_EVT_SEQUENC | 
+	STREAM_THD_EXEC_TIMING | 
+	STREAM_THD_INTERACTION;
+	/* STREAM_THD_CONTEX_SWCH | */
+	/* STREAM_SPD_INVOCATIONS; */
 
 //unsigned int streams = STREAM_THD_EXEC_TIMING;
 
@@ -50,7 +49,7 @@ fkml_process(int streams)
 		struct mlmp_thdevtseq_entry mlmpentry;
 		while((CK_RING_DEQUEUE_SPSC(mlmpthdevtseqbuffer_ring, 
 					    mlmpthdevtseq_ring, &mlmpentry))) {
-			print_mlmpthdevtseq_info(&mlmpentry);
+			//print_mlmpthdevtseq_info(&mlmpentry);
 		}
 	}
 
@@ -59,7 +58,7 @@ fkml_process(int streams)
 		struct mlmp_thdtime_entry mlmpentry;
 		while((CK_RING_DEQUEUE_SPSC(mlmpthdtimebuffer_ring, 
 					    mlmpthdtime_ring, &mlmpentry))) {
-			//print_mlmpthdtime_info(&mlmpentry);
+			print_mlmpthdtime_info(&mlmpentry);
 		}
 		
 	}
@@ -231,8 +230,8 @@ cos_init(void *d)
 			periodic_wake_create(cos_spd_id(), FML_PERIOD);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				printc("PERIODIC: fkml....(thd %d in spd %ld)\n",
-				       cos_get_thd_id(), cos_spd_id());
+				/* printc("PERIODIC: fkml....(thd %d in spd %ld)\n", */
+				/*        cos_get_thd_id(), cos_spd_id()); */
 				multiplexer_retrieve_data(cos_spd_id(), streams);
 				fkml_process(streams);
 			}			

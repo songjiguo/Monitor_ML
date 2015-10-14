@@ -446,7 +446,7 @@ enum {
 	COS_CAP_SET_SERV_FN,
 	COS_CAP_ACTIVATE,
 	COS_CAP_GET_INVCNT,
-	COS_CAP_GET_SER_SPD,   // Jiguo: for monitor
+	COS_CAP_GET_SER_SPD,   // Jiguo: for monitorCOS_UPCALL
 	COS_CAP_SET_FAULT
 };
 

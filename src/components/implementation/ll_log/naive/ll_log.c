@@ -421,7 +421,7 @@ llog_contention(spdid_t spdid, int par2, int par3, int par4)
 
 // really do not need this since we need read c from somewhere anyway!!!
 /* Initialize thread period. This should only be called when a period
-   thread is created by periodic_wake_create
+   thread is created through periodic_wake_create
  */
 int 
 llog_setperiod(spdid_t spdid, unsigned int thd_id, unsigned int period)

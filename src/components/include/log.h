@@ -147,7 +147,8 @@ PERCPU_EXTERN(cos_sched_notifications);
 #define FML_PERIOD  34
 
 // PID controller period
-#define PID_PERIOD  100
+#define PID_PERIOD  77
+#define NOISE_PERIOD 66
 
 /* [ 3938.886250] 	1: alpha */
 /* [ 3938.886250] 	2: recov */

@@ -416,8 +416,8 @@ multiplexer_process(int streams)
 int
 multiplexer_retrieve_data(spdid_t spdid, int streams)
 {
-	printc("fkml thd %d is retrieving event stream(%d)....\n",
-	       cos_get_thd_id(), streams);
+	/* printc("fkml thd %d is retrieving event stream(%d)....\n", */
+	/*        cos_get_thd_id(), streams); */
 #ifdef STREAM_PROCESS_OPTION_1
 	multiplexer_process(streams);	
 #endif
@@ -579,8 +579,8 @@ cos_init(void *d)
 			periodic_wake_create(cos_spd_id(), EMP_PERIOD);
 			while(1){
 				periodic_wake_wait(cos_spd_id());
-				printc("PERIODIC: emp....(thd %d in spd %ld)\n",
-				       cos_get_thd_id(), cos_spd_id());
+				/* printc("PERIODIC: emp....(thd %d in spd %ld)\n", */
+				/*        cos_get_thd_id(), cos_spd_id()); */
 				llog_multiplexer_retrieve_data(cos_spd_id());
 				/* return;   // debug network, so disable this for now */
 #ifdef STREAM_PROCESS_OPTION_2

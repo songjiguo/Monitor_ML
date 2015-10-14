@@ -97,17 +97,20 @@ CK_RING(mlmp_thdevtseq_entry, mlmpthdevtseqbuffer_ring);
 CK_RING_INSTANCE(mlmpthdevtseqbuffer_ring) *mlmpthdevtseq_ring;
 #endif
 
+// event sequence: S:
+// thd,(x-> or ->x or <-y or y<-)@ttttt for "thread,inv, inv, ret and ret at time"
+
 static void
 print_mlmpthdevtseq_info(struct mlmp_thdevtseq_entry *mlmpevt)
 {
 	assert(mlmpevt);
 	if (mlmpevt->thd_id) {
-		printc ("seq:thd %d ", mlmpevt->thd_id);
-		if (mlmpevt->time_stamp) printc ("@ %llu:", mlmpevt->time_stamp);
-		if (mlmpevt->inv_from_spd) printc ("inv-> %d \n", mlmpevt->inv_from_spd);
-		if (mlmpevt->inv_into_spd) printc ("->inv %d \n", mlmpevt->inv_into_spd);
-		if (mlmpevt->ret_from_spd) printc ("<-ret %d \n", mlmpevt->ret_from_spd);
-		if (mlmpevt->ret_back_spd) printc ("ret<- %d \n", mlmpevt->ret_back_spd);
+		printc ("S:%d,", mlmpevt->thd_id);
+		if (mlmpevt->inv_from_spd) printc ("%d-> ", mlmpevt->inv_from_spd);
+		if (mlmpevt->inv_into_spd) printc ("->%d ", mlmpevt->inv_into_spd);
+		if (mlmpevt->ret_from_spd) printc ("<-%d ", mlmpevt->ret_from_spd);
+		if (mlmpevt->ret_back_spd) printc ("%d<- ", mlmpevt->ret_back_spd);
+		if (mlmpevt->time_stamp) printc ("@%llu\n", mlmpevt->time_stamp);
 	}
 	return;
 }
@@ -125,14 +128,17 @@ CK_RING(mlmp_thdtime_entry, mlmpthdtimebuffer_ring);
 CK_RING_INSTANCE(mlmpthdtimebuffer_ring) *mlmpthdtime_ring;
 #endif
 
+// thread execution time: E:
+// thd,xxxxx@ttttt for "thread executed xxxxx since ttttt"
+
 static void
 print_mlmpthdtime_info(struct mlmp_thdtime_entry *mlmpevt)
 {
 	assert(mlmpevt);
-	if (mlmpevt->thd_id) {
-		printc ("exec:thd %d n", mlmpevt->thd_id);
-		if (mlmpevt->exec_max) printc ("exec %llu ", mlmpevt->exec_max);
-		if (mlmpevt->deadline_start) printc ("(%llu)\n", mlmpevt->deadline_start);
+	if (mlmpevt->thd_id != 19) {   // hardcode to remove normal test, change back later
+		printc ("E:%d,", mlmpevt->thd_id);
+		if (mlmpevt->exec_max) printc ("%llu", mlmpevt->exec_max);
+		if (mlmpevt->deadline_start) printc ("@%llu\n", mlmpevt->deadline_start);
 	}
 	return;
 }
@@ -152,15 +158,18 @@ CK_RING(mlmp_thdinteract_entry, mlmpthdinteractbuffer_ring);
 CK_RING_INSTANCE(mlmpthdinteractbuffer_ring) *mlmpthdinteract_ring;
 #endif
 
+// interrupts: I:
+// thd,int_thd,spd@ttttt for "thd is interrupted by int_thd from spd at tttttt"
+
 static void
 print_mlmpthdinteract_info(struct mlmp_thdinteract_entry *mlmpevt)
 {
 	assert(mlmpevt);
 	if (mlmpevt->curr_thd) {
-		printc ("int:curr thd %d ", mlmpevt->curr_thd);
-		if (mlmpevt->int_thd) printc ("(thd %d ", mlmpevt->int_thd);
-		if (mlmpevt->int_spd) printc ("spd %d ", mlmpevt->int_spd);
-		if (mlmpevt->time_stamp) printc ("@ %llu)\n", mlmpevt->time_stamp);
+		printc ("I:%d,", mlmpevt->curr_thd);
+		if (mlmpevt->int_thd) printc ("%d,", mlmpevt->int_thd);
+		if (mlmpevt->int_spd) printc ("%d", mlmpevt->int_spd);
+		if (mlmpevt->time_stamp) printc ("@%llu\n", mlmpevt->time_stamp);
 	}
 	return;
 }
@@ -178,14 +187,17 @@ CK_RING(mlmp_thdcs_entry, mlmpthdcsbuffer_ring);
 CK_RING_INSTANCE(mlmpthdcsbuffer_ring) *mlmpthdcs_ring;
 #endif
 
+// context switch: C:
+// from_thd,to_thd@ttttt for "from_thd is switching to to_thd at tttttt"
+
 static void
 print_mlmpthdcs_info(struct mlmp_thdcs_entry *mlmpevt)
 {
 	assert(mlmpevt);
 	if (mlmpevt->from_thd) {
-		printc ("cs:thd %d", mlmpevt->from_thd);
-		if (mlmpevt->to_thd) printc ("->%d ", mlmpevt->to_thd);
-		if (mlmpevt->time_stamp) printc ("(@ %llu)\n", mlmpevt->time_stamp);
+		printc ("C:%d,", mlmpevt->from_thd);
+		if (mlmpevt->to_thd) printc ("%d,", mlmpevt->to_thd);
+		if (mlmpevt->time_stamp) printc ("@%llu\n", mlmpevt->time_stamp);
 	}
 	return;
 }
@@ -204,15 +216,18 @@ CK_RING(mlmp_spdinvnum_entry, mlmpspdinvnumbuffer_ring);
 CK_RING_INSTANCE(mlmpspdinvnumbuffer_ring) *mlmpspdinvnum_ring;
 #endif
 
+// spd invocation number: V:
+// thd,spd,xxxx for "thd has invoked spd for xxxx times"
+
 static void
 print_mlmpspdinvnum_info(struct mlmp_spdinvnum_entry *mlmpevt)
 {
 	assert(mlmpevt);
 	//TODO: fix the overflow in spdinvnum later
 	if (mlmpevt->invnum > 0 && mlmpevt->invnum < 10000 && mlmpevt->spd < 28) {
-		printc ("inv:thd %d ", mlmpevt->thd_id);
-		if (mlmpevt->spd) printc ("->spd %d ", mlmpevt->spd);
-		if (mlmpevt->invnum) printc ("%d times\n", mlmpevt->invnum);
+		printc ("V:%d,", mlmpevt->thd_id);
+		if (mlmpevt->spd) printc ("%d,", mlmpevt->spd);
+		if (mlmpevt->invnum) printc ("%d\n", mlmpevt->invnum);
 	}
 
 	return;
