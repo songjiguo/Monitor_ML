@@ -575,7 +575,8 @@ llog_multiplexer_init(spdid_t spdid, vaddr_t addr, int npages)
 {
 	vaddr_t ret = 0;
 
-	assert(spdid == MULTIPLEXER_SPD);
+	/* assert(spdid == MULTIPLEXER_SPD); */
+
 	/* MULTIPLEXER_THD = cos_get_thd_id(); */
 	/* printc("set multiplexer thread to be %d\n", MULTIPLEXER_THD); */
 

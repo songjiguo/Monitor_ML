@@ -168,6 +168,11 @@ cos_init(void)
 				printc("one invocation in cmon is %llu\n", end_pp-start_pp);
 			}
 		}
+#elif defined MON_FPU
+		if (cos_get_thd_id() == high) {
+			printc("\n\n<<<high thd %d --- FPU>>>\n\n", cos_get_thd_id());
+			try_cs_hp();
+		}
 #endif		
 	}
 

@@ -50,6 +50,7 @@
 
 /************spd execution time paras******************/
 //#define MON_PPONG   // just for invocation cost measure
+//#define MON_FPU     // just for testing floating point
 
 #define MON_SCHED
 //#define MON_MM

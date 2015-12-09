@@ -19,6 +19,8 @@
 #include <log.h>
 #include <multiplexer.h>
 
+#include <math.h>
+
 /* the stream type is defined in multiplexer interface
  * (see mutiplexer.h) */
 
@@ -44,6 +46,10 @@ fkml_process(int streams)
 	/* printc("fkml process (thd %d)\n", cos_get_thd_id()); */
 
 	printc("\n");
+
+	/* printc("sqrt(2) = %f\n", sqrt(2)); */
+	/* printc("sqrt(2+6) = %f\n", sqrt(2+6)); */
+
 	if ((streams & STREAM_THD_EVT_SEQUENC)) {
 		/* printc("[[[ Event sequence info ]]]\n"); */
 		struct mlmp_thdevtseq_entry mlmpentry;

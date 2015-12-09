@@ -726,9 +726,15 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		}
 
-                fpu_init();
+		/* printk("COS AED IOCTL: core %d creating thread in spd %d.\n",  */
+		/*        get_cpuid(), thread_info.spd_handle); */
+		if (fpu_init() < 0) {
+			printk("cos: FPU init failed.\n");
+			return -EFAULT;
+		}
 
 		printk("cos core %u: creating thread in spd %d.\n", get_cpuid(), thread_info.spd_handle);
+
 		spd = spd_get_by_index(thread_info.spd_handle);
 		if (!spd) {
 			printk("cos: Spd %d invalid for thread creation.\n", 
@@ -1554,7 +1560,7 @@ int chal_attempt_brand(struct thread *brand)
 			/*        thd_get_id(next), thd_get_id(cos_current)); */
 			if (next != cos_current) {
 				thd_save_preempted_state(cos_current, regs);
-                                fpu_save(next);
+                //fpu_save(next);
 				if (!(next->flags & THD_STATE_ACTIVE_UPCALL)) {
 					printk("cos: upcall thread %d is not set to be an active upcall.\n",
 					       thd_get_id(next));

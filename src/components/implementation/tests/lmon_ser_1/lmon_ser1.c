@@ -562,6 +562,34 @@ int try_cs_mp(void) { return 0;}
 int try_cs_lp(void) { return 0;}
 vaddr_t lmon_ser1_test(void) { return 0;}
 
+#elif defined MON_FPU
+
+#include <math.h>
+/* this is adpated from f.c under no_interface/fpu */
+int try_cs_hp(void) 
+{ 
+        double a = 0.5, b = 0.5, c = 0;
+	
+        timed_event_block(cos_spd_id(), 1);
+
+	printc("doing fp !!!!!!\n");
+        while (1)
+        {
+                c += a + b;
+                if (((int)c % 1000000 == 0) && ((int)c != 0))
+                        printc("thread %d, result = %f\n", cos_get_thd_id(), c);
+		printc("sqrt(c) = %f\n", sqrt(c));
+		printc("sqrt(2) = %f\n", sqrt(2));
+        }
+	printc("doing fp done !!!!!!\n");
+	return 0;
+}
+
+
+int try_cs_mp(void) { return 0;}
+int try_cs_lp(void) { return 0;}
+vaddr_t lmon_ser1_test(void) { return 0;}
+
 #else 
 int try_cs_hp(void) { return 0;}
 int try_cs_mp(void) { return 0;}

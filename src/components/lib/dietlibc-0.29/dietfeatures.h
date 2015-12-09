@@ -3,8 +3,8 @@
 
 /* feel free to comment some of these out to reduce code size */
 
-//#define WANT_FLOATING_POINT_IN_PRINTF
-//#define WANT_FLOATING_POINT_IN_SCANF
+#define WANT_FLOATING_POINT_IN_PRINTF
+#define WANT_FLOATING_POINT_IN_SCANF
 //#define WANT_CHARACTER_CLASSES_IN_SCANF
  #define WANT_NULL_PRINTF
 /* #define WANT_ERROR_PRINTF */
@@ -69,7 +69,7 @@
  #define WANT_INET_ADDR_DNS
 
 /* do you want math functions high precision rather than fast/small? */
-//#define WANT_HIGH_PRECISION_MATH
+#define WANT_HIGH_PRECISION_MATH
 
 /* do you want support for matherr? */
 #define WANT_MATHERR
